@@ -1,112 +1,184 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+// app/(tabs)/explore.tsx
+import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React from "react";
+import {
+  Dimensions,
+  FlatList,
+  Image,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import { Collapsible } from '@/components/ui/collapsible';
-import { ExternalLink } from '@/components/external-link';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
+import LevelsCarousel from "../../components/LevelsCarousel";
+import PuzzleItem from "../../components/PuzzleItem";
 
-export default function TabTwoScreen() {
+/* ----- constants ----- */
+const { width: SCREEN_W } = Dimensions.get("window");
+// max content width for each card on web / large screens:
+const CARD_MAX_WIDTH = 900;
+
+const DATA = [
+  {
+    id: "p1",
+    level: "Beginner",
+    title: "The Bullish Engulfing Pattern",
+    description: "Identify the correct entry point based on the chart pattern.",
+    progress: 0.5,
+    image: require("../../assets/images/Puzzle/p1.png"),
+    buttonLabel: "Continue",
+  },
+  {
+    id: "p2",
+    level: "Intermediate",
+    title: "Hedging with Futures",
+    description: "Learn to minimize risk in your portfolio using futures contracts.",
+    progress: 0.05,
+    image: require("../../assets/images/Puzzle/p2.png"),
+    buttonLabel: "Start",
+  },
+  {
+    id: "p3",
+    level: "Advanced",
+    title: "Options Trading Strategies",
+    description: "Master complex options strategies like iron condors and butterflies.",
+    progress: 0,
+    image: require("../../assets/images/Puzzle/p3.png"),
+    buttonLabel: "Start",
+  },
+];
+
+const LEVELS = ["All", "Beginner", "Intermediate", "Advanced", "Options", "Futures"];
+
+export default function PuzzlesScreen() {
+  const router = useRouter();
+  const [activeLevel, setActiveLevel] = React.useState<string>("All");
+
+  const filtered = React.useMemo(() => {
+    if (activeLevel === "All") return DATA;
+    return DATA.filter((d) => d.level === activeLevel);
+  }, [activeLevel]);
+
+  // compute width for each card wrapper:
+  const cardWrapperWidth =
+    Platform.OS === "web" ? Math.min(CARD_MAX_WIDTH, SCREEN_W - 80) : "100%";
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText
-          type="title"
-          style={{
-            fontFamily: Fonts.rounded,
-          }}>
-          Explore
-        </ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image
-          source={require('@/assets/images/react-logo.png')}
-          style={{ width: 100, height: 100, alignSelf: 'center' }}
-        />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful{' '}
-          <ThemedText type="defaultSemiBold" style={{ fontFamily: Fonts.mono }}>
-            react-native-reanimated
-          </ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <SafeAreaView style={styles.screen}>
+      {/* Top nav */}
+      <View style={styles.topNav}>
+        <TouchableOpacity
+          style={styles.iconBtn}
+          onPress={() => {
+            // explicit route to Home tab
+            router.push("/");
+          }}
+        >
+          <MaterialIcons name="arrow-back" size={22} color="#111827" />
+        </TouchableOpacity>
+
+        <Text style={styles.title}>Puzzles</Text>
+
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <TouchableOpacity style={styles.iconBtn} onPress={() => console.log("search")}>
+            <MaterialIcons name="search" size={22} color="#111827" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.iconBtn, { marginLeft: 8 }]} onPress={() => console.log("profile")}>
+            <Image source={require("../../assets/images/profile/Avatar.png")} style={styles.smallAvatar} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Levels carousel */}
+      <LevelsCarousel levels={LEVELS} active={activeLevel} onSelect={(lvl) => setActiveLevel(lvl)} />
+
+      {/* Puzzle list */}
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          // WRAPPER: constrains width on web so cards don't stretch across very wide screens.
+          <View
+            style={[
+              styles.cardWrapper,
+              {
+                width: cardWrapperWidth,
+                alignSelf: Platform.OS === "web" ? "center" : "stretch",
+              },
+            ]}
+          >
+            <PuzzleItem
+              image={item.image}
+              level={item.level}
+              title={item.title}
+              description={item.description}
+              progress={item.progress}
+              buttonLabel={item.buttonLabel}
+              onPress={() => {
+                // placeholder navigation — replace if you have a puzzle detail route
+                console.log("open puzzle:", item.id);
+              }}
+            />
+          </View>
+        )}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+      />
+    </SafeAreaView>
   );
 }
 
+/* ----- Styles ----- */
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
-    position: 'absolute',
+  screen: {
+    flex: 1,
+    backgroundColor: "#f6f7fb",
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+
+  topNav: {
+    height: 64,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f6f7fb",
+  },
+
+  iconBtn: {
+    padding: 8,
+    borderRadius: 8,
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+    color: "#0f1724",
+  },
+
+  smallAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+  },
+
+  listContainer: {
+    paddingTop: 8,
+    paddingBottom: 80,
+    // Add some horizontal padding on web so the centered cards have breathing room
+    paddingHorizontal: Platform.OS === "web" ? 40 : 0,
+  },
+
+  // wrapper that constrains each PuzzleItem on web
+  cardWrapper: {
+    marginTop: 12,
+    marginBottom: 12,
+    // add a tiny horizontal padding for visual spacing on mobile as well
+    paddingHorizontal: Platform.OS === "web" ? 0 : 12,
   },
 });
