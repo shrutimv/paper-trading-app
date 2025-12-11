@@ -17,6 +17,7 @@
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
+    "axios": "^1.13.2",
     "expo": "~54.0.27",
     "expo-av": "~16.0.8",
     "expo-constants": "~18.0.11",
@@ -44,6 +45,7 @@
     "react-native-worklets": "0.5.1"
   },
   "devDependencies": {
+    "@types/lodash.debounce": "^4.0.9",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",

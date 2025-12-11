@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pandas
+yfinance
+requests
+python-dotenv
+cachetools

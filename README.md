@@ -3,11 +3,15 @@
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
 ## Get started
+0. Go through the README.md in /API/ to run the API
+
+check the ipv4 address of your system using the command 'ipconfig' in cmd and update the ipv4 address in /src/config.ts
 
 1. Install dependencies
 
    ```bash
    npm install
+   npm install axios
    ```
 
 2. Start the app
