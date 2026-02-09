@@ -46,13 +46,13 @@ export default function ProfileScreen() {
         {/* Menu (Edit + Settings disabled) */}
         <View style={styles.menu}>
 
-          <View style={[styles.menuRow, { opacity: 0.6 }]}>
-            <View style={styles.menuIconWrap}>
-              <MaterialIcons name="person-outline" size={20} color="#111827" />
-            </View>
-            <Text style={styles.menuText}>Edit Profile</Text>
-            <MaterialIcons name="chevron-right" size={20} color="#9aa3b2" />
-          </View>
+            <TouchableOpacity style={styles.menuRow} onPress={() => router.push('/edit-profile')}>
+              <View style={styles.menuIconWrap}>
+                <MaterialIcons name="person-outline" size={20} color="#111827" />
+              </View>
+              <Text style={styles.menuText}>Edit Profile</Text>
+              <MaterialIcons name="chevron-right" size={20} color="#9aa3b2" />
+            </TouchableOpacity>
 
           <View style={[styles.menuRow, { opacity: 0.6 }]}>
             <View style={styles.menuIconWrap}>
