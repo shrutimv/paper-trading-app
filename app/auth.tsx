@@ -49,7 +49,7 @@ export default function AuthScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logoText}>BullRun 📈</Text>
+      <Text style={styles.logoText}>PaperTrade</Text>
       <Text style={styles.subtitle}>{isLogin ? "Welcome Back" : "Create Account"}</Text>
 
       <TextInput 
