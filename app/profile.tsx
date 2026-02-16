@@ -1,145 +1,113 @@
-// app/(tabs)/profile.tsx
-import { MaterialIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React from "react";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  const user = {
-    name: "Ananya Sharma",
-    subtitle: "Aspiring Trader",
-    avatar: require("../assets/images/ProfilePage/image 1.png"),
-    stats: [
-      { key: "earnings", label: "Total Earnings", value: "₹ 1,50,000" },
-      { key: "puzzles", label: "Puzzles Solved", value: "24" },
-      { key: "courses", label: "Courses Completed", value: "8" },
-      { key: "streak", label: "Current Streak", value: "12 days" },
-    ],
+  useEffect(() => {
+    const loadUser = async () => {
+      try {
+        const session = await AsyncStorage.getItem('userSession');
+        if (session) {
+          setUser(JSON.parse(session));
+        }
+      } catch (e) {
+        console.error("Failed to load user", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadUser();
+  }, []);
+
+  // FIXED: Clears Guest Session before going to Login
+  const handleUpgrade = async () => {
+    await AsyncStorage.removeItem('userSession'); // Throw away the "Guest Badge"
+    router.replace('/auth'); // Now go to login
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Log Out", 
+          style: 'destructive',
+          onPress: async () => {
+            await AsyncStorage.removeItem('userSession');
+            router.replace('/auth');
+          }
+        }
+      ]
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#0f62fe" />
+      </View>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <ScrollView contentContainerStyle={styles.container}>
-        
-        
+    <View style={styles.container}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <Ionicons name="arrow-back" size={24} color="#111" />
+      </TouchableOpacity>
 
-        {/* Avatar */}
-        <View style={styles.avatarWrap}>
-          <Image source={user.avatar} style={styles.avatar} />
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.subtitle}>{user.subtitle}</Text>
+      <View style={styles.header}>
+        <View style={styles.avatarContainer}>
+          <Ionicons name="person-circle-outline" size={80} color="#e5e7eb" />
         </View>
+        <Text style={styles.name}>
+          {user?.isGuest ? "Guest User" : "Trader"}
+        </Text>
+        <Text style={styles.status}>
+          {user?.isGuest ? "Basic Access 🔒" : "Premium Member 🔓"}
+        </Text>
+      </View>
 
-        {/* Stats */}
-        <View style={styles.statsGrid}>
-          {user.stats.map((s) => (
-            <View key={s.key} style={styles.statCard}>
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
+      <View style={styles.menu}>
+        {/* UPDATED BUTTON LOGIC & LABEL */}
+        {user?.isGuest && (
+          <TouchableOpacity style={styles.menuItem} onPress={handleUpgrade}>
+            <View style={styles.menuIconInfo}>
+              <Ionicons name="log-in-outline" size={22} color="#0f62fe" />
+              <Text style={[styles.menuText, { color: '#0f62fe', fontWeight:'bold' }]}>
+                Login/Signup to Access
+              </Text>
             </View>
-          ))}
-        </View>
-
-        {/* Menu (Edit + Settings disabled) */}
-        <View style={styles.menu}>
-
-          <View style={[styles.menuRow, { opacity: 0.6 }]}>
-            <View style={styles.menuIconWrap}>
-              <MaterialIcons name="person-outline" size={20} color="#111827" />
-            </View>
-            <Text style={styles.menuText}>Edit Profile</Text>
-            <MaterialIcons name="chevron-right" size={20} color="#9aa3b2" />
-          </View>
-
-          <View style={[styles.menuRow, { opacity: 0.6 }]}>
-            <View style={styles.menuIconWrap}>
-              <MaterialIcons name="settings" size={20} color="#111827" />
-            </View>
-            <Text style={styles.menuText}>Settings</Text>
-            <MaterialIcons name="chevron-right" size={20} color="#9aa3b2" />
-          </View>
-
-          {/* Logout is clickable */}
-          <TouchableOpacity style={styles.menuRow} onPress={() => console.log("logout")}>
-            <View style={[styles.menuIconWrap, { backgroundColor: "#feecec" }]}>
-              <MaterialIcons name="logout" size={20} color="#ef4444" />
-            </View>
-            <Text style={[styles.menuText, { color: "#ef4444" }]}>Logout</Text>
-            <MaterialIcons name="chevron-right" size={20} color="#9aa3b2" />
+            <Ionicons name="chevron-forward" size={22} color="#9ca3af" />
           </TouchableOpacity>
+        )}
+      </View>
 
-        </View>
-
-        <View style={{ height: 40 }} />
-
-      </ScrollView>
-    </SafeAreaView>
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <Text style={styles.logoutText}>Log Out</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
-  container: { paddingBottom: 36 },
-
-  header: {
-    height: 64,
-    paddingHorizontal: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  headerBack: { padding: 8 },
-  headerTitle: { fontSize: 16, fontWeight: "700", color: "#0f1724" },
-
-  avatarWrap: { alignItems: "center", paddingTop: 8, paddingBottom: 16 },
-  avatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 12 },
-  name: { fontSize: 20, fontWeight: "800", color: "#0f1724" },
-  subtitle: { color: "#6b7280", marginTop: 4 },
-
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 16,
-    justifyContent: "space-between",
-  },
-  statCard: {
-    width: "48%",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  statValue: { fontSize: 16, fontWeight: "800", color: "#0f1724" },
-  statLabel: { color: "#6b7280", marginTop: 6 },
-
-  menu: { marginTop: 12, paddingHorizontal: 16 },
-  menuRow: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
-    elevation: 1,
-  },
-  menuIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: "#f2f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-  menuText: { fontSize: 16, flex: 1, color: "#0f1724" },
+  container: { flex: 1, backgroundColor: '#f8f9fa', padding: 20, paddingTop: 60 },
+  backBtn: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
+  header: { alignItems: 'center', marginTop: 20, marginBottom: 40 },
+  avatarContainer: { marginBottom: 10, backgroundColor: '#fff', borderRadius: 50, padding: 5 },
+  name: { fontSize: 22, fontWeight: 'bold', color: '#111' },
+  status: { fontSize: 14, color: '#6b7280', marginTop: 5 },
+  menu: { backgroundColor: '#fff', borderRadius: 16, padding: 10, marginBottom: 30 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, paddingHorizontal: 10 },
+  menuIconInfo: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  menuText: { fontSize: 16, color: '#374151', fontWeight: '500' },
+  logoutBtn: { backgroundColor: '#fee2e2', padding: 15, borderRadius: 12, alignItems: 'center', marginTop: 'auto', marginBottom: 20 },
+  logoutText: { color: '#ef4444', fontWeight: 'bold', fontSize: 16 },
 });

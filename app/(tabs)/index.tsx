@@ -1,4 +1,5 @@
 // app/(tabs)/index.tsx
+import { useRouter } from "expo-router"; // Added for navigation
 import React from "react";
 import {
   Image,
@@ -11,7 +12,6 @@ import {
 } from "react-native";
 
 import CourseCard from "../../components/CourseCard";
-import Header from "../../components/Header";
 import HorizontalCardCarousel from "../../components/HorizontalCardCarousel";
 import PaperTradingCard from "../../components/PaperTradingCard";
 import PuzzleCard from "../../components/PuzzleCard";
@@ -19,16 +19,19 @@ import SmallCard from "../../components/SmallCard";
 import SmallCourseCard from "../../components/SmallCourseCard";
 
 export default function Home() {
-  // No change to any router behavior here
+  const router = useRouter(); // Initializing the router
+
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 56 }}
     >
-      {/* Centered page container on web/desktop so cards aren't stretched */}
       <View style={styles.page}>
         {/* Header */}
-        <Header name="Ananya Sharma" />
+        <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+          <Text style={{ color: '#6b7280', fontSize: 16 }}>Hello,</Text>
+          <Text style={{ color: '#111', fontSize: 24, fontWeight: 'bold' }}>Ananya Sharma</Text>
+        </View>
 
         {/* Stats Row */}
         <View style={styles.statsRow}>
@@ -39,7 +42,7 @@ export default function Home() {
             />
             <View>
               <Text style={styles.statLabel}>Streak</Text>
-              <Text style={styles.statValue}>12 days</Text>
+              <Text style={styles.statValue}>11 days</Text>
             </View>
           </View>
 
@@ -66,10 +69,10 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Puzzles Section */}
+        {/* Puzzles Section - Linked to your new Quiz Screen */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Puzzles</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/quiz")}>
             <Text style={styles.link}>View all</Text>
           </TouchableOpacity>
         </View>
@@ -144,21 +147,16 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f6f7fb", // keep mobile background unchanged
+    backgroundColor: "#f6f7fb",
   },
-
-  // This is the centered page container used on web to avoid stretched cards
   page: {
     width: "100%",
-    maxWidth: 1100, // most websites use a similar max width
+    maxWidth: 1100,
     alignSelf: "center",
-    // keep some side padding on narrow screens
     paddingHorizontal: Platform.OS === "web" ? 32 : 0,
     paddingTop: 12,
-    backgroundColor: "transparent", // container is transparent; body bg handled in _layout.tsx
+    backgroundColor: "transparent",
   },
-
-  /* Stats */
   statsRow: {
     flexDirection: "row",
     justifyContent: "space-around",
@@ -185,8 +183,6 @@ const styles = StyleSheet.create({
     color: "#0f1724",
     fontSize: 14,
   },
-
-  /* Sections */
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -203,14 +199,12 @@ const styles = StyleSheet.create({
     color: "#0f62fe",
     fontWeight: "600",
   },
-
   smallCardsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 12,
     paddingHorizontal: 16,
   },
-
   smallCoursesRow: {
     flexDirection: "row",
     justifyContent: "space-between",

@@ -26,7 +26,7 @@ export default function PaperTradingCard() {
 
         <View style={{ alignItems: "flex-end" }}>
           <Text style={styles.smallLabel}>Today's P&L</Text>
-          <View style={styles.pnlBubble}><Text style={styles.pnlText}>+₹2,350</Text></View>
+          <View style={styles.pnlBubble}><Text style={styles.pnlText}>+₹2,3660</Text></View>
         </View>
       </View>
 
@@ -45,8 +45,8 @@ export default function PaperTradingCard() {
             backgroundGradientFrom: "#ffffff",
             backgroundGradientTo: "#ffffff",
             color: (opacity = 1) => `rgba(34,197,94, ${opacity})`,
-            strokeWidth: 2,
-            propsForBackgroundLines: { strokeWidth: 0 },
+            strokeWidth: 4,
+            propsForBackgroundLines: { strokeWidth: 4 },
           }}
           bezier
           style={{ marginLeft: CARD_PADDING * -1 }} // compensate chart-kit internal padding on some platforms
