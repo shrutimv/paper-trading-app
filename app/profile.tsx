@@ -10,38 +10,62 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadUser = async () => {
-      try {
-        const session = await AsyncStorage.getItem('userSession');
-        if (session) {
-          setUser(JSON.parse(session));
-        }
-      } catch (e) {
-        console.error("Failed to load user", e);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadUser();
   }, []);
 
-  // FIXED: Clears Guest Session before going to Login
+  const loadUser = async () => {
+    try {
+      const session = await AsyncStorage.getItem('userSession');
+      if (session) {
+        setUser(JSON.parse(session));
+      }
+    } catch (e) {
+      console.error("Failed to load user", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- NEW FUNCTION: WIPES ALL PROGRESS ---
+  const clearProgress = async () => {
+    try {
+      // 1. Get ALL keys in storage
+      const keys = await AsyncStorage.getAllKeys();
+      
+      // 2. Find keys that start with "module_completed_"
+      const progressKeys = keys.filter(key => key.startsWith('module_completed_'));
+      
+      // 3. Delete ONLY those keys (and the user session)
+      if (progressKeys.length > 0) {
+        await AsyncStorage.multiRemove(progressKeys);
+      }
+    } catch (e) {
+      console.error("Failed to clear progress", e);
+    }
+  };
+  // ----------------------------------------
+
   const handleUpgrade = async () => {
-    await AsyncStorage.removeItem('userSession'); // Throw away the "Guest Badge"
-    router.replace('/auth'); // Now go to login
+    await clearProgress(); // Wipe progress
+    await AsyncStorage.removeItem('userSession'); // Wipe ID
+    router.replace('/auth');
   };
 
   const handleLogout = () => {
     Alert.alert(
       "Log Out",
-      "Are you sure you want to log out?",
+      "This will clear your progress on this device. Are you sure?",
       [
         { text: "Cancel", style: "cancel" },
         { 
           text: "Log Out", 
           style: 'destructive',
           onPress: async () => {
-            await AsyncStorage.removeItem('userSession');
+            await clearProgress(); // Wipe progress
+            await AsyncStorage.removeItem('userSession'); // Wipe ID
+            
+            // Force navigation to Auth
+            router.dismissAll();
             router.replace('/auth');
           }
         }
@@ -76,7 +100,6 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.menu}>
-        {/* UPDATED BUTTON LOGIC & LABEL */}
         {user?.isGuest && (
           <TouchableOpacity style={styles.menuItem} onPress={handleUpgrade}>
             <View style={styles.menuIconInfo}>
@@ -91,7 +114,7 @@ export default function ProfileScreen() {
       </View>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Log Out</Text>
+        <Text style={styles.logoutText}>Log Out & Reset</Text>
       </TouchableOpacity>
     </View>
   );

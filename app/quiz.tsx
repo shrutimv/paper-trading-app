@@ -1,118 +1,160 @@
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { quizData } from '../src/quizData';
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { QUIZ_DATA } from '../constants/Questions';
 
 export default function QuizScreen() {
-  const { moduleId } = useLocalSearchParams();
+  const { moduleId, level } = useLocalSearchParams(); // Get Level
   const router = useRouter();
-  const module = quizData.modules.find(m => m.id === moduleId) || quizData.modules[0];
-
-  const [stage, setStage] = useState<'reading' | 'quiz' | 'result'>('reading');
-  const [currentIdx, setCurrentIdx] = useState(0);
+  
+  const [currentQuestion, setCurrentQuestion] = useState(0);
   const [score, setScore] = useState(0);
+  const [showResults, setShowResults] = useState(false);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [canClick, setCanClick] = useState(true);
+
+  // --- THEME LOGIC ---
+  const getTheme = (lvl: string) => {
+    switch(lvl) {
+      case 'Beginner': return { main: '#10b981', light: '#ecfdf5', bg: '#f0fdf4' };
+      case 'Intermediate': return { main: '#f59e0b', light: '#fffbeb', bg: '#fffaf0' };
+      case 'Advanced': return { main: '#ef4444', light: '#fef2f2', bg: '#fef2f2' };
+      case 'Expert': return { main: '#7c3aed', light: '#f3e8ff', bg: '#faf5ff' };
+      default: return { main: '#0f62fe', light: '#eff6ff', bg: '#fff' };
+    }
+  };
+  const theme = getTheme(String(level));
+
+  const activeQuestions = QUIZ_DATA[String(moduleId)] || [];
+
+  if (activeQuestions.length === 0) return null; // Or fallback UI
 
   const handleAnswer = (index: number) => {
-    if (showExplanation) return; // Prevent double clicking
+    if (!canClick) return;
+    setCanClick(false);
     setSelectedOption(index);
-    setShowExplanation(true);
-    if (index === module.questions[currentIdx].correct) {
-      setScore(score + 1);
+
+    const isRight = index === activeQuestions[currentQuestion].correct;
+    if (isRight) setScore(score + 1);
+
+    setTimeout(() => {
+      if (currentQuestion + 1 < activeQuestions.length) {
+        setCurrentQuestion(currentQuestion + 1);
+        setSelectedOption(null);
+        setCanClick(true);
+      } else {
+        saveProgress(isRight ? score + 1 : score);
+        setShowResults(true);
+      }
+    }, 1200);
+  };
+
+  const saveProgress = async (finalScore: number) => {
+    if (finalScore === activeQuestions.length) {
+      await AsyncStorage.setItem(`module_completed_${moduleId}`, 'true');
     }
   };
 
-  const nextQuestion = () => {
-    setShowExplanation(false);
-    setSelectedOption(null);
-    if (currentIdx < module.questions.length - 1) {
-      setCurrentIdx(currentIdx + 1);
-    } else {
-      setStage('result');
-    }
+  // --- DYNAMIC COLORS ---
+  const getOptionColor = (index: number) => {
+    if (selectedOption === null) return '#fff'; // White background for cards
+    const correctIndex = activeQuestions[currentQuestion].correct;
+    if (index === correctIndex) return '#dcfce7'; // Green Success
+    if (index === selectedOption) return '#fee2e2'; // Red Error
+    return '#fff';
+  };
+  
+  const getBorderColor = (index: number) => {
+      if (selectedOption === null) return '#e5e7eb'; // Gray border
+      const correctIndex = activeQuestions[currentQuestion].correct;
+      if (index === correctIndex) return '#16a34a'; 
+      if (index === selectedOption) return '#dc2626';
+      return '#e5e7eb';
   };
 
-  if (stage === 'reading') {
+  if (showResults) {
     return (
-      <View style={styles.container}>
-        <ScrollView style={{ flex: 1, padding: 20 }}>
-          <Text style={styles.title}>{module.title}</Text>
-          <Text style={styles.readingText}>{module.content}</Text>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => setStage('quiz')}>
-            <Text style={styles.btnText}>I'm Ready, Start Quiz</Text>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+        <View style={styles.resultBox}>
+          <Ionicons 
+            name={score === activeQuestions.length ? "trophy" : "ribbon"} 
+            size={80} 
+            color={theme.main} 
+          />
+          <Text style={styles.title}>
+            {score === activeQuestions.length ? "Module Complete!" : "Good Try!"}
+          </Text>
+          <Text style={styles.subTitle}>You scored {score} / {activeQuestions.length}</Text>
+          
+          <TouchableOpacity style={[styles.button, { backgroundColor: theme.main }]} onPress={() => router.replace('/(tabs)/puzzles')}>
+            <Text style={styles.buttonText}>Continue Journey</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => setStage('quiz')}>
-            <Text style={styles.secondaryBtnText}>Skip Reading & Take Quiz</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    );
-  }
-
-  if (stage === 'quiz') {
-    const q = module.questions[currentIdx];
-    return (
-      <View style={styles.container}>
-        <Text style={styles.progress}>Question {currentIdx + 1} of {module.questions.length}</Text>
-        <Text style={styles.questionText}>{q.question}</Text>
-
-        {q.options.map((opt, i) => (
-          <TouchableOpacity 
-            key={i} 
-            disabled={showExplanation}
-            style={[
-              styles.optionBtn,
-              selectedOption === i && (i === q.correct ? styles.correctOpt : styles.wrongOpt)
-            ]}
-            onPress={() => handleAnswer(i)}
-          >
-            <Text>{opt}</Text>
-          </TouchableOpacity>
-        ))}
-
-        {showExplanation && (
-          <View style={styles.explanationBox}>
-            <Text style={styles.explanationTitle}>
-              {selectedOption === q.correct ? "✅ Correct!" : "❌ Incorrect"}
-            </Text>
-            <Text style={styles.explanationText}>{q.explanation}</Text>
-            <TouchableOpacity style={styles.nextBtn} onPress={nextQuestion}>
-              <Text style={styles.btnText}>Next Question</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Quiz Completed!</Text>
-      <Text style={styles.scoreText}>You scored {score} / {module.questions.length}</Text>
-      <TouchableOpacity style={styles.primaryBtn} onPress={() => router.replace('/(tabs)/puzzles')}>
-        <Text style={styles.btnText}>Return to Modules</Text>
-      </TouchableOpacity>
-    </View>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={styles.header}>
+         <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="close" size={24} color="#374151" />
+         </TouchableOpacity>
+         <Text style={{ fontWeight: 'bold', color: theme.main }}>{String(level).toUpperCase()}</Text>
+         <View style={{width: 24}} /> 
+      </View>
+
+      <View style={styles.quizBox}>
+        {/* Themed Progress Bar */}
+        <View style={styles.progressBarBg}>
+            <View style={[styles.progressBarFill, { width: `${((currentQuestion + 1) / activeQuestions.length) * 100}%`, backgroundColor: theme.main }]} />
+        </View>
+        
+        <Text style={styles.questionText}>{activeQuestions[currentQuestion].question}</Text>
+        
+        {activeQuestions[currentQuestion].options.map((option: string, index: number) => (
+          <TouchableOpacity 
+            key={index} 
+            style={[
+                styles.option, 
+                { backgroundColor: getOptionColor(index), borderColor: getBorderColor(index) }
+            ]} 
+            onPress={() => handleAnswer(index)}
+            disabled={!canClick}
+          >
+            <Text style={[styles.optionText, { fontWeight: selectedOption === index ? 'bold' : '500' }]}>
+              {option}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f6f7fb', padding: 20, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '800', marginBottom: 20, color: '#0f1724' },
-  readingText: { fontSize: 16, lineHeight: 24, color: '#4b5563', marginBottom: 30 },
-  primaryBtn: { backgroundColor: '#0f62fe', padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 10 },
-  secondaryBtn: { padding: 18, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
-  secondaryBtnText: { color: '#0f62fe', fontWeight: '600' },
-  questionText: { fontSize: 20, fontWeight: '700', marginBottom: 20 },
-  optionBtn: { backgroundColor: '#fff', padding: 15, borderRadius: 10, marginBottom: 10, borderWidth: 1, borderColor: '#e5e7eb' },
-  correctOpt: { backgroundColor: '#dcfce7', borderColor: '#22c55e' },
-  wrongOpt: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },
-  explanationBox: { marginTop: 20, padding: 15, backgroundColor: '#eff6ff', borderRadius: 10 },
-  explanationTitle: { fontWeight: 'bold', marginBottom: 5 },
-  explanationText: { color: '#1e40af', marginBottom: 15 },
-  nextBtn: { backgroundColor: '#0f62fe', padding: 12, borderRadius: 8, alignItems: 'center' },
-  progress: { color: '#6b7280', marginBottom: 10 },
-  scoreText: { fontSize: 22, textAlign: 'center', marginBottom: 30 }
+  container: { flex: 1, paddingHorizontal: 20 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 60 },
+  
+  quizBox: { flex: 1, paddingTop: 20 },
+  progressBarBg: { height: 4, backgroundColor: '#e5e7eb', borderRadius: 2, marginBottom: 24 },
+  progressBarFill: { height: 4, borderRadius: 2 },
+  
+  questionText: { fontSize: 20, fontWeight: '800', color: '#111', marginBottom: 30, lineHeight: 28 },
+  
+  option: { 
+      padding: 16, borderRadius: 12, marginBottom: 12, 
+      borderWidth: 2, // Thicker border for better touch target visibility
+      elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width:0, height:2}
+  },
+  optionText: { fontSize: 16, color: '#1f2937' },
+  
+  resultBox: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 28, fontWeight: '800', marginTop: 20, color: '#111' },
+  subTitle: { fontSize: 18, color: '#6b7280', marginBottom: 40, marginTop: 10 },
+  
+  button: { paddingVertical: 16, paddingHorizontal: 40, borderRadius: 12, width: '100%', alignItems: 'center' },
+  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
