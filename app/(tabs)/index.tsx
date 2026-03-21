@@ -147,7 +147,6 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-<<<<<<< Updated upstream
     backgroundColor: "#f6f7fb",
   },
   page: {
@@ -157,20 +156,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === "web" ? 32 : 0,
     paddingTop: 12,
     backgroundColor: "transparent",
-=======
-    backgroundColor: "#f6f7fb", 
-  },
-
-  
-  page: {
-    width: "100%",
-    maxWidth: 1100, 
-    alignSelf: "center",
-    
-    paddingHorizontal: Platform.OS === "web" ? 32 : 0,
-    paddingTop: 12,
-    backgroundColor: "transparent", 
->>>>>>> Stashed changes
   },
   statsRow: {
     flexDirection: "row",

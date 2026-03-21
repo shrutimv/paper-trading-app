@@ -7,6 +7,8 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+// 1. IMPORT YOUR NEW CONTEXT HERE (Check your relative path if needed)
+import { TradingProvider } from '../context/TradingContext'; 
 
 export const unstable_settings = {
   initialRouteName: '(tabs)',
@@ -60,14 +62,19 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    // 2. WRAP YOUR APP IN THE PROVIDER
+    <TradingProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          {/* Note: If you haven't explicitly added your 'learn' screen here, it will still work but it's good practice to declare it if you want specific animations/headers */}
+          <Stack.Screen name="learn" options={{ headerShown: false }} /> 
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </TradingProvider>
   );
 }
