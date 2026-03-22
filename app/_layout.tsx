@@ -7,12 +7,10 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-// 1. IMPORT YOUR NEW CONTEXT HERE (Check your relative path if needed)
-import { TradingProvider } from '../context/TradingContext'; 
+import { GamificationProvider } from '../context/GamificationContext';
+import { TradingProvider } from '../context/TradingContext';
 
-export const unstable_settings = {
-  initialRouteName: '(tabs)',
-};
+export const unstable_settings = { initialRouteName: '(tabs)' };
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -21,37 +19,29 @@ export default function RootLayout() {
   
   const [isLoading, setIsLoading] = useState(true);
 
-  // 1. Initial Load: Just to hide the splash screen
   useEffect(() => {
-    // Artificial delay to ensure storage is ready
     setTimeout(() => setIsLoading(false), 500);
   }, []);
 
-  // 2. The "Gatekeeper" - Runs on every navigation change
   useEffect(() => {
     if (isLoading) return;
 
     const checkAuth = async () => {
       try {
-        // ALWAYS read fresh data from storage
         const session = await AsyncStorage.getItem('userSession');
-        
         const inAuthGroup = segments[0] === 'auth';
 
         if (!session && !inAuthGroup) {
-          // If no session and trying to access app -> Boot to Auth
           router.replace('/auth');
         } else if (session && inAuthGroup) {
-          // If has session and trying to access auth -> Send to Home
           router.replace('/(tabs)');
         }
       } catch (e) {
         console.error("Auth Loop Error", e);
       }
     };
-
     checkAuth();
-  }, [segments, isLoading]); // Re-run this whenever the path changes
+  }, [segments, isLoading]);
 
   if (isLoading) {
     return (
@@ -62,19 +52,19 @@ export default function RootLayout() {
   }
 
   return (
-    // 2. WRAP YOUR APP IN THE PROVIDER
-    <TradingProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack>
-          <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-          {/* Note: If you haven't explicitly added your 'learn' screen here, it will still work but it's good practice to declare it if you want specific animations/headers */}
-          <Stack.Screen name="learn" options={{ headerShown: false }} /> 
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </TradingProvider>
+    <GamificationProvider>
+      <TradingProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <Stack>
+            <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen name="learn" options={{ headerShown: false }} /> 
+          </Stack>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </TradingProvider>
+    </GamificationProvider>
   );
 }
