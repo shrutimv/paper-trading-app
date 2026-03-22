@@ -3,8 +3,9 @@ import React from "react";
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 
 // Imports for our custom components and context
+import PageTransition from "@/components/PageTransition";
 import Watchlist from "../../../components/Watchlist";
-import { useTrading } from "../../../context/TradingContext"; 
+import { useTrading } from "../../../context/TradingContext";
 
 // Helper function to format money nicely (e.g., 100000 -> ₹1,00,000.00)
 const formatCurrency = (value: number) => {
@@ -22,6 +23,7 @@ export default function TradingDashboard() {
   const pnlPercent = totalInvestment > 0 ? (pnl / totalInvestment) * 100 : 0;
 
   return (
+    <PageTransition>
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
@@ -97,6 +99,7 @@ export default function TradingDashboard() {
         <Watchlist showSearch={true} limit={5} />
       </ScrollView>
     </SafeAreaView>
+    </PageTransition>
   );
 }
 

@@ -14,6 +14,7 @@ import {
   View
 } from "react-native";
 
+import PageTransition from "@/components/PageTransition";
 import CourseCard from "../../../components/CourseCard";
 import LevelsCarousel from "../../../components/LevelsCarousel";
 
@@ -104,6 +105,7 @@ export default function CoursesScreen() {
   };
 
   return (
+    <PageTransition>
     <SafeAreaView style={styles.safe}>
       {/* Top nav */}
 <View style={styles.topNav}>
@@ -155,6 +157,7 @@ export default function CoursesScreen() {
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
+    </PageTransition>
   );
 }
 

@@ -3,11 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QUIZ_DATA } from '../constants/Questions';
 import { useGamification } from '../context/GamificationContext';
 
 export default function QuizScreen() {
+  const insets = useSafeAreaInsets();
   const { moduleId, level } = useLocalSearchParams(); 
   const router = useRouter();
   
@@ -122,14 +123,13 @@ export default function QuizScreen() {
     const isPerfect = score === activeQuestions.length;
 
     return (
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+      <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.resultBox}>
           
           <Ionicons name={isPerfect ? "shield-checkmark" : "shield-half"} size={80} color={theme.main} />
           <Text style={styles.title}>{isPerfect ? "Module Cleared!" : "Good Effort!"}</Text>
           <Text style={styles.subTitle}>Accuracy: {score} / {activeQuestions.length}</Text>
           
-          {/* SLEEK LIGHT GAMING XP CARD */}
           <View style={[styles.proGameCard, { borderColor: currentRank.color + '30' }]}>
             {isPracticeMode ? (
               <>
@@ -169,12 +169,12 @@ export default function QuizScreen() {
             <Text style={styles.gameButtonText}>CONTINUE</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.bg }]}>
+    <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.header}>
          <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="close" size={28} color="#374151" />
@@ -214,7 +214,7 @@ export default function QuizScreen() {
           </TouchableOpacity>
         ))}
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -234,7 +234,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: '900', marginTop: 24, color: '#111827', letterSpacing: -0.5 },
   subTitle: { fontSize: 18, color: '#6b7280', marginBottom: 30, marginTop: 8, fontWeight: '700' },
   
-  // SLEEK LIGHT CARD
   proGameCard: { 
     backgroundColor: '#ffffff', 
     width: '100%', padding: 28, 

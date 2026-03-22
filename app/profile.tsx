@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- 1. IMPORT HOOK
 
 // IMPORT BOTH GLOBAL CONTEXTS!
 import { RANKS, useGamification } from '../context/GamificationContext';
@@ -11,14 +12,12 @@ import { useTrading } from '../context/TradingContext';
 const formatCurrency = (val: number) => "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ProfileScreen() {
+  const insets = useSafeAreaInsets(); // <-- 2. INITIALIZE HOOK
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Pull Balance from Trading Engine
   const { balance } = useTrading();
-  
-  // Pull Gamification Data
   const { xp, currentRank, nextRank, progressPercent } = useGamification();
   const [isRankModalOpen, setIsRankModalOpen] = useState(false);
 
@@ -83,26 +82,26 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={24} color="#111" />
+    // <-- 3. INJECT DYNAMIC PADDING TOP AND BOTTOM -->
+    <View style={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
+      
+      {/* <-- 4. DYNAMIC BACK BUTTON PLACEMENT --> */}
+      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 15 }]} onPress={() => router.back()}>
+        <Ionicons name="arrow-back" size={28} color="#111827" />
       </TouchableOpacity>
 
-      {/* ── HEADER (AVATAR & WALLET BALANCE) ── */}
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <Ionicons name="person-circle-outline" size={70} color="#cbd5e1" />
         </View>
         <Text style={styles.name}>{user?.isGuest ? "Guest User" : "Trader"}</Text>
         
-        {/* NEW SLEEK WALLET DISPLAY */}
         <View style={styles.walletPill}>
           <Ionicons name="wallet-outline" size={16} color="#0f62fe" style={{ marginRight: 6 }} />
           <Text style={styles.walletText}>{formatCurrency(balance)}</Text>
         </View>
       </View>
 
-      {/* ── SLEEK INTERACTIVE RANK CARD ── */}
       <TouchableOpacity 
         style={[styles.rankCard, { borderColor: currentRank.color + '40' }]} 
         onPress={() => setIsRankModalOpen(true)}
@@ -126,7 +125,6 @@ export default function ProfileScreen() {
         </View>
       </TouchableOpacity>
 
-      {/* ── MENU ITEMS ── */}
       <View style={styles.menu}>
         {user?.isGuest && (
           <TouchableOpacity style={styles.menuItem} onPress={handleUpgrade}>
@@ -152,31 +150,28 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Log Out & Reset Progress</Text>
       </TouchableOpacity>
 
-      {/* ========================================= */}
-      {/* THE RANK JOURNEY MODAL (SLIDES UP) */}
-      {/* ========================================= */}
+      {/* THE RANK JOURNEY MODAL */}
       <Modal visible={isRankModalOpen} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { paddingBottom: insets.bottom > 0 ? insets.bottom + 20 : 40 }]}>
             
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Rank Journey</Text>
               <TouchableOpacity onPress={() => setIsRankModalOpen(false)}>
-                <Ionicons name="close-circle" size={28} color="#9ca3af" />
+                <Ionicons name="close-circle" size={32} color="#9ca3af" />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.journeyLine} />
               
-              {RANKS.map((rank, index) => {
+              {RANKS.map((rank) => {
                 const isCurrent = rank.name === currentRank.name;
                 const isPassed = xp >= rank.minXp;
                 
                 return (
                   <View key={rank.name} style={[styles.journeyItem, isCurrent && styles.journeyItemCurrent]}>
                     
-                    {/* Timeline Node */}
                     <View style={[styles.node, { backgroundColor: isPassed ? rank.color : '#e2e8f0', borderColor: isCurrent ? '#fff' : 'transparent', borderWidth: isCurrent ? 3 : 0 }]} />
                     
                     <View style={styles.journeyTextContainer}>
@@ -210,8 +205,11 @@ export default function ProfileScreen() {
 // Styles
 // ─────────────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fa', padding: 20, paddingTop: 60 },
-  backBtn: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
+  // Removed hardcoded paddingTop: 60 from container!
+  container: { flex: 1, backgroundColor: '#f8f9fa', paddingHorizontal: 20 },
+  
+  // Removed hardcoded top: 50 from backBtn!
+  backBtn: { position: 'absolute', left: 20, zIndex: 10, padding: 4 },
   
   header: { alignItems: 'center', marginTop: 10, marginBottom: 30 },
   avatarContainer: { marginBottom: 10, backgroundColor: '#fff', borderRadius: 50, padding: 2, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
@@ -220,7 +218,6 @@ const styles = StyleSheet.create({
   walletPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 8 },
   walletText: { color: '#0f62fe', fontWeight: '800', fontSize: 14 },
 
-  // SLEEK RANK CARD
   rankCard: { backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 25, borderWidth: 1, elevation: 4, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
   rankCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   rankSubText: { color: '#6b7280', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
@@ -238,12 +235,12 @@ const styles = StyleSheet.create({
   menuIconInfo: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   menuText: { fontSize: 16, color: '#374151', fontWeight: '600' },
   
-  logoutBtn: { backgroundColor: '#fef2f2', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 'auto', marginBottom: 10, borderWidth: 1, borderColor: '#fee2e2' },
+  logoutBtn: { backgroundColor: '#fef2f2', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 'auto', borderWidth: 1, borderColor: '#fee2e2' },
   logoutText: { color: '#ef4444', fontWeight: '800', fontSize: 15 },
 
   // --- MODAL STYLES ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 40, maxHeight: '80%' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
   modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' },
   

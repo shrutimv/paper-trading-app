@@ -13,6 +13,7 @@ import {
   View
 } from "react-native";
 
+import PageTransition from "@/components/PageTransition";
 import LevelsCarousel from "../../components/LevelsCarousel";
 import PuzzleItem from "../../components/PuzzleItem";
 
@@ -118,6 +119,7 @@ export default function PuzzlesScreen() {
   };
 
   return (
+  <PageTransition>
     <SafeAreaView style={styles.screen}>
       {/* Top Nav */}
       <View style={styles.topNav}>
@@ -155,7 +157,7 @@ export default function PuzzlesScreen() {
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
                <View style={{paddingHorizontal:16, marginTop:10}}>
-                 <PuzzleItem {...item} onPress={() => {}} />
+                 <PuzzleItem {...item} onPress={() => router.push('/play-puzzle')} />
                </View>
             )}
             contentContainerStyle={{paddingBottom: 100}}
@@ -230,6 +232,7 @@ export default function PuzzlesScreen() {
         </View>
       )}
     </SafeAreaView>
+    </PageTransition>  
   );
 }
 

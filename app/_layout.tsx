@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <-- 1. NEW IMPORT
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { GamificationProvider } from '../context/GamificationContext';
@@ -51,18 +52,29 @@ export default function RootLayout() {
     );
   }
 
+  // Determine background color based on theme so the space behind the nav bar matches
+  const bgColor = colorScheme === 'dark' ? '#000' : '#fff';
+
   return (
     <GamificationProvider>
       <TradingProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          <Stack>
-            <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-            <Stack.Screen name="learn" options={{ headerShown: false }} /> 
-          </Stack>
-          <StatusBar style="auto" />
+          
+          {/* <-- 2. THE GLOBAL SAFE AREA FIX --> */}
+          {/* edges={['bottom']} ensures we only push up from the bottom nav bar */}
+          <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }} edges={['bottom']}>
+            
+            <Stack>
+              <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              <Stack.Screen name="learn" options={{ headerShown: false }} /> 
+            </Stack>
+            <StatusBar style="auto" />
+            
+          </SafeAreaView>
+          
         </ThemeProvider>
       </TradingProvider>
     </GamificationProvider>
