@@ -1,8 +1,16 @@
 # app.py
+import os
+from pathlib import Path
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
-from API.logic import get_stock_data, get_stock_history, get_stock_data_by_symbol, yahoo_search, fetch_yf_info_and_history
+from dotenv import load_dotenv
+from .logic import get_stock_data, get_stock_history, get_stock_data_by_symbol, yahoo_search, fetch_yf_info_and_history
+from .news_cache import news_cache
+from .news_service import fetch_news
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 app = FastAPI(title="Stock Lookup API")
 
 app.add_middleware(
@@ -17,6 +25,30 @@ app.add_middleware(
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+async def startup_news_cache() -> None:
+    await news_cache.start_background_refresh()
+
+
+@app.get("/news")
+def news(
+    sector: Optional[str] = Query(None, description="Optional industry sector filter"),
+    industry: Optional[str] = Query(None, description="Optional industry filter"),
+    keyword: Optional[str] = Query(None, description="Optional keyword filter"),
+):
+    cached = news_cache.get(sector, industry, keyword)
+    if cached:
+        return cached
+
+    try:
+        result = fetch_news(sector=sector, industry=industry, keyword=keyword)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
+
+    news_cache.set(sector, industry, keyword, value=result)
+    return result
 
 
 @app.get("/search")

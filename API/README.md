@@ -41,7 +41,40 @@ Response JSON contains:
 - On Android emulator (Android Studio), use: http://10.0.2.2:8000
 - Make sure local firewall allows incoming connections to port 8000.
 
-## 6) Notes and next steps
+## 6) Running Both Backend and Frontend Together
+
+To run the complete application (backend + frontend):
+
+### Backend (FastAPI):
+From the project root directory (`paper-trading-app/`):
+```bash
+uvicorn API.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend (Expo React Native):
+Open a new terminal and from the project root:
+```bash
+npm start
+# or
+expo start
+```
+
+This will start:
+- Backend API on `http://0.0.0.0:8000` (accessible at your LAN IP, e.g., `http://192.168.0.105:8000`)
+- Frontend Expo dev server (typically on `http://localhost:8081`)
+
+### Testing the Full Application:
+1. Backend should show: "Uvicorn running on http://0.0.0.0:8000"
+2. Frontend will open Expo DevTools in your browser
+3. Use Expo Go app on your phone to scan the QR code, or run on simulator/emulator
+4. The app will connect to the backend automatically (IP configured in `src/config.ts`)
+
+### Troubleshooting:
+- If port 8081 is busy, Expo will ask to use 8082
+- Ensure both terminals remain open
+- Check firewall settings for backend port 8000
+
+## 7) Notes and next steps
 - This server uses simple in-memory caching (TTLCache) to reduce yfinance/Yahoo hits for repeated queries.
 - For production you should:
   - Serve via HTTPS
