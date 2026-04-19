@@ -14,6 +14,7 @@ import {
 
 import CourseCard from "../../components/CourseCard";
 import HorizontalCardCarousel from "../../components/HorizontalCardCarousel";
+import NewsCarousel from "../../components/NewsCarousel";
 import PaperTradingCard from "../../components/PaperTradingCard";
 import PuzzleCard from "../../components/PuzzleCard";
 import SmallCard from "../../components/SmallCard";
@@ -189,6 +190,14 @@ export default function Home() {
             <PaperTradingCard />
           </View>
         </AnimatedTabCard>
+
+        {/* --- MARKET NEWS SECTION --- */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Market News</Text>
+        </View>
+        <View style={{ paddingHorizontal: 16 }}>
+          <NewsCarousel />
+        </View>
 
       </View>
     </ScrollView>

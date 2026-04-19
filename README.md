@@ -52,3 +52,44 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+
+## NEWS API MODULE
+
+This project now includes a News API integration for Indian stock market news.
+
+### Setup
+
+1. Add your NewsAPI.org key to `API/.env`:
+
+```env
+NEWS_API_KEY=your_api_key_here
+```
+
+2. Install backend dependencies:
+
+```bash
+pip install -r API/requirements.txt
+```
+
+3. Start the backend:
+
+```bash
+uvicorn API.app:app --reload
+```
+
+4. Confirm the endpoint works:
+
+```bash
+curl "http://192.168.0.105:8000/news"
+```
+
+### Frontend
+
+- `components/NewsCarousel.tsx` loads `/news` and displays horizontal news cards.
+- `src/api/newsApi.ts` provides `fetchNews(sector?, keyword?, industry?)`.
+- The home screen in `app/(tabs)/index.tsx` now renders the news carousel.
+
+### Notes
+
+- The backend caches news and refreshes every 15 minutes via `API/news_cache.py`.
+- Use your local LAN IP in `src/config.ts` if needed.
