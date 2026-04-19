@@ -1,263 +1,432 @@
-// app/stock/[symbol].tsx
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { Ionicons } from '@expo/vector-icons';
+import Slider from '@react-native-community/slider';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
-  Button,
-  FlatList,
-  Platform,
+  ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View
-} from "react-native";
-import PriceBadge from "../../components/PriceBadge";
-import SmallChart, { RangeKey } from "../../components/SmallChart";
-import { fetchStockBySymbol } from "../../src/api";
-import type { HistoryPoint, StockResponse } from "../../src/types";
+} from 'react-native';
+import { LineChart } from 'react-native-gifted-charts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const RANGE_KEYS: RangeKey[] = ["1D", "5D", "1M", "3M", "6M", "1Y", "2Y", "5Y", "Max"];
+import { API_BASE_URL } from '../../src/config';
 
-const RANGE_MAP: Record<RangeKey, { period: string; interval: string }> = {
-  "1D": { period: "5d", interval: "15m" },
-  "5D": { period: "5d", interval: "30m" },
-  "1M": { period: "1mo", interval: "1d" },
-  "3M": { period: "3mo", interval: "1d" },
-  "6M": { period: "6mo", interval: "1d" },
-  "1Y": { period: "1y", interval: "1d" },
-  "2Y": { period: "2y", interval: "1d" },
-  "5Y": { period: "5y", interval: "1d" },
-  "Max": { period: "max", interval: "1wk" },
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+const fmt = (val: number) => '₹' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtCompact = (val: number): string => {
+  if (val >= 10_000_000) return '₹' + (val / 10_000_000).toFixed(2) + ' Cr';
+  if (val >= 100_000)    return '₹' + (val / 100_000).toFixed(2) + ' L';
+  if (val >= 1_000)      return '₹' + (val / 1_000).toFixed(2) + ' K';
+  return '₹' + val.toFixed(2);
 };
 
-export default function StockDetail() {
-  const params = useLocalSearchParams();
-  const router = useRouter();
-  const symbol = (params?.symbol as string) || "";
+const makeYLabel = (yOff: number) => (raw: string): string => {
+  const n = parseFloat(raw) + yOff;
+  if (isNaN(n) || n <= 0) return '';
+  if (n >= 100_000) return (n / 100_000).toFixed(1) + 'L';
+  if (n >= 1_000)   return (n / 1_000).toFixed(1) + 'K';
+  return n.toFixed(0);
+};
 
-  const [loading, setLoading] = useState<boolean>(true);
-  const [data, setData] = useState<StockResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [qty, setQty] = useState<string>("1");
-  const [range, setRange] = useState<RangeKey>("1M");
+// Safe date parser for the new Python format ("YYYY-MM-DD HH:MM:SS")
+const parseSafeDate = (dateStr: string) => {
+  if (!dateStr) return new Date();
+  // iOS Safari/JS needs the 'T' instead of space to parse reliably
+  return new Date(dateStr.replace(' ', 'T')); 
+};
 
-  const chartContainerRef = useRef<View | null>(null);
+const TIMEFRAMES = [
+  { label: '1D', period: '1d',  interval: '5m'  },
+  { label: '1W', period: '5d',  interval: '15m' },
+  { label: '1M', period: '1mo', interval: '1d'  },
+  { label: '6M', period: '6mo', interval: '1d'  },
+  { label: '1Y', period: '1y',  interval: '1d'  },
+];
 
-  useEffect(() => {
-    if (!symbol) {
-      setError("No symbol provided");
-      setLoading(false);
-      return;
-    }
-    fetchForRange(range);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [symbol, range]);
+const C = {
+  bg:      '#0d0d12',
+  surface: '#13131a',
+  card:    '#17171f',
+  border:  '#252535',
+  axis:    '#c0c0e0',
+  textPri: '#f0f0f8',
+  textSec: '#8888aa',
+  green:   '#089981', // TradingView Green
+  greenBg: 'rgba(8,153,129,0.12)',
+  red:     '#f23645', // TradingView Red
+  redBg:   'rgba(242,54,69,0.12)',
+  pill:    '#1e1e2c',
+};
 
-  async function fetchForRange(r: RangeKey) {
+function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <View style={SC.wrap}>
+      <Text style={SC.label}>{label}</Text>
+      <Text style={[SC.value, color ? { color } : {}]}>{value}</Text>
+    </View>
+  );
+}
+const SC = StyleSheet.create({
+  wrap:  { flex: 1, minWidth: '45%', marginBottom: 14 },
+  label: { fontSize: 10, color: '#8888aa', fontWeight: '600', marginBottom: 3, textTransform: 'uppercase', letterSpacing: 0.5 },
+  value: { fontSize: 14, color: '#f0f0f8', fontWeight: '700' },
+});
+
+export default function StockDetailScreen() {
+  const router            = useRouter();
+  const { symbol }        = useLocalSearchParams();
+  const { width, height } = useWindowDimensions();
+  const insets            = useSafeAreaInsets();
+
+  const [activeRange, setActiveRange] = useState(TIMEFRAMES[3]);
+  const [chartData,   setChartData]   = useState<any[]>([]);
+  const [stockMeta,   setStockMeta]   = useState<any>(null);
+  const [isLoading,   setIsLoading]   = useState(true);
+
+  const [sliderIndex, setSliderIndex] = useState(0);
+  const isLandscape = width > height;
+
+  useEffect(() => { fetchStockData(); }, [symbol, activeRange]);
+  useEffect(() => () => { ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP); }, []);
+
+  const fetchStockData = async () => {
+    setIsLoading(true);
     try {
-      setLoading(true);
-      setError(null);
-      const opts = RANGE_MAP[r];
-      const res = await fetchStockBySymbol(symbol, {
-        period: opts.period,
-        interval: opts.interval,
-        max_points: 1200,
-        compact: false,
-      });
-      setData(res);
-    } catch (err: any) {
-      console.error("fetchStockBySymbol error:", err?.response ?? err);
-      const msg = err?.response?.data?.detail?.error || err?.message || "Failed to load stock details.";
-      setError(String(msg));
+      const res  = await fetch(`${API_BASE_URL}/stock?symbol=${symbol}&period=${activeRange.period}&interval=${activeRange.interval}`);
+      const data = await res.json();
+      if (data?.history?.length > 0) {
+        setStockMeta(data.meta);
+        
+        const formatted = data.history.map((p: any) => ({
+          value: p.close,
+          fullDate: p.date || p.Datetime,
+        }));
+        
+        setChartData(formatted);
+        setSliderIndex(formatted.length - 1); 
+      } else {
+        setChartData([]);
+      }
+    } catch (e) {
+      console.error(e);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }
-
-  const history = data?.history ?? [];
-  const historyNewestFirst = [...history].reverse().slice(0, 200); // for FlatList data
-
-  const onBuy = () => {
-    if (!data) return;
-    const price = data.meta?.regularMarketPrice ?? 0;
-    const units = Number(qty || "0");
-    if (!units || units <= 0) {
-      Alert.alert("Invalid quantity", "Enter a positive number of units.");
-      return;
-    }
-    const cost = price * units;
-    Alert.alert("Confirm Buy", `Buy ${units} units of ${data.meta.symbol} for ${data.meta.currency}${cost.toFixed(2)}?`);
   };
 
-  function renderHistory({ item }: { item: HistoryPoint }) {
-    return (
-      <View style={styles.historyRow}>
-        <Text style={styles.historyDate}>{item.date}</Text>
-        <Text style={styles.historyClose}>{item.close == null ? "—" : Number(item.close).toFixed(2)}</Text>
-      </View>
+  const toggleLandscape = async () => {
+    await ScreenOrientation.lockAsync(
+      isLandscape ? ScreenOrientation.OrientationLock.PORTRAIT_UP : ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT
     );
+  };
+
+  const first  = chartData[0]?.value || 0;
+  const last   = chartData[chartData.length - 1]?.value || 0;
+  const diff   = last - first;
+  const pct    = first > 0 ? ((diff / first) * 100).toFixed(2) : '0.00';
+  const isUp   = last >= first;
+  const accent = isUp ? C.green : C.red;
+  const dimBg  = isUp ? C.greenBg : C.redBg;
+
+  const minP   = chartData.length > 0 ? Math.min(...chartData.map(d => d.value)) : 0;
+  const maxP   = chartData.length > 0 ? Math.max(...chartData.map(d => d.value)) : 0;
+  const yOff   = minP * 0.995;
+  const yRange = (maxP - yOff) * 1.05;
+
+  const Y_W  = 40; 
+  const containerWidth = isLandscape ? width * 0.95 : width - 16; 
+  const chartW = containerWidth - Y_W; 
+  const chartH = isLandscape ? 220 : 250;
+
+  const spacing = chartData.length > 1 ? chartW / (chartData.length - 1) : 2;
+  const fmtY = useCallback(makeYLabel(yOff), [yOff]);
+
+  const yLabelStyle = { color: '#8888aa', fontSize: 9, fontWeight: '600' as const };
+  const xLabelStyle = { color: '#8888aa', fontSize: 9, fontWeight: '600' as const };
+
+  const sym       = String(symbol).replace('.NS', '');
+  const dayHigh   = stockMeta?.dayHigh   ?? stockMeta?.regularMarketDayHigh          ?? maxP;
+  const dayLow    = stockMeta?.dayLow    ?? stockMeta?.regularMarketDayLow            ?? minP;
+  const open      = stockMeta?.open      ?? stockMeta?.regularMarketOpen              ?? first;
+  const prevClose = stockMeta?.previousClose ?? stockMeta?.regularMarketPreviousClose ?? 0;
+  const vol       = stockMeta?.regularMarketVolume ?? 0;
+  const mktCap    = stockMeta?.marketCap ?? 0;
+
+  // CROSSHAIR & TOOLTIP MATH
+  const selectedPoint = chartData[sliderIndex];
+  let scrubDateText = '';
+  let dotX = 0;
+  let dotY = 0;
+  let tooltipX = 0;
+  
+  if (selectedPoint) {
+    const d = parseSafeDate(selectedPoint.fullDate);
+    scrubDateText = activeRange.label === '1D' 
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+      : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+      
+    dotX = sliderIndex * spacing;
+    dotY = chartH - ((selectedPoint.value - yOff) / yRange) * chartH;
+    tooltipX = Math.max(0, Math.min(dotX - 50, chartW - 100));
   }
 
-  // Header content that sits above the history list
-  const ListHeader = () => {
-    if (loading) {
-      return <ActivityIndicator size="large" style={{ marginTop: 24 }} />;
-    }
-    if (error) {
-      return (
-        <View style={{ padding: 16 }}>
-          <Text style={{ color: "red" }}>{error}</Text>
-        </View>
-      );
-    }
-    if (!data) {
-      return null;
-    }
-
-    const historyForChart = history; // oldest -> newest expected by chart
-
-    return (
-      <View style={styles.topContainer}>
-        <View style={styles.headerRow}>
-          <Button title="Back" onPress={() => router.back()} />
-          <Text style={styles.headerSymbol}>{symbol}</Text>
-          <View style={{ width: 60 }} />
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.title} numberOfLines={2}>
-            {data.meta.resolved_name ?? data.selected.shortname ?? data.selected.symbol}
-          </Text>
-          <Text style={styles.subtitle}>{data.meta.symbol}</Text>
-
-          <View style={styles.rowTop}>
-            <View style={{ flex: 1 }}>
-              <PriceBadge
-                price={data.meta.regularMarketPrice}
-                change={
-                  data.meta.regularMarketPrice != null && data.meta.previousClose != null
-                    ? Number(data.meta.regularMarketPrice) - Number(data.meta.previousClose)
-                    : undefined
-                }
-                changePct={
-                  data.meta.regularMarketPrice != null && data.meta.previousClose != null
-                    ? ((Number(data.meta.regularMarketPrice) - Number(data.meta.previousClose)) / Number(data.meta.previousClose)) * 100
-                    : undefined
-                }
-                currency={data.meta.currency ?? ""}
-              />
-              <Text style={styles.metaSmall}>
-                Market Cap: {data.meta.marketCap ? String(data.meta.marketCap) : "—"} • Sector: {data.meta.sector ?? "—"}
-              </Text>
-            </View>
-          </View>
-
-          {/* Range buttons */}
-          <View style={styles.rangeRow}>
-            {RANGE_KEYS.map((r) => (
-              <TouchableOpacity key={r} onPress={() => setRange(r)} style={[styles.rangeBtn, range === r && styles.rangeBtnActive]}>
-                <Text style={range === r ? styles.rangeTextActive : styles.rangeText}>{r}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Chart container (Victory-based SmallChart handles tooltips internally) */}
-          <View ref={(c) => { chartContainerRef.current = c; }} collapsable={false}>
-            <SmallChart history={historyForChart} range={range} />
-          </View>
-
-          {/* New Trade Box */}
-          <View style={styles.tradeBox}>
-            <Text style={{ fontWeight: "700", marginBottom: 6 }}>New Trade</Text>
-            <View style={styles.tradeRow}>
-              <TextInput style={styles.qtyInput} keyboardType="numeric" value={qty} onChangeText={setQty} placeholder="Qty" placeholderTextColor="#999" />
-              <Button title="Buy" onPress={onBuy} />
-            </View>
-
-            <View style={styles.estimate}>
-              <Text style={{ color: "#666" }}>Estimated Cost</Text>
-              <Text style={{ fontSize: 16, fontWeight: "800" }}>{data.meta.currency ?? ""}{Number((Number(qty || 0) * (data.meta.regularMarketPrice ?? 0))).toLocaleString()}</Text>
-              <Text style={{ fontSize: 12, color: "#888" }}>Based on market price {data.meta.currency ?? ""}{Number(data.meta.regularMarketPrice ?? 0).toLocaleString()}</Text>
-            </View>
-          </View>
-
-          <Text style={{ marginTop: 12, fontWeight: "700" }}>Recent history (newest first)</Text>
-        </View>
-      </View>
-    );
+  const getXAxisLabels = () => {
+    if (chartData.length === 0) return [];
+    const steps = [0, 0.25, 0.5, 0.75, 1].map(f => Math.round(f * (chartData.length - 1)));
+    return steps.map((idx) => {
+      const p = chartData[idx];
+      if (!p) return '';
+      const d = parseSafeDate(p.fullDate);
+      return activeRange.label === '1D'
+        ? `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
+        : `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`;
+    });
   };
 
   return (
     <>
-      {/* Use Stack.Screen to customize the native stack header for this route.
-          To hide the header entirely, change `headerShown` to `false`. */}
-      <Stack.Screen
-        options={{
-          title: symbol ?? "Stock Details",
-          headerStyle: { backgroundColor: "#fff" },
-          headerTintColor: "#000",
-          // headerShown: false, // <-- uncomment this line to completely remove the header
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
 
-      {/* FlatList is the top-level scroll container; header contains the UI above the list */}
-      <FlatList
-        style={styles.page}
-        contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 12 }}
-        data={historyNewestFirst}
-        keyExtractor={(item, index) => `${item.date}_${index}`}
-        renderItem={renderHistory}
-        ItemSeparatorComponent={() => <View style={{ height: 1, backgroundColor: "#eee", marginVertical: 2 }} />}
-        ListEmptyComponent={() => (
-          <View style={{ padding: 20 }}>
-            <Text style={{ color: "#666" }}>{loading ? "Loading..." : "No history available"}</Text>
+      <View style={[S.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+        <StatusBar barStyle="light-content" backgroundColor={C.bg} />
+
+        {/* ── HEADER (Hidden in Landscape to save space) ── */}
+        {!isLandscape && (
+          <View style={S.header}>
+            <TouchableOpacity onPress={() => router.back()} style={S.iconBtn}>
+              <Ionicons name="arrow-back" size={22} color={C.textPri} />
+            </TouchableOpacity>
+            <View style={S.headerMid}>
+              <Text style={S.headerSym}>{sym}</Text>
+              <View style={[S.badge, { backgroundColor: dimBg }]}>
+                <Text style={[S.badgeTxt, { color: accent }]}>NSE</Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={toggleLandscape} style={S.iconBtn}>
+              <Ionicons name="expand-outline" size={22} color={C.textPri} />
+            </TouchableOpacity>
           </View>
         )}
-        ListHeaderComponent={ListHeader}
-        // improvement flags:
-        keyboardShouldPersistTaps="handled"
-        // avoid nested scroll issues on Android
-        nestedScrollEnabled={true}
-      />
+
+        {/* ── FLOATING EXIT LANDSCAPE BUTTON ── */}
+        {isLandscape && (
+          <TouchableOpacity onPress={toggleLandscape} style={S.floatingExitBtn}>
+            <Ionicons name="contract-outline" size={22} color={C.textPri} />
+          </TouchableOpacity>
+        )}
+
+        {/* ── SCROLLABLE BODY ── */}
+        <ScrollView
+          style={S.scroll}
+          contentContainerStyle={[S.scrollContent, { width: containerWidth, alignSelf: 'center' }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* PRICE BLOCK */}
+          <View style={[S.priceBlock, isLandscape && { marginTop: 10 }]}>
+            <Text style={S.co} numberOfLines={1}>{stockMeta?.resolved_name || '—'}</Text>
+            <Text style={S.price}>{stockMeta ? fmt(stockMeta.regularMarketPrice) : '—'}</Text>
+            <View style={S.changeRow}>
+              <View style={[S.changePill, { backgroundColor: dimBg }]}>
+                <Ionicons name={isUp ? 'trending-up' : 'trending-down'} size={13} color={accent} style={{ marginRight: 4 }} />
+                <Text style={[S.changeAmt, { color: accent }]}>{isUp ? '+' : ''}{fmt(diff)}</Text>
+              </View>
+              <Text style={[S.changePct, { color: accent }]}>{isUp ? '+' : ''}{pct}%</Text>
+              <Text style={S.changeRange}>· {activeRange.label}</Text>
+            </View>
+          </View>
+
+          {/* TIMEFRAME PILLS */}
+          <View style={S.tfRow}>
+            {TIMEFRAMES.map(tf => {
+              const on = activeRange.label === tf.label;
+              return (
+                <TouchableOpacity key={tf.label} style={[S.pill, on && { backgroundColor: accent }]} onPress={() => setActiveRange(tf)} activeOpacity={0.7}>
+                  <Text style={[S.pillTxt, on && { color: C.bg }]}>{tf.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* THE CHART BLOCK */}
+          <View style={S.chartWrap}>
+            {isLoading ? (
+              <View style={[S.centre, { height: chartH }]}>
+                <ActivityIndicator size="large" color={accent} />
+                <Text style={S.loadTxt}>Fetching market data…</Text>
+              </View>
+            ) : chartData.length > 0 ? (
+              <View>
+                
+                <View style={{ position: 'relative' }}>
+                  {/* FLOATING TOOLTIP ON CURVE */}
+                  {selectedPoint && (
+                    <View style={[S.floatingTooltip, { left: tooltipX, top: Math.max(dotY - 45, 0), borderColor: accent }]}>
+                      <Text style={[S.scrubPrice, { color: accent }]}>{fmt(selectedPoint.value)}</Text>
+                      <Text style={S.scrubDate}>{scrubDateText}</Text>
+                    </View>
+                  )}
+
+                  {/* THE SVG CHART */}
+                  <LineChart
+                    areaChart
+                    data={chartData}
+                    width={chartW}
+                    height={chartH}
+                    spacing={spacing}
+                    initialSpacing={0}
+                    endSpacing={0}
+                    color={accent}
+                    thickness={2}
+                    hideDataPoints
+                    yAxisOffset={yOff}
+                    maxValue={yRange}
+                    noOfSections={4}
+                    yAxisSide={1} 
+                    yAxisLabelWidth={Y_W}
+                    formatYLabel={fmtY}
+                    yAxisTextStyle={yLabelStyle}
+                    yAxisColor="transparent"
+                    hideRules={false}
+                    rulesType="solid"
+                    rulesColor={C.border}
+                    xAxisColor={C.border}
+                    hideOrigin
+                    xAxisTextNumberOfLines={0} 
+                    startFillColor={accent}
+                    endFillColor={accent}
+                    startOpacity={0.2}
+                    endOpacity={0.0}
+                  />
+
+                  {/* DOT ON CURVE */}
+                  {selectedPoint && (
+                    <View style={[S.curveDot, { left: dotX - 6, top: dotY - 6, backgroundColor: accent }]} />
+                  )}
+                </View>
+
+                {/* CUSTOM X-AXIS */}
+                <View style={[S.customXAxis, { width: chartW }]}>
+                  {getXAxisLabels().map((label, i) => (
+                    <Text key={i} style={S.customXLabel}>{label}</Text>
+                  ))}
+                </View>
+
+                {/* FAT TOUCH SLIDER */}
+                <View style={S.sliderContainer}>
+                  <Slider
+                    style={{ width: chartW, height: 50, marginLeft: -15 }}
+                    minimumValue={0}
+                    maximumValue={chartData.length - 1}
+                    step={1}
+                    value={sliderIndex}
+                    onValueChange={(val) => setSliderIndex(val)}
+                    minimumTrackTintColor={accent}
+                    maximumTrackTintColor={C.border}
+                    thumbTintColor={accent}
+                  />
+                </View>
+
+              </View>
+            ) : (
+              <View style={[S.centre, { height: chartH }]}>
+                <Ionicons name="bar-chart-outline" size={40} color="#44445a" />
+                <Text style={S.emptyTxt}>No market data available</Text>
+              </View>
+            )}
+          </View>
+
+          {/* STATS BLOCK */}
+          <View style={S.statsCard}>
+            <View style={S.statsGrid}>
+              <StatCell label="Open"       value={open      ? fmt(open)      : '—'} />
+              <StatCell label="Prev Close" value={prevClose  ? fmt(prevClose) : '—'} />
+              <StatCell label="Day High"   value={dayHigh   ? fmt(dayHigh)   : '—'} color={C.green} />
+              <StatCell label="Day Low"    value={dayLow    ? fmt(dayLow)    : '—'} color={C.red}   />
+              <StatCell label="Volume"     value={vol       ? vol.toLocaleString('en-IN') : '—'} />
+              <StatCell label="Market Cap" value={mktCap    ? fmtCompact(mktCap) : '—'} />
+            </View>
+          </View>
+
+        </ScrollView>
+
+        {/* ── BUY / SELL ── */}
+        {!isLandscape && (
+          <View style={S.footer}>
+            <TouchableOpacity style={[S.btn, S.sell]} activeOpacity={0.8}>
+              <Text style={S.btnTxt}>SELL</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[S.btn, S.buy]} activeOpacity={0.8}>
+              <Text style={S.btnTxt}>BUY</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     </>
   );
 }
 
-const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#f4f7fb" },
-  topContainer: { paddingTop: Platform.OS === "web" ? 4 : 12 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12 },
-  headerSymbol: { fontWeight: "700", fontSize: 16 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-    marginHorizontal: 12,
-  },
-  title: { fontSize: 18, fontWeight: "800" },
-  subtitle: { color: "#666", marginTop: 4 },
-  rowTop: { marginTop: 8, flexDirection: "row", alignItems: "center" },
-  metaSmall: { color: "#666", marginTop: 8, fontSize: 12 },
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
+const S = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg },
 
-  rangeRow: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, justifyContent: "flex-start" },
-  rangeBtn: { paddingVertical: 6, paddingHorizontal: 10, borderRadius: 6, borderWidth: 1, borderColor: "#eee", margin: 4 },
-  rangeBtnActive: { backgroundColor: "#007aff", borderColor: "#007aff" },
-  rangeText: { color: "#333" },
-  rangeTextActive: { color: "#fff" },
+  header:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  headerMid: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  headerSym: { fontSize: 18, fontWeight: '800', color: C.textPri, letterSpacing: 0.4 },
+  badge:     { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badgeTxt:  { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  iconBtn:   { width: 36, height: 36, backgroundColor: C.surface, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
 
-  tradeBox: { marginTop: 12, padding: 12, backgroundColor: "#f7fbff", borderRadius: 10 },
-  tradeRow: { flexDirection: "row", alignItems: "center" },
-  qtyInput: { borderWidth: 1, borderColor: "#eee", padding: 8, borderRadius: 8, marginRight: 8, flex: 1 },
-  estimate: { marginTop: 10, backgroundColor: "#eef6ff", padding: 10, borderRadius: 8 },
-  historyRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 12, paddingHorizontal: 8 },
-  historyDate: { color: "#555" },
-  historyClose: { fontWeight: "700" },
+  floatingExitBtn: { position: 'absolute', top: 20, right: 30, zIndex: 100, width: 40, height: 40, backgroundColor: 'rgba(26, 26, 38, 0.8)', borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+
+  priceBlock:  { paddingTop: 4, paddingBottom: 8 },
+  co:          { fontSize: 12, color: C.textSec, fontWeight: '500', marginBottom: 2 },
+  price:       { fontSize: 30, fontWeight: '800', color: C.textPri, letterSpacing: -0.5 },
+  changeRow:   { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 4 },
+  changePill:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  changeAmt:   { fontSize: 12, fontWeight: '700' },
+  changePct:   { fontSize: 12, fontWeight: '700' },
+  changeRange: { fontSize: 11, color: C.textSec },
+
+  tfRow:   { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 10 },
+  pill:    { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 8, backgroundColor: C.pill },
+  pillTxt: { fontSize: 13, fontWeight: '700', color: C.axis },
+
+  scroll:        { flex: 1 },
+  scrollContent: { paddingBottom: 20 },
+
+  chartWrap: { paddingVertical: 10, marginBottom: 10 },
+  
+  customXAxis: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
+  customXLabel: { color: '#8888aa', fontSize: 9, fontWeight: '600' },
+
+  floatingTooltip: { position: 'absolute', backgroundColor: '#1a1a26', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, borderWidth: 1, zIndex: 30, alignItems: 'center', width: 100 },
+  curveDot: { position: 'absolute', width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: C.bg, zIndex: 20 },
+  scrubDate: { fontSize: 10, color: '#c0c0e0', fontWeight: '600', marginTop: 2 },
+  scrubPrice: { fontSize: 13, fontWeight: '900' },
+  
+  sliderContainer: { marginTop: 15, paddingVertical: 5 },
+
+  centre:   { alignItems: 'center', justifyContent: 'center' },
+  loadTxt:  { color: C.textSec, fontSize: 13, marginTop: 10 },
+  emptyTxt: { color: C.textSec, fontSize: 13, marginTop: 10 },
+
+  statsCard:   { backgroundColor: C.card, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: C.border },
+  statsGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+
+  footer:  { flexDirection: 'row', gap: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: C.border },
+  btn:     { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  sell:    { backgroundColor: C.red },
+  buy:     { backgroundColor: C.green },
+  btnTxt:  { color: '#fff', fontSize: 15, fontWeight: '800', letterSpacing: 1.5 },
 });

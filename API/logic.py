@@ -104,7 +104,7 @@ def fetch_yf_info_and_history(yf_symbol: str, period: str = "5Y", interval: str 
         # drop rows with NaN Close (incomplete rows)
         hist = hist.dropna(subset=["Close"])
         for idx, row in hist.iterrows():
-            date_str = pd.to_datetime(idx).strftime("%Y-%m-%d")
+            date_str = pd.to_datetime(idx).strftime("%Y-%m-%d %H:%M:%S")
             history_list.append({
                 "date": date_str,
                 "open": None if pd.isna(row.get("Open")) else float(row["Open"]),

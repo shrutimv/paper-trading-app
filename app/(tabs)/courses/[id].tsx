@@ -1,7 +1,7 @@
 // app/(tabs)/courses/[id].tsx
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Video } from "expo-av";
+import { Video, type ResizeMode } from "expo-av";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React from "react";
 import {
@@ -151,7 +151,10 @@ export default function CourseDetails() {
     async (map: Record<string, boolean>) => {
       try {
         const arr = Object.keys(map).filter((k) => map[k]);
-        await AsyncStorage.setItem(STORAGE_KEY_PREFIX + courseId, JSON.stringify(arr));
+        await AsyncStorage.setItem(
+          STORAGE_KEY_PREFIX + courseId,
+          JSON.stringify(arr)
+        );
       } catch (e) {
         console.warn("save failed", e);
       }
@@ -191,7 +194,9 @@ export default function CourseDetails() {
   const progressPct = total === 0 ? 0 : Math.round((done / total) * 100);
 
   const isWeb = Platform.OS === "web";
-  const contentSidePadding = isWeb ? Math.max(16, (SCREEN_W - Math.min(SCREEN_W, MAX_CONTENT_WIDTH)) / 2) : 0;
+  const contentSidePadding = isWeb
+    ? Math.max(16, (SCREEN_W - Math.min(SCREEN_W, MAX_CONTENT_WIDTH)) / 2)
+    : 0;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -199,19 +204,40 @@ export default function CourseDetails() {
         ListHeaderComponent={
           <>
             {/* Video (expo-av Video accepts require() directly) */}
-            <View style={[styles.headerWrap, { paddingHorizontal: contentSidePadding }]}>
-              <View style={[styles.contentInner, isWeb ? styles.contentInnerWeb : undefined]}>
+            <View
+              style={[
+                styles.headerWrap,
+                { paddingHorizontal: contentSidePadding },
+              ]}
+            >
+              <View
+                style={[
+                  styles.contentInner,
+                  isWeb ? styles.contentInnerWeb : undefined,
+                ]}
+              >
                 <View style={styles.videoWrap}>
                   <Video
                     source={course.video}
                     style={styles.video}
                     useNativeControls
-                    resizeMode="cover"
+
+                    resizeMode={"cover" as ResizeMode}
                     onLoadStart={() => setVideoLoading(true)}
                     onLoad={() => setVideoLoading(false)}
                   />
                   {videoLoading && (
-                    <View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, justifyContent: "center", alignItems: "center" }}>
+                    <View
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom: 0,
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
                       <ActivityIndicator />
                     </View>
                   )}
@@ -223,15 +249,24 @@ export default function CourseDetails() {
                   <Text style={styles.courseDesc}>{course.description}</Text>
 
                   {/* Progress */}
-                  <Text style={[styles.sectionHeading, { marginTop: 12 }]}>Course Progress</Text>
+                  <Text style={[styles.sectionHeading, { marginTop: 12 }]}>
+                    Course Progress
+                  </Text>
                   <View style={styles.progressBar}>
-                    <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: `${progressPct}%` },
+                      ]}
+                    />
                   </View>
                   <Text style={styles.progressLabel}>
                     {done}/{total} Chapters Complete
                   </Text>
 
-                  <Text style={[styles.sectionHeading, { marginTop: 18 }]}>Course Content</Text>
+                  <Text style={[styles.sectionHeading, { marginTop: 18 }]}>
+                    Course Content
+                  </Text>
                 </View>
               </View>
             </View>
@@ -243,7 +278,12 @@ export default function CourseDetails() {
           const isDone = !!completed[item.id];
           return (
             <View style={[{ paddingHorizontal: contentSidePadding }]}>
-              <View style={[styles.contentInner, isWeb ? styles.contentInnerWeb : undefined]}>
+              <View
+                style={[
+                  styles.contentInner,
+                  isWeb ? styles.contentInnerWeb : undefined,
+                ]}
+              >
                 <Pressable
                   onPress={() => toggleChapter(item.id)}
                   style={({ pressed }) => [
@@ -253,13 +293,33 @@ export default function CourseDetails() {
                   ]}
                 >
                   <View style={styles.chapterLeft}>
-                    <View style={[styles.iconCircle, isDone ? styles.iconCircleDone : null]}>
-                      {isDone ? <MaterialIcons name="check" size={18} color="#fff" /> : <MaterialIcons name="play-arrow" size={18} color="#374151" />}
+                    <View
+                      style={[
+                        styles.iconCircle,
+                        isDone ? styles.iconCircleDone : null,
+                      ]}
+                    >
+                      {isDone ? (
+                        <MaterialIcons name="check" size={18} color="#fff" />
+                      ) : (
+                        <MaterialIcons
+                          name="play-arrow"
+                          size={18}
+                          color="#374151"
+                        />
+                      )}
                     </View>
                   </View>
 
                   <View style={styles.chapterBody}>
-                    <Text style={[styles.chapterTitle, isDone ? { color: "#0f1724" } : null]}>{item.title}</Text>
+                    <Text
+                      style={[
+                        styles.chapterTitle,
+                        isDone ? { color: "#0f1724" } : null,
+                      ]}
+                    >
+                      {item.title}
+                    </Text>
                     <Text style={styles.chapterMeta}>{item.duration}</Text>
                   </View>
                 </Pressable>

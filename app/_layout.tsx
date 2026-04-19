@@ -1,24 +1,82 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <-- 1. NEW IMPORT
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { GamificationProvider } from '../context/GamificationContext';
+import { TradingProvider } from '../context/TradingContext';
 
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+export const unstable_settings = { initialRouteName: '(tabs)' };
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const segments = useSegments();
+  const router = useRouter();
+  
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    setTimeout(() => setIsLoading(false), 500);
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const checkAuth = async () => {
+      try {
+        const session = await AsyncStorage.getItem('userSession');
+        const inAuthGroup = segments[0] === 'auth';
+
+        if (!session && !inAuthGroup) {
+          router.replace('/auth');
+        } else if (session && inAuthGroup) {
+          router.replace('/(tabs)');
+        }
+      } catch (e) {
+        console.error("Auth Loop Error", e);
+      }
+    };
+    checkAuth();
+  }, [segments, isLoading]);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#0f62fe" />
+      </View>
+    );
+  }
+
+  // Determine background color based on theme so the space behind the nav bar matches
+  const bgColor = colorScheme === 'dark' ? '#000' : '#fff';
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <GamificationProvider>
+      <TradingProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          
+          {/* <-- 2. THE GLOBAL SAFE AREA FIX --> */}
+          {/* edges={['bottom']} ensures we only push up from the bottom nav bar */}
+          <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }} edges={['bottom']}>
+            
+            <Stack>
+              <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
+              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+              <Stack.Screen name="learn" options={{ headerShown: false }} /> 
+            </Stack>
+            <StatusBar style="auto" />
+            
+          </SafeAreaView>
+          
+        </ThemeProvider>
+      </TradingProvider>
+    </GamificationProvider>
   );
 }

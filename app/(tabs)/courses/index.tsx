@@ -3,18 +3,18 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
-    Dimensions,
-    FlatList,
-    Image,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Dimensions,
+  FlatList,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
+import PageTransition from "@/components/PageTransition";
 import CourseCard from "../../../components/CourseCard";
 import LevelsCarousel from "../../../components/LevelsCarousel";
 
@@ -105,28 +105,30 @@ export default function CoursesScreen() {
   };
 
   return (
+    <PageTransition>
     <SafeAreaView style={styles.safe}>
       {/* Top nav */}
-      <View style={styles.topNav}>
-        <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={22} color="#111827" />
-        </TouchableOpacity>
+<View style={styles.topNav}>
+  {/* Back Button */}
+  <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+    <MaterialIcons name="arrow-back" size={22} color="#111827" />
+  </TouchableOpacity>
 
-        <Text style={styles.title}>Courses</Text>
+  {/* Title */}
+  <Text style={styles.title}>Courses</Text>
 
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => console.log("notifications")}>
-            <MaterialIcons name="notifications-none" size={22} color="#111827" />
-          </TouchableOpacity>
+  {/* Right Side Icons */}
+  <View style={{ flexDirection: "row", alignItems: "center" }}>
+    
+    {/* Notification Icon - KEEP THIS */}
+    <TouchableOpacity style={styles.iconBtn} onPress={() => console.log("notifications")}>
+      <MaterialIcons name="notifications-none" size={22} color="#111827" />
+    </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.iconBtn, { marginLeft: 8 }]}
-            onPress={() => router.push("/")}
-          >
-            <Image source={require("../../../assets/images/profile/Avatar.png")} style={styles.smallAvatar} />
-          </TouchableOpacity>
-        </View>
-      </View>
+    {/* ❌ DELETED THE PROFILE ICON TOUCHABLEOPACITY HERE ❌ */}
+
+  </View>
+</View>
 
       {/* Search */}
       <View style={styles.searchWrap}>
@@ -155,6 +157,7 @@ export default function CoursesScreen() {
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>
+    </PageTransition>
   );
 }
 
