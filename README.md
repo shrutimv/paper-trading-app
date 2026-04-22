@@ -1,52 +1,161 @@
-# Welcome to your Expo app 👋
+# Paper Trading Application 📈
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is a full-stack paper trading application with a FastAPI backend and React Native Expo frontend.
 
-## Get started
-0. Go through the README.md in /API/ to run the API
+---
 
-check the ipv4 address of your system using the command 'ipconfig' in cmd and update the ipv4 address in /src/config.ts
+## 🚀 Complete Setup Guide
 
-1. Install dependencies
+### Prerequisites
+- Python 3.8+
+- Node.js 16+
+- Expo CLI installed globally (`npm install -g expo-cli`)
 
-   ```bash
-   npm install
-   npm install axios
-   ```
+---
 
-2. Start the app
+## Part 1: Backend API Setup
 
-   ```bash
-   npx expo start
-   ```
+### Step 1: Create `.env` file in `/API` directory
+
+Navigate to the `/API` folder and create a `.env` file with the following content:
+
+```
+NEWS_API_KEY=your_newsapi_org_key_here
+```
+
+**Path:** `D:\VESIT\Project\PaperTradeApplication\paper-trading-app\API\.env`
+
+Get your NEWS_API_KEY from [newsapi.org](https://newsapi.org)
+
+### Step 2: Install API dependencies
+
+From the project root directory:
+
+```bash
+# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
+
+pip install -r API/requirements.txt
+```
+
+### Step 3: Start the FastAPI server
+
+From the project root directory:
+
+```bash
+# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
+
+uvicorn API.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+✅ You should see: `Uvicorn running on http://0.0.0.0:8000`
+
+The API will be accessible at:
+- **Local:** `http://localhost:8000`
+- **Network:** `http://<your-ipv4-address>:8000` (e.g., `http://192.168.0.105:8000`)
+
+---
+
+## Part 2: Frontend Setup
+
+### Step 1: Find your IPv4 address
+
+Run in PowerShell/Command Prompt:
+
+```bash
+ipconfig
+```
+
+Look for "IPv4 Address" (usually starts with 192.168.x.x or 10.0.x.x)
+
+### Step 2: Update API endpoint in config
+
+Edit the file: `src/config.ts`
+
+Update the API URL with your IPv4 address:
+
+```typescript
+export const API_BASE_URL = 'http://192.168.0.105:8000'; // Replace 192.168.0.105 with your IPv4
+```
+
+### Step 3: Install frontend dependencies
+
+From the project root directory:
+
+```bash
+# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
+
+npm install
+npm install axios
+```
+
+### Step 4: Start the Expo development server
+
+From the project root directory:
+
+```bash
+# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
+
+npx expo start
+```
 
 In the output, you'll find options to open the app in a
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Expo Go](https://expo.dev/go) - Scan QR code with your phone
 - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+- [Web browser](https://docs.expo.dev/workflow/web/)
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## 🔄 Running Both Backend and Frontend Together
 
-When you're ready, run:
+**Terminal 1 - Start Backend API:**
 
 ```bash
-npm run reset-project
+cd D:\VESIT\Project\PaperTradeApplication\paper-trading-app
+uvicorn API.app:app --reload --host 0.0.0.0 --port 8000
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+**Terminal 2 - Start Frontend:**
 
-## Learn more
+```bash
+cd D:\VESIT\Project\PaperTradeApplication\paper-trading-app
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Both servers should now be running and the app can communicate with the backend.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+---
 
-## Join the community
+## ⚙️ Configuration Checklist
+
+- [ ] Created `.env` file in `/API` directory with `NEWS_API_KEY`
+- [ ] Updated IPv4 address in `src/config.ts`
+- [ ] Installed API requirements: `pip install -r API/requirements.txt`
+- [ ] Installed frontend dependencies: `npm install && npm install axios`
+- [ ] Backend running on port 8000
+- [ ] Frontend running (Expo dev server)
+- [ ] Mobile device/emulator connected on same Wi-Fi network (for testing on actual device)
+
+---
+
+## 🐛 Troubleshooting
+
+### API connection refused error
+- Ensure API server is running: `uvicorn API.app:app --reload --host 0.0.0.0 --port 8000`
+- Verify IPv4 address is correct in `src/config.ts`
+- Check firewall allows port 8000
+
+### `ModuleNotFoundError: No module named 'API'`
+- Make sure you're running uvicorn from the **project root** directory
+- Correct: `D:\VESIT\Project\PaperTradeApplication\paper-trading-app>`
+- Wrong: `D:\VESIT\Project\PaperTradeApplication\paper-trading-app\API>`
+
+### News endpoint not working
+- Verify `NEWS_API_KEY` is set in `API/.env`
+- Check that the key is valid at [newsapi.org](https://newsapi.org)
+
+---
 
 Join our community of developers creating universal apps.
 

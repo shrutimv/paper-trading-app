@@ -18,7 +18,8 @@ On Windows (PowerShell):
   pip install -r requirements.txt
 
 ## 3) Run the API locally
-  uvicorn app:app --reload --host 0.0.0.0 --port 8000
+From the project root directory (paper-trading-app/):
+  uvicorn API.app:app --reload --host 0.0.0.0 --port 8000
 
 This will start the server on port 8000.
 

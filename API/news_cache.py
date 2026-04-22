@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from cachetools import TTLCache
 
-from .news_service import fetch_news
+from API.news_service import fetch_news
 
 CACHE_TTL_SECONDS = 900
 CACHE_MAXSIZE = 50

@@ -5,9 +5,9 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from dotenv import load_dotenv
-from .logic import get_stock_data, get_stock_history, get_stock_data_by_symbol, yahoo_search, fetch_yf_info_and_history
-from .news_cache import news_cache
-from .news_service import fetch_news
+from API.logic import get_stock_data, get_stock_history, get_stock_data_by_symbol, yahoo_search, fetch_yf_info_and_history
+from API.news_cache import news_cache
+from API.news_service import fetch_news
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
