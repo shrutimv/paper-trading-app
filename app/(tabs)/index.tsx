@@ -21,14 +21,13 @@ import SmallCard from "../../components/SmallCard";
 import SmallCourseCard from "../../components/SmallCourseCard";
 
 // --- THE ANIMATED CARD WRAPPER ---
-// --- THE ANIMATED CARD WRAPPER ---
 const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: string }) => {
   const router = useRouter();
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
     Animated.spring(scale, {
-      toValue: 0.95, 
+      toValue: 0.96, 
       useNativeDriver: true,
     }).start();
   };
@@ -43,7 +42,6 @@ const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: 
   };
 
   const handlePress = () => {
-    // 🔥 CHANGE HERE: Use navigate() instead of push() for instant tab switching!
     router.navigate(href as any);
   };
 
@@ -82,22 +80,22 @@ export default function Home() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={{ paddingBottom: 56 }}
+      contentContainerStyle={{ paddingBottom: 100 }}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.page}>
         
-        {/* --- DYNAMIC HEADER --- */}
-        <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
-          <Text style={{ color: '#6b7280', fontSize: 16 }}>Hello,</Text>
-          <Text style={{ color: '#111', fontSize: 24, fontWeight: 'bold' }}>
-            {user?.isGuest ? "Guest User" : "Trader"}
+        {/* --- PREMIUM DYNAMIC HEADER --- */}
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Good Morning,</Text>
+          <Text style={styles.username}>
+            {user?.isGuest ? "Guest User" : "Jaspreet"} 
           </Text>
         </View>
 
-        {/* Stats Row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
+        {/* --- PREMIUM STATS TILES --- */}
+        <View style={styles.statsContainer}>
+          <View style={styles.statTile}>
             <Image source={require("../../assets/images/header/streak.png")} style={styles.statIcon} />
             <View>
               <Text style={styles.statLabel}>Streak</Text>
@@ -105,7 +103,7 @@ export default function Home() {
             </View>
           </View>
 
-          <View style={styles.statItem}>
+          <View style={styles.statTile}>
             <Image source={require("../../assets/images/header/puzzel.png")} style={styles.statIcon} />
             <View>
               <Text style={styles.statLabel}>Puzzles</Text>
@@ -113,7 +111,7 @@ export default function Home() {
             </View>
           </View>
 
-          <View style={styles.statItem}>
+          <View style={styles.statTile}>
             <Image source={require("../../assets/images/header/courses.png")} style={styles.statIcon} />
             <View>
               <Text style={styles.statLabel}>Courses</Text>
@@ -124,35 +122,39 @@ export default function Home() {
 
         {/* --- PUZZLES SECTION --- */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Puzzles</Text>
+          <Text style={styles.sectionTitle}>Daily Puzzles</Text>
           <TouchableOpacity onPress={() => router.push("/(tabs)/puzzles")}>
             <Text style={styles.link}>View all</Text>
           </TouchableOpacity>
         </View>
 
-        {/* WRAPPED WITH ANIMATION */}
         <AnimatedTabCard href="/(tabs)/puzzles">
-          <PuzzleCard />
+          <View style={styles.cardWrapper}>
+            <PuzzleCard />
+          </View>
         </AnimatedTabCard>
 
-        {/* Draggable small-card carousel */}
-        <HorizontalCardCarousel cardWidth={260} cardSpacing={14}>
-          <SmallCard title="Reading Volume" subtitle="Understand trade volume." progress={0.6} />
-          <SmallCard title="Risk Management" subtitle="Learn to mitigate losses." tag="Popular" />
-          <SmallCard title="Support & Resistance" subtitle="Identify key price levels." progress={0.15} />
-        </HorizontalCardCarousel>
+        {/* --- HORIZONTAL SKILLS CAROUSEL --- */}
+        <View style={{ marginTop: 10 }}>
+          <HorizontalCardCarousel cardWidth={260} cardSpacing={14}>
+            <SmallCard title="Reading Volume" subtitle="Understand trade volume." progress={0.6} />
+            <SmallCard title="Risk Management" subtitle="Learn to mitigate losses." tag="Popular" />
+            <SmallCard title="Support & Resistance" subtitle="Identify key price levels." progress={0.15} />
+          </HorizontalCardCarousel>
+        </View>
 
         {/* --- COURSES SECTION --- */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Courses</Text>
+        <View style={[styles.sectionHeader, { marginTop: 30 }]}>
+          <Text style={styles.sectionTitle}>Active Courses</Text>
           <TouchableOpacity onPress={() => router.push("/(tabs)/courses")}>
             <Text style={styles.link}>See all</Text>
           </TouchableOpacity>
         </View>
 
-        {/* WRAPPED WITH ANIMATION */}
         <AnimatedTabCard href="/(tabs)/courses">
-          <CourseCard />
+          <View style={styles.cardWrapper}>
+            <CourseCard />
+          </View>
         </AnimatedTabCard>
 
         <View style={styles.smallCoursesRow}>
@@ -180,22 +182,21 @@ export default function Home() {
         </View>
 
         {/* --- PAPER TRADING SECTION --- */}
-        <Text style={[styles.sectionTitle, { marginLeft: 16, marginTop: 16 }]}>
-          Paper Trading
-        </Text>
+        <View style={[styles.sectionHeader, { marginTop: 30 }]}>
+          <Text style={styles.sectionTitle}>Paper Trading</Text>
+        </View>
 
-        {/* WRAPPED WITH ANIMATION */}
         <AnimatedTabCard href="/(tabs)/trading">
-          <View style={{ paddingHorizontal: 16 }}>
+          <View style={styles.cardWrapper}>
             <PaperTradingCard />
           </View>
         </AnimatedTabCard>
 
-        {/* --- MARKET NEWS SECTION --- */}
-        <View style={styles.sectionHeader}>
+        {/* --- MARKET NEWS SECTION (API DRIVEN) --- */}
+        <View style={[styles.sectionHeader, { marginTop: 30, marginBottom: 10 }]}>
           <Text style={styles.sectionTitle}>Market News</Text>
         </View>
-        <View style={{ paddingHorizontal: 16 }}>
+        <View style={{ paddingHorizontal: 20 }}>
           <NewsCarousel />
         </View>
 
@@ -204,11 +205,11 @@ export default function Home() {
   );
 }
 
-/* -------------------- Styles -------------------- */
+/* -------------------- Premium Styles -------------------- */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f6f7fb",
+    backgroundColor: "#F8FAFC", // FinTech Slate/Gray
   },
   page: {
     width: "100%",
@@ -216,60 +217,98 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     paddingHorizontal: Platform.OS === "web" ? 32 : 0,
     paddingTop: 12,
-    backgroundColor: "transparent",
   },
-  statsRow: {
+  
+  /* --- HEADERS --- */
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    marginBottom: 25,
+  },
+  greeting: {
+    color: "#64748B",
+    fontSize: 14,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  username: {
+    color: "#0F172A",
+    fontSize: 28,
+    fontWeight: "900",
+    marginTop: 2,
+  },
+
+  /* --- STATS DASHBOARD --- */
+  statsContainer: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 12,
-    paddingHorizontal: 8,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginBottom: 30,
   },
-  statItem: {
+  statTile: {
     flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    width: "31%",
+    // Premium Shadow
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2, 
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   statIcon: {
-    width: 22,
-    height: 22,
-    marginRight: 6,
+    width: 24,
+    height: 24,
+    marginRight: 8,
     resizeMode: "contain",
   },
   statLabel: {
-    color: "#6b7280",
+    color: "#64748B",
     fontWeight: "600",
-    fontSize: 13,
+    fontSize: 11,
   },
   statValue: {
-    fontWeight: "700",
-    color: "#0f1724",
+    fontWeight: "800",
+    color: "#0F172A",
     fontSize: 14,
+    marginTop: 2,
   },
+
+  /* --- SECTION HEADERS --- */
   sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    marginTop: 20,
+    alignItems: "flex-end",
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: "700",
-    color: "#0f1724",
+    fontWeight: "800",
+    color: "#0F172A",
   },
   link: {
     color: "#0f62fe",
-    fontWeight: "600",
+    fontWeight: "700",
+    fontSize: 14,
   },
-  smallCardsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 12,
-    paddingHorizontal: 16,
+
+  /* --- COMPONENT WRAPPERS --- */
+  cardWrapper: {
+    paddingHorizontal: 20,
+    marginBottom: 5, // Gives the animation room to breathe
   },
   smallCoursesRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    marginTop: 12,
+    paddingHorizontal: 20,
+    marginTop: 15,
   },
 });

@@ -9,7 +9,7 @@ interface Props {
   currency?: string;
 }
 
-export default function PriceBadge({ price, change, changePct, currency = "₹" }: Props) {
+export default function PriceBadge({ price, change, changePct, currency = "₳" }: Props) {
   const isUp = (change ?? 0) > 0;
   const color = isUp ? styles.up : styles.down;
 

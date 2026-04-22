@@ -21,12 +21,12 @@ export default function PaperTradingCard() {
       <View style={styles.topRow}>
         <View>
           <Text style={styles.smallLabel}>Current Cash</Text>
-          <Text style={styles.cash}>₹1,00,000</Text>
+          <Text style={styles.cash}>₳1,00,000</Text>
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
           <Text style={styles.smallLabel}>Today's P&L</Text>
-          <View style={styles.pnlBubble}><Text style={styles.pnlText}>+₹2,3660</Text></View>
+          <View style={styles.pnlBubble}><Text style={styles.pnlText}>+₳2,3660</Text></View>
         </View>
       </View>
 

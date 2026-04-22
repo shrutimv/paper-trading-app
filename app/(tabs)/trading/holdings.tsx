@@ -1,11 +1,11 @@
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
-import React, { useState, useEffect } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-import { useTrading, Holding } from "../../../context/TradingContext";
+import { Holding, useTrading } from "../../../context/TradingContext";
 import { API_BASE_URL } from "../../../src/config";
 
-const formatCurrency = (val: number) => "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCurrency = (val: number) => "₳" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function HoldingsScreen() {
   const { holdings, watchlist, sellStock, totalInvestment } = useTrading();

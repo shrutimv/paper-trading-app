@@ -3,16 +3,16 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Modal,
-  PanResponder,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Modal,
+    PanResponder,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useTrading } from '../context/TradingContext';
 import { API_BASE_URL } from '../src/config';
@@ -158,7 +158,7 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
     setIsBuyModalOpen(true);
   };
 
-  const formatCurrency = (val: number) => "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatCurrency = (val: number) => "₳" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const modalLivePrice = selectedStock ? liveData[selectedStock.symbol]?.price || 0 : 0;
   const requiredMargin = modalLivePrice * (parseInt(quantity) || 0);
 

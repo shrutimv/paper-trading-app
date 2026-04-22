@@ -27,7 +27,7 @@ export default function StockCard({ item, onPress }: Props) {
           <Text style={styles.name} numberOfLines={1}>{name}</Text>
         </View>
         <View style={{ marginLeft: 12 }}>
-          <PriceBadge price={price} change={change} changePct={changePct} currency={item.meta?.currency ?? "₹"} />
+          <PriceBadge price={price} change={change} changePct={changePct} currency={item.meta?.currency ?? "₳"} />
         </View>
       </View>
     </TouchableOpacity>

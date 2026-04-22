@@ -9,7 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- 1. IM
 import { RANKS, useGamification } from '../context/GamificationContext';
 import { useTrading } from '../context/TradingContext';
 
-const formatCurrency = (val: number) => "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCurrency = (val: number) => "₳" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets(); // <-- 2. INITIALIZE HOOK

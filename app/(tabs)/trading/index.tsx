@@ -1,240 +1,310 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import React from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 // Imports for our custom components and context
 import PageTransition from "@/components/PageTransition";
 import Watchlist from "../../../components/Watchlist";
 import { useTrading } from "../../../context/TradingContext";
 
-// Helper function to format money nicely (e.g., 100000 -> ₹1,00,000.00)
 const formatCurrency = (value: number) => {
-  return "₹" + value.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  return "₳" + value.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 };
 
 export default function TradingDashboard() {
-  // Pull live data from our Global Bank
   const { balance, totalInvestment } = useTrading();
-
-  // For the dashboard overview, we calculate P&L. 
-  // (Note: Once we fetch live prices for holdings, currentValue will update dynamically!)
   const currentValue = totalInvestment; 
   const pnl = currentValue - totalInvestment;
   const pnlPercent = totalInvestment > 0 ? (pnl / totalInvestment) * 100 : 0;
 
   return (
     <PageTransition>
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.hello}>Hi, Trader!</Text>
-            <Text style={styles.sub}>Welcome back to PaperTrade</Text>
-          </View>
-          <MaterialIcons name="notifications-none" size={24} color="#111827" />
-        </View>
-
-        {/* MARKET OVERVIEW */}
-        <Text style={styles.section}>MARKET OVERVIEW</Text>
-
-        <View style={styles.row}>
-          <View style={styles.marketCard}>
-            <Text style={styles.marketLabel}>NIFTY 50</Text>
-            <Text style={styles.marketValue}>Live Soon</Text>
-            <Text style={styles.green}>--</Text>
-          </View>
-
-          <View style={styles.marketCard}>
-            <Text style={styles.marketLabel}>SENSEX</Text>
-            <Text style={styles.marketValue}>Live Soon</Text>
-            <Text style={styles.green}>--</Text>
-          </View>
-        </View>
-
-        {/* EQUITY CARD */}
-        <View style={styles.equityCard}>
-          <Text style={styles.equityLabel}>Equity</Text>
-
-          <Text style={styles.equitySub}>Margin Available</Text>
-          {/* LIVE BALANCE DISPLAYED HERE */}
-          <Text style={styles.equityAmount}>{formatCurrency(balance)}</Text>
-
-          <View style={styles.rowBetween}>
+      <SafeAreaView style={styles.safe}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+          
+          {/* PREMIUM HEADER */}
+          <View style={styles.headerRow}>
             <View>
-              <Text style={styles.equitySub}>Margin Used</Text>
-              <Text style={styles.white}>{formatCurrency(totalInvestment)}</Text>
+              <Text style={styles.greeting}>PORTFOLIO</Text>
+              <Text style={styles.username}>Trading Dashboard</Text>
+            </View>
+            <TouchableOpacity style={styles.notificationBtn}>
+              <MaterialIcons name="notifications-none" size={22} color="#0f62fe" />
+            </TouchableOpacity>
+          </View>
+
+          {/* MARKET OVERVIEW */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Market Overview</Text>
+          </View>
+
+          <View style={styles.row}>
+            <View style={styles.marketCard}>
+              <Text style={styles.marketLabel}>NIFTY 50</Text>
+              <Text style={styles.marketValue}>Live Soon</Text>
+              <View style={styles.badgeNeutral}><Text style={styles.neutralText}>--</Text></View>
             </View>
 
-            <View>
-              <Text style={styles.equitySub}>Opening Balance</Text>
-              <Text style={styles.white}>₹1,00,000.00</Text>
+            <View style={styles.marketCard}>
+              <Text style={styles.marketLabel}>SENSEX</Text>
+              <Text style={styles.marketValue}>Live Soon</Text>
+              <View style={styles.badgeNeutral}><Text style={styles.neutralText}>--</Text></View>
             </View>
           </View>
-        </View>
 
-        {/* HOLDINGS CARD */}
-        <View style={styles.holdingsCard}>
-          <Text style={styles.holdingsTitle}>Holdings Snapshot</Text>
+          {/* PREMIUM EQUITY CARD */}
+          <View style={styles.equityCard}>
+            <View style={styles.equityTopRow}>
+               <Text style={styles.equityLabel}>Trading Equity</Text>
+               <MaterialIcons name="account-balance-wallet" size={20} color="#93C5FD" />
+            </View>
 
-          <View style={styles.holdingsRow}>
-            <Text style={styles.holdingsLabel}>Total P&L</Text>
-            <Text style={[styles.greenBold, { color: pnl >= 0 ? '#16a34a' : '#dc2626' }]}>
-              {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} ({pnlPercent.toFixed(2)}%)
-            </Text>
+            <Text style={styles.equitySub}>Available Margin</Text>
+            <Text style={styles.equityAmount}>{formatCurrency(balance)}</Text>
+
+            <View style={styles.equityDivider} />
+
+            <View style={styles.rowBetween}>
+              <View>
+                <Text style={styles.equitySub}>Margin Used</Text>
+                <Text style={styles.white}>{formatCurrency(totalInvestment)}</Text>
+              </View>
+
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.equitySub}>Opening Balance</Text>
+                <Text style={styles.white}>₳1,00,000.00</Text>
+              </View>
+            </View>
           </View>
 
-          <View style={styles.holdingsRow}>
-            <Text style={styles.holdingsLabel}>Current Value</Text>
-            <Text style={styles.holdingsValue}>{formatCurrency(currentValue)}</Text>
+          {/* HOLDINGS CARD */}
+          <View style={styles.holdingsCard}>
+            <Text style={styles.holdingsTitle}>Holdings Snapshot</Text>
+
+            <View style={styles.holdingsRow}>
+              <Text style={styles.holdingsLabel}>Total P&L</Text>
+              <View style={[styles.pnlBadge, { backgroundColor: pnl >= 0 ? '#ECFDF5' : '#FEF2F2' }]}>
+                <Text style={[styles.pnlText, { color: pnl >= 0 ? '#059669' : '#DC2626' }]}>
+                  {pnl >= 0 ? '+' : ''}{formatCurrency(pnl)} ({pnlPercent.toFixed(2)}%)
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.holdingsRow}>
+              <Text style={styles.holdingsLabel}>Current Value</Text>
+              <Text style={styles.holdingsValue}>{formatCurrency(currentValue)}</Text>
+            </View>
+
+            <View style={[styles.holdingsRow, { borderBottomWidth: 0, paddingBottom: 0, marginBottom: 0 }]}>
+              <Text style={styles.holdingsLabel}>Total Investment</Text>
+              <Text style={styles.holdingsValue}>{formatCurrency(totalInvestment)}</Text>
+            </View>
           </View>
 
-          <View style={styles.holdingsRow}>
-            <Text style={styles.holdingsLabel}>Total Investment</Text>
-            <Text style={styles.holdingsValue}>{formatCurrency(totalInvestment)}</Text>
+          {/* WATCHLIST */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Your Watchlist</Text>
           </View>
-        </View>
-
-        {/* WATCHLIST COMPONENT */}
-        <Watchlist showSearch={true} limit={5} />
-      </ScrollView>
-    </SafeAreaView>
+          <Watchlist showSearch={true} limit={5} />
+          
+        </ScrollView>
+      </SafeAreaView>
     </PageTransition>
   );
 }
 
-// ---------------- STYLES ----------------
+// ---------------- PREMIUM STYLES ----------------
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#f3f4f6",
-    padding: 16,
+    backgroundColor: "#F8FAFC", // Unified FinTech Gray
+    paddingHorizontal: 20,
   },
+  
+  /* --- HEADER --- */
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
-    marginTop: 10,
+    marginTop: Platform.OS === 'ios' ? 10 : 30,
+    marginBottom: 25,
   },
-  hello: {
-    fontSize: 20,
-    fontWeight: "800",
-  },
-  sub: {
-    color: "#6b7280",
-    fontSize: 13,
-  },
-  section: {
-    fontSize: 13,
+  greeting: {
+    fontSize: 12,
+    color: "#64748B",
     fontWeight: "700",
-    color: "#6b7280",
-    marginBottom: 10,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  username: {
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#0F172A",
+    marginTop: 2,
+  },
+  notificationBtn: {
+    backgroundColor: '#EFF6FF',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  /* --- SECTION HEADERS --- */
+  sectionHeader: {
+    marginBottom: 12,
     marginTop: 10,
   },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+
+  /* --- MARKET CARDS --- */
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
+    marginBottom: 24,
+  },
+  marketCard: {
+    backgroundColor: "#FFFFFF",
+    padding: 16,
+    borderRadius: 16,
+    width: "48%",
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  marketLabel: {
+    fontSize: 13,
+    color: "#64748B",
+    fontWeight: "600",
+  },
+  marketValue: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0F172A",
+    marginVertical: 6,
+  },
+  badgeNeutral: {
+    backgroundColor: '#F1F5F9',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  neutralText: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+
+  /* --- EQUITY CARD (The Hero) --- */
+  equityCard: {
+    backgroundColor: "#0f62fe", // Deep brand blue
+    padding: 24,
+    borderRadius: 24,
+    marginBottom: 24,
+    shadowColor: '#0f62fe',
+    shadowOpacity: 0.25,
+    shadowRadius: 15,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  equityTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+  },
+  equityLabel: {
+    color: "#EFF6FF",
+    fontSize: 16,
+    fontWeight: "600",
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  equityAmount: {
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    marginVertical: 4,
+    letterSpacing: 1,
+  },
+  equitySub: {
+    color: "#93C5FD", // Light blue for contrast
+    fontSize: 12,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  equityDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginVertical: 16,
   },
   rowBetween: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  marketCard: {
-    backgroundColor: "#fff",
-    padding: 14,
-    borderRadius: 12,
-    width: "48%",
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  marketLabel: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  marketValue: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginVertical: 4,
-  },
-  green: {
-    color: "#16a34a",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  equityCard: {
-    backgroundColor: "#2563eb",
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 16,
-    elevation: 3,
-    shadowColor: '#2563eb',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  equityLabel: {
-    color: "#ffffff",
-    marginBottom: 8,
-    fontSize: 17,
-    fontWeight: "600",
-  },
-  equityAmount: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#fff",
-    marginVertical: 8,
-    letterSpacing: 0.5,
-  },
-  equitySub: {
-    color: "#c7d2fe",
-    fontSize: 12,
-    marginBottom: 2,
-  },
   white: {
-    color: "#fff",
+    color: "#FFFFFF",
     fontWeight: "700",
-    fontSize: 15,
+    fontSize: 16,
   },
+
+  /* --- HOLDINGS CARD --- */
   holdingsCard: {
-    backgroundColor: "#fff",
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 16,
-    elevation: 1,
+    backgroundColor: "#FFFFFF",
+    padding: 20,
+    borderRadius: 20,
+    marginBottom: 30,
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
   holdingsTitle: {
     fontSize: 16,
     fontWeight: "800",
-    marginBottom: 14,
-    color: "#111827",
+    marginBottom: 16,
+    color: "#0F172A",
   },
   holdingsRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: 'center',
     marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
   },
   holdingsLabel: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#64748B",
+    fontWeight: '500',
   },
   holdingsValue: {
-    fontWeight: "700",
-    color: "#111827",
-    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+    fontSize: 15,
   },
-  greenBold: {
-    color: "#16a34a",
-    fontWeight: "700",
+  pnlBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  pnlText: {
+    fontWeight: "800",
     fontSize: 14,
   },
 });

@@ -4,14 +4,14 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  useWindowDimensions,
-  View
+    ActivityIndicator,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    useWindowDimensions,
+    View
 } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,12 +21,12 @@ import { API_BASE_URL } from '../../src/config';
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-const fmt = (val: number) => '₹' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (val: number) => '₳' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtCompact = (val: number): string => {
-  if (val >= 10_000_000) return '₹' + (val / 10_000_000).toFixed(2) + ' Cr';
-  if (val >= 100_000)    return '₹' + (val / 100_000).toFixed(2) + ' L';
-  if (val >= 1_000)      return '₹' + (val / 1_000).toFixed(2) + ' K';
-  return '₹' + val.toFixed(2);
+  if (val >= 10_000_000) return '₳' + (val / 10_000_000).toFixed(2) + ' Cr';
+  if (val >= 100_000)    return '₳' + (val / 100_000).toFixed(2) + ' L';
+  if (val >= 1_000)      return '₳' + (val / 1_000).toFixed(2) + ' K';
+  return '₳' + val.toFixed(2);
 };
 
 const makeYLabel = (yOff: number) => (raw: string): string => {
