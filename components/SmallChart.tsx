@@ -212,18 +212,16 @@ export default function SmallChart({
   maxPoints?: number;
   onDataPoint?: (payload: { index: number; value: number; x?: number; y?: number }) => void;
 }) {
-  if (!Array.isArray(history) || history.length === 0) {
-    return (
-      <View style={[styles.container, { height: HEIGHT, justifyContent: "center", alignItems: "center" }]}>
-        <Text style={{ color: "#666" }}>Chart unavailable</Text>
-      </View>
-    );
-  }
-
   // choose series per range (ensures 1Y covers ~365 days, 5D picks days etc.)
-  const series = getSeriesForRange(history, range, maxPoints);
+  const series = React.useMemo(() => {
+    if (!Array.isArray(history) || history.length === 0) return [];
+    return getSeriesForRange(history, range, maxPoints);
+  }, [history, range, maxPoints]);
 
   const chartData = useMemo(() => {
+    if (series.length === 0) {
+      return { labels: [], datasets: [{ data: [] }] as any[] };
+    }
     const values = series.map((s) => (s && typeof s.close === "number" ? s.close : Number(s?.close ?? 0)));
 
     // pick tick indices appropriate for the range
@@ -256,6 +254,14 @@ export default function SmallChart({
   }, [series, range]);
 
   const colorFn = (opacity = 1) => safeHexToRgba(lineColor ?? DEFAULT_COLOR_HEX, opacity);
+
+  if (!Array.isArray(history) || history.length === 0 || series.length === 0) {
+    return (
+      <View style={[styles.container, { height: HEIGHT, justifyContent: "center", alignItems: "center" }]}>
+        <Text style={{ color: "#666" }}>Chart unavailable</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

@@ -126,7 +126,7 @@ export default function HoldingsScreen() {
 
         {holdings.length === 0 ? (
           <View style={styles.emptyBox}>
-            <Text style={styles.emptyText}>You don't own any stocks yet. Go to the dashboard to buy some!</Text>
+            <Text style={styles.emptyText}>{"You don't own any stocks yet. Go to the dashboard to buy some!"}</Text>
           </View>
         ) : (
           <View style={styles.instrumentsContainer}>

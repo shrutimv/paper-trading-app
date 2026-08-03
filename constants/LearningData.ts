@@ -5,7 +5,7 @@ export const LEARNING_DATA: any = {
     content: [
       {
         heading: "The Pizza Shop Problem ",
-        body: "Imagine you want to start a business that costs ₹10 Lakhs, but you only have ₹5 Lakhs. You have two choices:\n\n1. **Debt:** Take a bank loan (You must pay interest).\n2. **Equity:** Ask investors for money in exchange for a share of ownership.\n\nThe Stock Market exists so companies can choose Option 2. They issue shares to the public to **raise Capital (money) without paying interest**."
+        body: "Imagine you want to start a business that costs Ω10 Lakhs, but you only have Ω5 Lakhs. You have two choices:\n\n1. **Debt:** Take a bank loan (You must pay interest).\n2. **Equity:** Ask investors for money in exchange for a share of ownership.\n\nThe Stock Market exists so companies can choose Option 2. They issue shares to the public to **raise Capital (money) without paying interest**."
       },
       {
         heading: "What is an IPO? ",
@@ -55,11 +55,11 @@ export const LEARNING_DATA: any = {
       },
       {
         heading: "Two Types of Price ",
-        body: "1. **Face Value:** The original value of the share on paper (usually ₹10 or ₹1). It remains fixed and is used for accounting.\n2. **Market Price:** The current price you pay to buy it (e.g., ₹2,400). This changes every second during market hours based on **Supply and Demand**."
+        body: "1. **Face Value:** The original value of the share on paper (usually Ω10 or Ω1). It remains fixed and is used for accounting.\n2. **Market Price:** The current price you pay to buy it (e.g., Ω2,400). This changes every second during market hours based on **Supply and Demand**."
       },
       {
         heading: "How do you make money? ",
-        body: "There are two ways to profit from stocks:\n\n1. **Capital Appreciation:** If you buy a stock at ₹100 and sell it at ₹150, the ₹50 profit is called Capital Appreciation.\n2. **Dividends:** Profitable companies often share a part of their profits directly with shareholders. This cash payment is called a **Dividend**."
+        body: "There are two ways to profit from stocks:\n\n1. **Capital Appreciation:** If you buy a stock at Ω100 and sell it at Ω150, the Ω50 profit is called Capital Appreciation.\n2. **Dividends:** Profitable companies often share a part of their profits directly with shareholders. This cash payment is called a **Dividend**."
       }
     ]
   },

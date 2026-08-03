@@ -45,17 +45,21 @@ export default function CourseCard({
 
 const styles = StyleSheet.create({
   card: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 12,
+    borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: "#fff",
+    backgroundColor: "#ffffff",
     elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   image: { width: "100%", height: 140, resizeMode: "cover" },
-  meta: { padding: 12 },
-  metaSubtitle: { color: "#6b7280" },
-  metaTitle: { fontSize: 18, fontWeight: "800", marginTop: 6, color: "#0f1724" },
+  meta: { padding: 16 },
+  metaSubtitle: { color: "#64748B", fontSize: 12, fontWeight: "600", textTransform: "uppercase" },
+  metaTitle: { fontSize: 18, fontWeight: "800", marginTop: 4, color: "#0F172A" },
 
   smallCard: {
     backgroundColor: "#fff",

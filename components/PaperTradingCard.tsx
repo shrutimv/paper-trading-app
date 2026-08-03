@@ -25,7 +25,7 @@ export default function PaperTradingCard() {
         </View>
 
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={styles.smallLabel}>Today's P&L</Text>
+          <Text style={styles.smallLabel}>{"Today's P&L"}</Text>
           <View style={styles.pnlBubble}><Text style={styles.pnlText}>+₳2,3660</Text></View>
         </View>
       </View>

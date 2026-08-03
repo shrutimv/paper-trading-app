@@ -96,7 +96,7 @@ export const QUIZ_DATA: any = {
       explanation: "Face Value is the original value on paper, used to calculate dividends and splits."
     },
     {
-      question: "If you buy a stock at ₹100 and sell at ₹150, what is the profit called?",
+      question: "If you buy a stock at Ω100 and sell at Ω150, what is the profit called?",
       options: ["Dividend", "Capital Appreciation", "Interest", "Salary"],
       correct: 1,
       explanation: "Capital Appreciation is the increase in the price of an asset over time."

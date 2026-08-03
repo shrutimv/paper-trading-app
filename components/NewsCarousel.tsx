@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Linking,
   ScrollView,
   StyleSheet,
@@ -9,10 +8,11 @@ import {
   useWindowDimensions,
   View,
   Image,
+  Animated,
 } from "react-native";
 import { fetchNews, type NewsArticle } from "../src/api/newsApi";
 
-const AUTO_SCROLL_INTERVAL = 5000;
+const AUTO_SCROLL_INTERVAL = 6000;
 const CARD_WIDTH = 300;
 
 function formatDate(dateValue: string) {
@@ -25,6 +25,53 @@ function formatDate(dateValue: string) {
   });
 }
 
+function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.7,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0.3,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, [pulseAnim]);
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.scrollContent}
+    >
+      {[1, 2, 3].map((key) => (
+        <Animated.View
+          key={key}
+          style={[
+            styles.card,
+            { width: cardWidth, opacity: pulseAnim, minHeight: 310 }
+          ]}
+        >
+          <View style={[styles.image, { backgroundColor: "#E2E8F0" }]} />
+          <View style={styles.cardBody}>
+            <View style={{ height: 16, backgroundColor: "#E2E8F0", borderRadius: 4, marginBottom: 8, width: "90%" }} />
+            <View style={{ height: 12, backgroundColor: "#E2E8F0", borderRadius: 4, marginBottom: 8, width: "100%" }} />
+            <View style={{ height: 12, backgroundColor: "#E2E8F0", borderRadius: 4, marginBottom: 12, width: "80%" }} />
+            <View style={{ height: 10, backgroundColor: "#E2E8F0", borderRadius: 4, width: "30%" }} />
+          </View>
+        </Animated.View>
+      ))}
+    </ScrollView>
+  );
+}
+
 export default function NewsCarousel() {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +79,7 @@ export default function NewsCarousel() {
   const scrollRef = useRef<ScrollView | null>(null);
   const activeIndex = useRef(0);
   const { width } = useWindowDimensions();
-  const cardWidth = Math.min(CARD_WIDTH, width * 0.8);
+  const cardWidth = Math.min(CARD_WIDTH, width * 0.85);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,7 +91,7 @@ export default function NewsCarousel() {
         const response = await fetchNews();
         if (!isMounted) return;
         setArticles(response.articles || []);
-      } catch (err) {
+      } catch {
         if (!isMounted) return;
         setError("Unable to load market news. Please try again later.");
       } finally {
@@ -87,9 +134,8 @@ export default function NewsCarousel() {
 
   if (loading) {
     return (
-      <View style={styles.stateContainer}>
-        <ActivityIndicator size="small" color="#0f62fe" />
-        <Text style={styles.stateText}>Loading market news…</Text>
+      <View style={styles.container}>
+        <NewsSkeleton cardWidth={cardWidth} />
       </View>
     );
   }
@@ -97,7 +143,7 @@ export default function NewsCarousel() {
   if (error) {
     return (
       <View style={styles.stateContainer}>
-        <Text style={[styles.stateText, { color: "#991b1b" }]}>{error}</Text>
+        <Text style={[styles.stateText, { color: "#b91c1c" }]}>{error}</Text>
       </View>
     );
   }
@@ -160,15 +206,17 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
+    backgroundColor: "#ffffff",
+    borderRadius: 20,
     overflow: "hidden",
     marginRight: 16,
     shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
   },
   image: {
     width: "100%",
