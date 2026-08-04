@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
+import { useTheme } from "../../context/ThemeContext";
 import {
   Dimensions,
   FlatList,
@@ -57,6 +58,8 @@ const LEVELS = ["All", "Beginner", "Intermediate", "Advanced"];
 export default function PuzzlesScreen() {
   const router = useRouter();
   const scrollViewRef = useRef<ScrollView>(null); 
+  const { colors } = useTheme();
+  const styles = getStyles(colors); 
 
   const [activeLevel, setActiveLevel] = useState<string>("All");
   const [activeTab, setActiveTab] = useState<'puzzles' | 'roadmap'>('roadmap');
@@ -211,11 +214,11 @@ export default function PuzzlesScreen() {
                   </View>
 
                   {/* Icon */}
-                  <View style={[styles.iconWrapper, { backgroundColor: isDone ? bgColor : '#F1F5F9' }]}>
+                  <View style={[styles.iconWrapper, { backgroundColor: isDone ? bgColor : colors.border }]}>
                     {isDone ? (
                         <Ionicons name="checkmark-done" size={20} color={accentColor} />
                     ) : (
-                        <Ionicons name="lock-open-outline" size={20} color="#94A3B8" />
+                        <Ionicons name="lock-open-outline" size={20} color={colors.textSecondary} />
                     )}
                   </View>
                 </TouchableOpacity>
@@ -230,8 +233,8 @@ export default function PuzzlesScreen() {
 }
 
 /* PREMIUM STYLES */
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#F8FAFC" },
+const getStyles = (colors: any) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
   
   header: {
     paddingHorizontal: 20,
@@ -243,26 +246,28 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 12,
-    color: "#64748B",
+    color: colors.textSecondary,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
-  title: { fontSize: 26, fontWeight: "900", color: "#0F172A", marginTop: 2 },
+  title: { fontSize: 26, fontWeight: "900", color: colors.text, marginTop: 2 },
   notificationBtn: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.card,
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   
   /* --- TAB SWITCHER --- */
   tabContainer: { paddingHorizontal: 20, marginBottom: 15 },
   tabBackground: {
     flexDirection: 'row',
-    backgroundColor: '#E2E8F0', // Inner gray track
+    backgroundColor: colors.border, // Inner gray track
     borderRadius: 16,
     padding: 4,
   },
@@ -273,15 +278,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   activeTab: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+    backgroundColor: colors.card,
+    shadowColor: colors.shadowColor,
     shadowOpacity: 0.05,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  tabText: { fontSize: 14, color: '#64748B', fontWeight: '700' },
-  activeTabText: { color: '#0F172A' },
+  tabText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
+  activeTabText: { color: colors.text },
 
   /* --- ROADMAP FILTERS --- */
   filterRow: { 
@@ -295,6 +300,7 @@ const styles = StyleSheet.create({
     borderRadius: 12, 
     paddingVertical: 8, 
     paddingHorizontal: 12, 
+    borderColor: colors.border,
   },
   filterText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
 
@@ -308,9 +314,9 @@ const styles = StyleSheet.create({
     borderRadius: 20, 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderLeftWidth: 6, // Thick colored accent on the left
-    shadowColor: '#000',
+    shadowColor: colors.shadowColor,
     shadowOpacity: 0.03,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
@@ -318,15 +324,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderRightWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.border,
   },
   quizInfo: { flex: 1, paddingRight: 10 },
-  quizTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A' },
-  quizDesc: { color: '#64748B', fontSize: 13, lineHeight: 18 },
+  quizTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
+  quizDesc: { color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
   
   levelTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 10 },
   levelLabel: { fontWeight: '800', fontSize: 10, textTransform: 'uppercase' },
-  actionText: { fontSize: 12, fontWeight: '700', color: '#94A3B8' },
+  actionText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
   
   badge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
   badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },

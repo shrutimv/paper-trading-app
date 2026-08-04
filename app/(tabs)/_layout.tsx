@@ -1,40 +1,46 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { Platform, TouchableOpacity, useColorScheme } from 'react-native';
+import { Platform, TouchableOpacity } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const router = useRouter();
-
-  // Standard safe colors
-  const iconColor = colorScheme === 'dark' ? '#fff' : '#000';
-  const activeColor = '#0f62fe'; // Your blue brand color
-  const inactiveColor = colorScheme === 'dark' ? '#9BA1A6' : '#687076';
-  
-  // The "Lightly dark / off-white" you requested
-  const navBg = colorScheme === 'dark' ? '#11181C' : '#F9FAFB'; 
+  const { colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: activeColor,
-        tabBarInactiveTintColor: inactiveColor,
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textSecondary,
         headerShown: true,
         tabBarHideOnKeyboard: true, // Prevents the navbar from jumping up when typing
+        headerStyle: {
+          backgroundColor: colors.background,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        headerTitleStyle: {
+          color: colors.text,
+          fontSize: 20,
+          fontWeight: '800',
+        },
+        headerTintColor: colors.text,
         headerRight: () => (
           <TouchableOpacity 
             onPress={() => router.push('/profile')} 
             style={{ marginRight: 15 }}
           >
-            <Ionicons name="person-circle-outline" size={30} color={iconColor} />
+            <Ionicons name="person-circle-outline" size={28} color={colors.text} />
           </TouchableOpacity>
         ),
         // --- STRICTLY ANCHORED STYLING ---
         tabBarStyle: {
-          backgroundColor: navBg,
+          backgroundColor: colors.tabBg,
           borderTopWidth: 1,
-          borderTopColor: colorScheme === 'dark' ? '#2A2D32' : '#E5E7EB',
+          borderTopColor: colors.border,
           // Standard heights that won't float
           height: Platform.OS === 'ios' ? 85 : 65,
           paddingBottom: Platform.OS === 'ios' ? 25 : 10,
@@ -42,7 +48,7 @@ export default function TabLayout() {
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          fontWeight: '500',
+          fontWeight: '600',
         },
       }}>
 

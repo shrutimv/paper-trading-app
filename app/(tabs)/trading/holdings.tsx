@@ -1,13 +1,16 @@
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-
+import { useTheme } from "../../../context/ThemeContext";
 import { Holding, useTrading } from "../../../context/TradingContext";
 import { API_BASE_URL } from "../../../src/config";
 
 const formatCurrency = (val: number) => "₳" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function HoldingsScreen() {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+
   const { holdings, watchlist, sellStock, totalInvestment } = useTrading();
   
   const [liveData, setLiveData] = useState<Record<string, { price: number, changePercent: number }>>({});
@@ -76,7 +79,7 @@ export default function HoldingsScreen() {
       return;
     }
 
-    const success = await sellStock(selectedHolding.symbol, livePrice, qty);
+    const success = await sellStock(selectedHolding.symbol, livePrice, qty, selectedHolding.productType || 'cnc');
     if (success) {
       Alert.alert("Trade Successful! 💰", `Sold ${qty} shares of ${selectedHolding.symbol.replace('.NS', '')}`);
       setIsSellModalOpen(false);
@@ -101,7 +104,7 @@ export default function HoldingsScreen() {
         {/* HEADER */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Holdings</Text>
-          {isFetching ? <ActivityIndicator size="small" color="#0f62fe" /> : <MaterialIcons name="search" size={22} color="#111827" />}
+          {isFetching ? <ActivityIndicator size="small" color={colors.accent} /> : <MaterialIcons name="search" size={22} color={colors.text} />}
         </View>
 
         {/* MARKET CARDS */}
@@ -121,7 +124,7 @@ export default function HoldingsScreen() {
         {/* INSTRUMENTS LIST (NO MORE HORIZONTAL SCROLLING!) */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.section}>Instruments ({holdings.length})</Text>
-          <MaterialIcons name="tune" size={18} color="#6b7280" />
+          <MaterialIcons name="tune" size={18} color={colors.textSecondary} />
         </View>
 
         {holdings.length === 0 ? (
@@ -137,13 +140,20 @@ export default function HoldingsScreen() {
               const isRowProfit = rowPnl >= 0;
 
               return (
-                <View key={item.symbol} style={styles.instrumentCard}>
+                <View key={item.symbol + "-" + (item.productType || 'cnc')} style={styles.instrumentCard}>
                   {/* Top Row: Info & LTP */}
                   <View style={styles.rowBetween}>
                     <View>
-                      <Text style={styles.instrumentSymbol}>{item.symbol.replace('.NS', '')}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.instrumentSymbol}>{item.symbol.replace('.NS', '')}</Text>
+                        <View style={[styles.miniBadge, { backgroundColor: item.productType === 'mis' ? 'rgba(230, 242, 255, 0.12)' : 'rgba(209, 250, 229, 0.12)' }]}>
+                          <Text style={[styles.miniBadgeText, { color: item.productType === 'mis' ? colors.accent : '#10b981' }]}>
+                            {(item.productType || 'cnc').toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
                       <Text style={styles.instrumentSub}>
-                        Qty: <Text style={{fontWeight: '700', color: '#111'}}>{item.quantity}</Text> • Avg: {formatCurrency(item.averagePrice)}
+                        Qty: <Text style={{fontWeight: '700', color: colors.text}}>{item.quantity}</Text> • Avg: {formatCurrency(item.averagePrice)}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -196,7 +206,7 @@ export default function HoldingsScreen() {
         </View>
 
         {watchlist.length === 0 ? (
-          <Text style={{ color: '#6b7280', fontStyle: 'italic', marginTop: 10 }}>Your watchlist is empty.</Text>
+          <Text style={{ color: colors.textSecondary, fontStyle: 'italic', marginTop: 10 }}>Your watchlist is empty.</Text>
         ) : (
           watchlist.slice(0, 5).map((item) => {
             const data = liveData[item.symbol];
@@ -235,10 +245,10 @@ export default function HoldingsScreen() {
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Sell {selectedHolding?.symbol.replace('.NS', '')}</Text>
-                <Text style={styles.modalSub}>LTP: <Text style={{fontWeight: '800', color: '#111'}}>{formatCurrency(modalLivePrice)}</Text></Text>
+                <Text style={styles.modalSub}>LTP: <Text style={{fontWeight: '800', color: colors.text}}>{formatCurrency(modalLivePrice)}</Text></Text>
               </View>
               <TouchableOpacity onPress={() => setIsSellModalOpen(false)}>
-                <Ionicons name="close-circle" size={28} color="#9ca3af" />
+                <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -271,10 +281,10 @@ export default function HoldingsScreen() {
               <Text style={styles.mathHeader}>Selling For (Live Price)</Text>
               <View style={styles.mathRow}>
                 <Text style={styles.mathEquation}>{formatCurrency(modalLivePrice)} × {qtyToSell} shares</Text>
-                <Text style={[styles.mathResult, { color: '#111', fontWeight: '800' }]}>{formatCurrency(totalValueReceived)}</Text>
+                <Text style={[styles.mathResult, { color: colors.text, fontWeight: '800' }]}>{formatCurrency(totalValueReceived)}</Text>
               </View>
 
-              <View style={[styles.dividerRow, { borderTopWidth: 2, borderTopColor: '#cbd5e1' }]} />
+              <View style={[styles.dividerRow, { borderTopWidth: 2, borderTopColor: colors.border }]} />
 
               {/* Dynamic P&L */}
               <View style={styles.mathRow}>
@@ -298,69 +308,69 @@ export default function HoldingsScreen() {
   );
 }
 
-// ---------------- STYLES ----------------
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f3f4f6", padding: 16 },
+// STYLES
+const getStyles = (colors: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background, padding: 16 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20, marginTop: 10 },
-  headerTitle: { fontSize: 20, fontWeight: "800", color: "#111" },
-  section: { fontSize: 14, fontWeight: "700", marginVertical: 12, color: '#4b5563' },
+  headerTitle: { fontSize: 20, fontWeight: "800", color: colors.text },
+  section: { fontSize: 14, fontWeight: "700", marginVertical: 12, color: colors.textSecondary },
   row: { flexDirection: "row", justifyContent: "space-between", marginBottom: 16 },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: 'center' },
-  marketCard: { backgroundColor: "#fff", padding: 14, borderRadius: 12, width: "48%", elevation: 1 },
-  marketLabel: { fontSize: 12, color: "#6b7280" },
-  marketValue: { fontSize: 16, fontWeight: "700", marginVertical: 4 },
+  marketCard: { backgroundColor: colors.card, padding: 14, borderRadius: 12, width: "48%", elevation: 1, borderWidth: 1, borderColor: colors.border },
+  marketLabel: { fontSize: 12, color: colors.textSecondary },
+  marketValue: { fontSize: 16, fontWeight: "700", marginVertical: 4, color: colors.text },
   green: { color: "#16a34a", fontSize: 12, fontWeight: '600' },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
   
-  // NEW INSTRUMENT CARD STYLES
   instrumentsContainer: { gap: 12, marginBottom: 20 },
-  instrumentCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  instrumentSymbol: { fontSize: 16, fontWeight: '800', color: '#111827' },
-  instrumentSub: { fontSize: 13, color: '#6b7280', marginTop: 4 },
-  instrumentLtp: { fontSize: 16, fontWeight: '800', color: '#111827' },
+  instrumentCard: { backgroundColor: colors.card, borderRadius: 16, padding: 16, elevation: 2, shadowColor: colors.shadowColor, shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, borderWidth: 1, borderColor: colors.border },
+  instrumentSymbol: { fontSize: 16, fontWeight: '800', color: colors.text },
+  instrumentSub: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
+  instrumentLtp: { fontSize: 16, fontWeight: '800', color: colors.text },
   instrumentChange: { fontSize: 13, fontWeight: '700', marginTop: 4 },
-  instrumentActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f1f5f9' },
-  instrumentPnlText: { fontSize: 14, fontWeight: '600', color: '#4b5563' },
-  sellBtnSmall: { backgroundColor: '#fee2e2', paddingVertical: 8, paddingHorizontal: 24, borderRadius: 8 },
+  instrumentActionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.border },
+  instrumentPnlText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  sellBtnSmall: { backgroundColor: colors.isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2', paddingVertical: 8, paddingHorizontal: 24, borderRadius: 8, borderWidth: 1, borderColor: colors.isDark ? '#ef4444' : 'transparent' },
   sellBtnSmallText: { color: '#ef4444', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+
+  miniBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginLeft: 8 },
+  miniBadgeText: { fontSize: 9, fontWeight: '800' },
 
   greenText: { color: "#16a34a", fontWeight: '700' },
   redText: { color: "#ef4444", fontWeight: '700' },
   
-  emptyBox: { backgroundColor: '#fff', padding: 24, borderRadius: 16, alignItems: 'center', marginBottom: 20 },
-  emptyText: { color: '#6b7280', textAlign: 'center', fontStyle: 'italic' },
+  emptyBox: { backgroundColor: colors.card, padding: 24, borderRadius: 16, alignItems: 'center', marginBottom: 20, borderWidth: 1, borderColor: colors.border },
+  emptyText: { color: colors.textSecondary, textAlign: 'center', fontStyle: 'italic' },
 
-  summaryCard: { backgroundColor: "#e0f2fe", padding: 20, borderRadius: 16, marginVertical: 10, borderWidth: 1, borderColor: '#bae6fd' },
-  subText: { fontSize: 12, color: "#0369a1", fontWeight: '600', marginBottom: 4 },
-  bold: { fontWeight: "800", fontSize: 16, color: '#0f172a' },
+  summaryCard: { backgroundColor: colors.isDark ? '#1D2433' : "#e0f2fe", padding: 20, borderRadius: 16, marginVertical: 10, borderWidth: 1, borderColor: colors.isDark ? colors.border : '#bae6fd' },
+  subText: { fontSize: 12, color: colors.isDark ? colors.textSecondary : "#0369a1", fontWeight: '600', marginBottom: 4 },
+  bold: { fontWeight: "800", fontSize: 16, color: colors.text },
 
-  stockRow: { backgroundColor: "#fff", padding: 14, borderRadius: 12, marginBottom: 10, flexDirection: "row", justifyContent: "space-between", alignItems: 'center', elevation: 1 },
-  stockName: { fontSize: 16, fontWeight: "800", color: "#111827" },
-  stockSub: { fontSize: 12, color: "#6b7280", marginTop: 2, maxWidth: 180 },
-  stockPrice: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  stockRow: { backgroundColor: colors.card, padding: 14, borderRadius: 12, marginBottom: 10, flexDirection: "row", justifyContent: "space-between", alignItems: 'center', elevation: 1, borderWidth: 1, borderColor: colors.border },
+  stockName: { fontSize: 16, fontWeight: "800", color: colors.text },
+  stockSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2, maxWidth: 180 },
+  stockPrice: { fontSize: 15, fontWeight: "800", color: colors.text },
   stockRight: { alignItems: "flex-end" },
   stockChange: { fontSize: 13, fontWeight: "700", marginTop: 2 },
 
-  // --- MODAL STYLES ---
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  modalContent: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, borderWidth: 1, borderColor: colors.border },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
-  modalTitle: { fontSize: 22, fontWeight: '900', color: '#111' },
-  modalSub: { fontSize: 15, color: '#6b7280', marginTop: 4 },
+  modalTitle: { fontSize: 22, fontWeight: '900', color: colors.text },
+  modalSub: { fontSize: 15, color: colors.textSecondary, marginTop: 4 },
   inputGroup: { marginBottom: 20 },
-  inputLabel: { fontSize: 14, fontWeight: '600', color: '#4b5563', marginBottom: 8 },
-  maxText: { fontSize: 13, color: '#2563eb', fontWeight: '600' },
-  numberInput: { backgroundColor: '#fef2f2', borderRadius: 12, fontSize: 28, fontWeight: '800', padding: 12, textAlign: 'center', borderWidth: 1, borderColor: '#fecaca' },
+  inputLabel: { fontSize: 14, fontWeight: '600', color: colors.textSecondary, marginBottom: 8 },
+  maxText: { fontSize: 13, color: colors.accent, fontWeight: '600' },
+  numberInput: { backgroundColor: colors.isDark ? '#1e293b' : '#fef2f2', borderRadius: 12, fontSize: 28, fontWeight: '800', padding: 12, textAlign: 'center', borderWidth: 1, borderColor: colors.isDark ? '#ef4444' : '#fecaca', color: colors.text },
   
-  // Modal Math Breakdown Styles
-  breakdownBox: { backgroundColor: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 24, borderWidth: 1, borderColor: '#e2e8f0' },
-  mathHeader: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: 0.5 },
+  breakdownBox: { backgroundColor: colors.background, padding: 16, borderRadius: 12, marginBottom: 24, borderWidth: 1, borderColor: colors.border },
+  mathHeader: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, letterSpacing: 0.5 },
   mathRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  mathEquation: { fontSize: 14, color: '#475569', fontWeight: '500' },
-  mathResult: { fontSize: 15, fontWeight: '700', color: '#0f172a' },
-  dividerRow: { borderTopWidth: 1, borderTopColor: '#e2e8f0', marginVertical: 10 },
-  breakdownLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
-  breakdownValue: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
+  mathEquation: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
+  mathResult: { fontSize: 15, fontWeight: '700', color: colors.text },
+  dividerRow: { borderTopWidth: 1, borderTopColor: colors.border, marginVertical: 10 },
+  breakdownLabel: { fontSize: 14, color: colors.textSecondary, fontWeight: '500' },
+  breakdownValue: { fontSize: 14, fontWeight: '600', color: colors.text },
   
   fullWidthBtn: { width: '100%', backgroundColor: '#ef4444', paddingVertical: 18, borderRadius: 12, alignItems: 'center' },
   fullWidthBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 },

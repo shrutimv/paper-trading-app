@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useTheme } from "../../../context/ThemeContext";
 
 import PageTransition from "@/components/PageTransition";
 import CourseCard from "../../../components/CourseCard";
@@ -35,6 +36,8 @@ const COURSES = [
 
 export default function CoursesScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
   const [search, setSearch] = React.useState("");
   const [activeLevel, setActiveLevel] = React.useState<string>("All");
 
@@ -76,7 +79,7 @@ export default function CoursesScreen() {
           <Text style={styles.title}>Active Courses</Text>
         </View>
         <TouchableOpacity style={styles.notificationBtn} onPress={() => console.log("notifications")}>
-          <MaterialIcons name="notifications-none" size={22} color="#0f62fe" />
+          <MaterialIcons name="notifications-none" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
@@ -114,8 +117,8 @@ export default function CoursesScreen() {
 }
 
 /* PREMIUM STYLES */
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F8FAFC" },
+const getStyles = (colors: any) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.background },
 
   topNav: {
     paddingHorizontal: 20,
@@ -130,35 +133,37 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 12,
-    color: "#64748B",
+    color: colors.textSecondary,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
-  title: { fontSize: 26, fontWeight: "900", color: "#0F172A", marginTop: 2 },
+  title: { fontSize: 26, fontWeight: "900", color: colors.text, marginTop: 2 },
   
   notificationBtn: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.card,
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 
   searchWrap: {
     marginHorizontal: 20,
     marginBottom: 15,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
-    borderColor: '#F1F5F9',
-    shadowColor: '#000',
-    shadowOpacity: 0.02,
+    borderColor: colors.border,
+    shadowColor: colors.shadowColor,
+    shadowOpacity: 0.05,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
@@ -167,7 +172,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     flex: 1,
     fontSize: 15,
-    color: "#0F172A",
+    color: colors.text,
     fontWeight: '500',
   },
 
@@ -177,14 +182,14 @@ const styles = StyleSheet.create({
   
   // Wrap the external CourseCard to give it the global shadow feel
   cardShadowWrapper: {
-    backgroundColor: '#fff',
+    backgroundColor: colors.card,
     borderRadius: 20, // Match internal card if needed
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
+    shadowColor: colors.shadowColor,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.border,
   }
 });

@@ -1,3 +1,4 @@
+// components/NewsCarousel.tsx
 import React, { useEffect, useRef, useState } from "react";
 import {
   Linking,
@@ -11,6 +12,7 @@ import {
   Animated,
 } from "react-native";
 import { fetchNews, type NewsArticle } from "../src/api/newsApi";
+import { useTheme } from "../context/ThemeContext";
 
 const AUTO_SCROLL_INTERVAL = 6000;
 const CARD_WIDTH = 300;
@@ -26,6 +28,8 @@ function formatDate(dateValue: string) {
 }
 
 function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -45,6 +49,8 @@ function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
     ).start();
   }, [pulseAnim]);
 
+  const shimmerBg = colors.isDark ? "#1E293B" : "#E2E8F0";
+
   return (
     <ScrollView
       horizontal
@@ -59,12 +65,12 @@ function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
             { width: cardWidth, opacity: pulseAnim, minHeight: 310 }
           ]}
         >
-          <View style={[styles.image, { backgroundColor: "#E2E8F0" }]} />
+          <View style={[styles.image, { backgroundColor: shimmerBg }]} />
           <View style={styles.cardBody}>
-            <View style={{ height: 16, backgroundColor: "#E2E8F0", borderRadius: 4, marginBottom: 8, width: "90%" }} />
-            <View style={{ height: 12, backgroundColor: "#E2E8F0", borderRadius: 4, marginBottom: 8, width: "100%" }} />
-            <View style={{ height: 12, backgroundColor: "#E2E8F0", borderRadius: 4, marginBottom: 12, width: "80%" }} />
-            <View style={{ height: 10, backgroundColor: "#E2E8F0", borderRadius: 4, width: "30%" }} />
+            <View style={{ height: 16, backgroundColor: shimmerBg, borderRadius: 4, marginBottom: 8, width: "90%" }} />
+            <View style={{ height: 12, backgroundColor: shimmerBg, borderRadius: 4, marginBottom: 8, width: "100%" }} />
+            <View style={{ height: 12, backgroundColor: shimmerBg, borderRadius: 4, marginBottom: 12, width: "80%" }} />
+            <View style={{ height: 10, backgroundColor: shimmerBg, borderRadius: 4, width: "30%" }} />
           </View>
         </Animated.View>
       ))}
@@ -73,6 +79,9 @@ function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
 }
 
 export default function NewsCarousel() {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,7 +205,7 @@ export default function NewsCarousel() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     paddingTop: 12,
     paddingBottom: 24,
@@ -206,17 +215,17 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.card,
     borderRadius: 20,
     overflow: "hidden",
     marginRight: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowColor: colors.shadowColor,
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 4,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: colors.border,
   },
   image: {
     width: "100%",
@@ -226,10 +235,10 @@ const styles = StyleSheet.create({
   imagePlaceholder: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#e2e8f0",
+    backgroundColor: colors.border,
   },
   placeholderText: {
-    color: "#475569",
+    color: colors.textSecondary,
     fontSize: 14,
   },
   cardBody: {
@@ -238,18 +247,18 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0f1724",
+    color: colors.text,
     marginBottom: 8,
   },
   cardDescription: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#475569",
+    color: colors.textSecondary,
     marginBottom: 12,
   },
   cardDate: {
     fontSize: 11,
-    color: "#64748b",
+    color: colors.textSecondary,
   },
   stateContainer: {
     minHeight: 120,
@@ -260,6 +269,6 @@ const styles = StyleSheet.create({
   stateText: {
     marginTop: 8,
     fontSize: 14,
-    color: "#334155",
+    color: colors.textSecondary,
   },
 });

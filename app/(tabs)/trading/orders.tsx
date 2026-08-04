@@ -8,26 +8,29 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-
+import { useTheme } from "../../../context/ThemeContext";
 import Watchlist from "../../../components/Watchlist";
 
 export default function OrdersScreen() {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         {/* HEADER */}
         <View style={styles.header}>
           <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <MaterialIcons name="menu" size={22} color="#111827" />
+            <MaterialIcons name="menu" size={22} color={colors.text} />
             <Text style={styles.headerTitle}> Orders</Text>
           </View>
-          <MaterialIcons name="search" size={22} color="#111827" />
+          <MaterialIcons name="search" size={22} color={colors.text} />
         </View>
 
         {/* EMPTY STATE */}
         <View style={styles.emptyContainer}>
           <View style={styles.iconCircle}>
-            <MaterialIcons name="receipt-long" size={40} color="#2563eb" />
+            <MaterialIcons name="receipt-long" size={40} color={colors.accent} />
           </View>
 
           <Text style={styles.emptyTitle}>No orders placed yet</Text>
@@ -50,10 +53,10 @@ export default function OrdersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.background,
     padding: 16,
   },
 
@@ -67,43 +70,49 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: "800",
+    color: colors.text,
   },
 
   emptyContainer: {
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     padding: 24,
     borderRadius: 20,
     marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 
   iconCircle: {
     width: 150,
     height: 100,
     borderRadius: 50,
-    backgroundColor: "#dbeafe",
+    backgroundColor: colors.isDark ? 'rgba(59, 130, 246, 0.12)' : '#dbeafe',
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 16,
+    borderWidth: colors.isDark ? 1 : 0,
+    borderColor: colors.accent,
   },
 
   emptyTitle: {
     fontSize: 16,
     fontWeight: "800",
+    color: colors.text,
     marginBottom: 8,
   },
 
   emptySub: {
     textAlign: "center",
     fontSize: 13,
-    color: "#6b7280",
+    color: colors.textSecondary,
     marginBottom: 20,
   },
 
   buyButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2563eb",
+    backgroundColor: colors.accent,
     paddingVertical: 12,
     paddingHorizontal: 40,
     borderRadius: 12,

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
+import { useTheme } from "../../context/ThemeContext";
 import {
   Animated as RNAnimated,
   Image,
@@ -63,6 +64,8 @@ const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: 
 export default function Home() {
   const router = useRouter(); 
   const [user, setUser] = useState<any>(null);
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -215,10 +218,10 @@ export default function Home() {
 }
 
 /* -------------------- Premium Styles -------------------- */
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8FAFC", // FinTech Slate/Gray
+    backgroundColor: colors.background,
   },
   page: {
     width: "100%",
@@ -235,14 +238,14 @@ const styles = StyleSheet.create({
     marginBottom: 25,
   },
   greeting: {
-    color: "#64748B",
+    color: colors.textSecondary, // Slate secondary
     fontSize: 14,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   username: {
-    color: "#0F172A",
+    color: colors.text, // Pure white
     fontSize: 28,
     fontWeight: "900",
     marginTop: 2,
@@ -262,53 +265,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 18,
     width: "31%",
-    elevation: 2, 
+    backgroundColor: colors.card, // Dark Blue-Slate
+    borderColor: colors.border,
     borderWidth: 1,
-  },
-  // Streak Color Palette
-  streakTile: {
-    backgroundColor: "#FFF7ED", // soft orange
-    borderColor: "#FFEDD5",
-    shadowColor: "#EA580C",
+    shadowColor: colors.shadowColor,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3, 
   },
+  streakTile: {},
   streakLabel: {
-    color: "#C2410C",
+    color: colors.textSecondary,
   },
   streakValue: {
-    color: "#9A3412",
+    color: "#FB923C", // Orange glow
   },
-  // Puzzles Color Palette
-  puzzlesTile: {
-    backgroundColor: "#F5F3FF", // soft purple
-    borderColor: "#EDE9FE",
-    shadowColor: "#6D28D9",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-  },
+  puzzlesTile: {},
   puzzlesLabel: {
-    color: "#6D28D9",
+    color: colors.textSecondary,
   },
   puzzlesValue: {
-    color: "#5B21B6",
+    color: "#C084FC", // Purple glow
   },
-  // Courses Color Palette
-  coursesTile: {
-    backgroundColor: "#ECFDF5", // soft green
-    borderColor: "#D1FAE5",
-    shadowColor: "#047857",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-  },
+  coursesTile: {},
   coursesLabel: {
-    color: "#047857",
+    color: colors.textSecondary,
   },
   coursesValue: {
-    color: "#065F46",
+    color: "#34D399", // Emerald glow
   },
   
   statIcon: {
@@ -318,7 +303,7 @@ const styles = StyleSheet.create({
     resizeMode: "contain",
   },
   statLabel: {
-    fontWeight: "700",
+    fontWeight: "600",
     fontSize: 11,
   },
   statValue: {
@@ -338,10 +323,10 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0F172A",
+    color: colors.text,
   },
   link: {
-    color: "#0f62fe",
+    color: colors.accent, // Glowing brand blue
     fontWeight: "700",
     fontSize: 14,
   },

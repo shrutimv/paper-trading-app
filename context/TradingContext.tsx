@@ -2,18 +2,27 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Types
-export type Holding = { symbol: string; name: string; quantity: number; averagePrice: number; };
+export type Holding = { 
+  symbol: string; 
+  name: string; 
+  quantity: number; 
+  averagePrice: number; 
+  productType?: 'cnc' | 'mis'; 
+  stopLoss?: number; 
+};
 export type WatchlistStock = { symbol: string; shortname: string; exchange: string; };
 
 type TradingContextType = {
   balance: number;
   holdings: Holding[];
-  watchlist: WatchlistStock[]; // <-- NEW!
-  buyStock: (symbol: string, name: string, price: number, quantity: number) => Promise<boolean>;
-  sellStock: (symbol: string, price: number, quantity: number) => Promise<boolean>;
-  addToWatchlist: (stock: WatchlistStock) => void; // <-- NEW!
-  removeFromWatchlist: (symbol: string) => void; // <-- NEW!
+  watchlist: WatchlistStock[];
+  buyStock: (symbol: string, name: string, price: number, quantity: number, productType?: 'cnc' | 'mis', stopLoss?: number) => Promise<boolean>;
+  sellStock: (symbol: string, price: number, quantity: number, productType?: 'cnc' | 'mis') => Promise<boolean>;
+  addToWatchlist: (stock: WatchlistStock) => void;
+  removeFromWatchlist: (symbol: string) => void;
   totalInvestment: number;
+  setHoldings: React.Dispatch<React.SetStateAction<Holding[]>>;
+  setBalance: React.Dispatch<React.SetStateAction<number>>;
 };
 
 const TradingContext = createContext<TradingContextType | undefined>(undefined);
@@ -22,7 +31,7 @@ const STARTING_BALANCE = 100000;
 export const TradingProvider = ({ children }: { children: React.ReactNode }) => {
   const [balance, setBalance] = useState<number>(STARTING_BALANCE);
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]); // <-- NEW!
+  const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
 
   // Load Saved Data
   useEffect(() => {
@@ -30,11 +39,11 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       try {
         const savedBalance = await AsyncStorage.getItem('paper_balance');
         const savedHoldings = await AsyncStorage.getItem('paper_holdings');
-        const savedWatchlist = await AsyncStorage.getItem('paper_watchlist'); // <-- NEW!
+        const savedWatchlist = await AsyncStorage.getItem('paper_watchlist');
         
         if (savedBalance !== null) setBalance(parseFloat(savedBalance));
         if (savedHoldings !== null) setHoldings(JSON.parse(savedHoldings));
-        if (savedWatchlist !== null) setWatchlist(JSON.parse(savedWatchlist)); // <-- NEW!
+        if (savedWatchlist !== null) setWatchlist(JSON.parse(savedWatchlist));
       } catch (e) { console.error("Failed to load trading data", e); }
     };
     loadData();
@@ -46,13 +55,13 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       try {
         await AsyncStorage.setItem('paper_balance', balance.toString());
         await AsyncStorage.setItem('paper_holdings', JSON.stringify(holdings));
-        await AsyncStorage.setItem('paper_watchlist', JSON.stringify(watchlist)); // <-- NEW!
+        await AsyncStorage.setItem('paper_watchlist', JSON.stringify(watchlist));
       } catch (e) { console.error("Failed to save trading data", e); }
     };
     saveData();
   }, [balance, holdings, watchlist]);
 
-  // --- NEW: Watchlist Actions ---
+  // --- Watchlist Actions ---
   const addToWatchlist = (stock: WatchlistStock) => {
     if (!watchlist.find(s => s.symbol === stock.symbol)) {
       setWatchlist(prev => [...prev, stock]);
@@ -64,40 +73,82 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
   };
 
   // --- BUY / SELL LOGIC ---
-  const buyStock = async (symbol: string, name: string, price: number, quantity: number) => {
-    const cost = price * quantity;
+  const buyStock = async (
+    symbol: string, 
+    name: string, 
+    price: number, 
+    quantity: number, 
+    productType: 'cnc' | 'mis' = 'cnc', 
+    stopLoss?: number
+  ) => {
+    const totalValue = price * quantity;
+    const cost = productType === 'mis' ? totalValue * 0.20 : totalValue;
+    
     if (balance < cost) return false;
 
     setBalance(prev => prev - cost);
     setHoldings(prev => {
-      const existing = prev.find(h => h.symbol === symbol);
+      const existing = prev.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
       if (existing) {
-        const totalValue = (existing.averagePrice * existing.quantity) + cost;
+        const totalSharesValue = (existing.averagePrice * existing.quantity) + totalValue;
         const newQuantity = existing.quantity + quantity;
-        return prev.map(h => h.symbol === symbol ? { ...h, quantity: newQuantity, averagePrice: totalValue / newQuantity } : h);
+        return prev.map(h => h.symbol === symbol && (h.productType || 'cnc') === productType 
+          ? { ...h, quantity: newQuantity, averagePrice: totalSharesValue / newQuantity, stopLoss } 
+          : h
+        );
       }
-      return [...prev, { symbol, name, quantity, averagePrice: price }];
+      return [...prev, { symbol, name, quantity, averagePrice: price, productType, stopLoss }];
     });
     return true;
   };
 
-  const sellStock = async (symbol: string, price: number, quantity: number) => {
-    const existing = holdings.find(h => h.symbol === symbol);
+  const sellStock = async (
+    symbol: string, 
+    price: number, 
+    quantity: number, 
+    productType: 'cnc' | 'mis' = 'cnc'
+  ) => {
+    const existing = holdings.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
     if (!existing || existing.quantity < quantity) return false;
 
-    const revenue = price * quantity;
+    let revenue = price * quantity;
+    if (productType === 'mis') {
+      // Leveraged return formula: current value - 80% of purchase value
+      // This nets the original 20% margin + or - the full P&L amount.
+      revenue = (price * quantity) - (existing.averagePrice * quantity * 0.80);
+    }
+
     setBalance(prev => prev + revenue);
     setHoldings(prev => {
-      if (existing.quantity === quantity) return prev.filter(h => h.symbol !== symbol);
-      return prev.map(h => h.symbol === symbol ? { ...h, quantity: h.quantity - quantity } : h);
+      if (existing.quantity === quantity) {
+        return prev.filter(h => !(h.symbol === symbol && (h.productType || 'cnc') === productType));
+      }
+      return prev.map(h => h.symbol === symbol && (h.productType || 'cnc') === productType 
+        ? { ...h, quantity: h.quantity - quantity } 
+        : h
+      );
     });
     return true;
   };
 
-  const totalInvestment = holdings.reduce((sum, h) => sum + (h.averagePrice * h.quantity), 0);
+  const totalInvestment = holdings.reduce((sum, h) => {
+    const val = h.averagePrice * h.quantity;
+    return sum + ((h.productType || 'cnc') === 'mis' ? val * 0.20 : val);
+  }, 0);
 
   return (
-    <TradingContext.Provider value={{ balance, holdings, watchlist, buyStock, sellStock, addToWatchlist, removeFromWatchlist, totalInvestment }}>
+    <TradingContext.Provider value={{ 
+      balance, 
+      holdings, 
+      watchlist, 
+      buyStock, 
+      sellStock, 
+      addToWatchlist, 
+      removeFromWatchlist, 
+      totalInvestment,
+      setHoldings,
+      setBalance
+    }}>
       {children}
     </TradingContext.Provider>
   );

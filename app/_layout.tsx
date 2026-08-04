@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
@@ -7,9 +7,9 @@ import { StyleSheet, Text } from 'react-native';
 import Animated, { FadeIn, ZoomIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { GamificationProvider } from '../context/GamificationContext';
 import { TradingProvider } from '../context/TradingContext';
+import { ThemeProvider as CustomThemeProvider, useTheme } from '../context/ThemeContext';
 
 export const unstable_settings = { initialRouteName: '(tabs)' };
 
@@ -40,7 +40,19 @@ function CustomSplash({ isDark }: { isDark: boolean }) {
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  return (
+    <CustomThemeProvider>
+      <GamificationProvider>
+        <TradingProvider>
+          <RootLayoutContent />
+        </TradingProvider>
+      </GamificationProvider>
+    </CustomThemeProvider>
+  );
+}
+
+function RootLayoutContent() {
+  const { isDark, colors } = useTheme();
   const segments = useSegments();
   const router = useRouter();
   
@@ -61,8 +73,6 @@ export default function RootLayout() {
 
         if (!session && !inAuthGroup) {
           router.replace('/auth');
-        } else if (session && inAuthGroup) {
-          router.replace('/(tabs)');
         }
       } catch (e) {
         console.error("Auth Loop Error", e);
@@ -72,35 +82,26 @@ export default function RootLayout() {
   }, [segments, isLoading]);
 
   if (isLoading) {
-    return <CustomSplash isDark={colorScheme === 'dark'} />;
+    return <CustomSplash isDark={isDark} />;
   }
 
-  // Determine background color based on theme so the space behind the nav bar matches
-  const bgColor = colorScheme === 'dark' ? '#0A0F1D' : '#fff';
-
   return (
-    <GamificationProvider>
-      <TradingProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-          
-          {/* <-- 2. THE GLOBAL SAFE AREA FIX --> */}
-          {/* edges={['bottom']} ensures we only push up from the bottom nav bar */}
-          <SafeAreaView style={{ flex: 1, backgroundColor: bgColor }} edges={['bottom']}>
-            
-            <Stack>
-              <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
-              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-              <Stack.Screen name="learn" options={{ headerShown: false }} /> 
-            </Stack>
-            <StatusBar style="auto" />
-            
-          </SafeAreaView>
-          
-        </ThemeProvider>
-      </TradingProvider>
-    </GamificationProvider>
+    <NavThemeProvider value={isDark ? DarkTheme : DefaultTheme}>
+      {/* <-- 2. THE GLOBAL SAFE AREA FIX --> */}
+      {/* edges={['bottom']} ensures we only push up from the bottom nav bar */}
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['bottom']}>
+        
+        <Stack>
+          <Stack.Screen name="auth" options={{ headerShown: false, gestureEnabled: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+          <Stack.Screen name="learn" options={{ headerShown: false }} /> 
+        </Stack>
+        <StatusBar style={isDark ? "light" : "dark"} />
+        
+      </SafeAreaView>
+    </NavThemeProvider>
   );
 }
 

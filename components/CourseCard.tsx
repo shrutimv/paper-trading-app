@@ -1,6 +1,7 @@
 // components/CourseCard.tsx
 import React from "react";
 import { Image, ImageSourcePropType, StyleSheet, Text, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 
 type Props = {
   small?: boolean;
@@ -17,7 +18,10 @@ export default function CourseCard({
   progressLabel = "25% complete",
   image,
 }: Props) {
-  // fallback image if none provided (keeps your previous default behavior)
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+  
+  // fallback image if none provided
   const imgSource = image ?? require("../assets/images/courses/course.png");
 
   if (small) {
@@ -43,31 +47,37 @@ export default function CourseCard({
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   card: {
     borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.card,
     elevation: 3,
-    shadowColor: "#000",
+    shadowColor: colors.shadowColor,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.15,
     shadowRadius: 12,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: colors.border,
   },
   image: { width: "100%", height: 140, resizeMode: "cover" },
   meta: { padding: 16 },
-  metaSubtitle: { color: "#64748B", fontSize: 12, fontWeight: "600", textTransform: "uppercase" },
-  metaTitle: { fontSize: 18, fontWeight: "800", marginTop: 4, color: "#0F172A" },
+  metaSubtitle: { color: colors.textSecondary, fontSize: 12, fontWeight: "600", textTransform: "uppercase" },
+  metaTitle: { fontSize: 18, fontWeight: "800", marginTop: 4, color: colors.text },
 
   smallCard: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 0,
     minHeight: 120,
+    borderWidth: 1,
+    borderColor: colors.border,
     elevation: 2,
     overflow: "hidden",
+    shadowColor: colors.shadowColor,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   smallImage: {
     width: "100%",
@@ -80,10 +90,10 @@ const styles = StyleSheet.create({
   smallTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0f1724",
+    color: colors.text,
   },
   smallSubtitle: {
-    color: "#6b7280",
+    color: colors.textSecondary,
     marginTop: 6,
   },
 });

@@ -17,28 +17,43 @@ type GamificationType = {
   currentRank: typeof RANKS[0];
   nextRank: typeof RANKS[0] | null;
   progressPercent: number;
+  proMode: boolean;
+  setProMode: (val: boolean) => void;
 };
 
 const GamificationContext = createContext<GamificationType | undefined>(undefined);
 
 export const GamificationProvider = ({ children }: { children: React.ReactNode }) => {
   const [xp, setXp] = useState<number>(0);
+  const [proMode, setProModeState] = useState<boolean>(false);
 
-  // Load XP on app start
+  // Load Saved Data
   useEffect(() => {
-    const loadXp = async () => {
+    const loadSavedData = async () => {
       try {
         const savedXp = await AsyncStorage.getItem('user_xp');
         if (savedXp !== null) setXp(parseInt(savedXp));
-      } catch (e) { console.error("Failed to load XP", e); }
+        
+        const savedProMode = await AsyncStorage.getItem('paper_promode');
+        if (savedProMode !== null) setProModeState(savedProMode === 'true');
+      } catch (e) { console.error("Failed to load gamification data", e); }
     };
-    loadXp();
+    loadSavedData();
   }, []);
 
   // Save XP whenever it changes
   useEffect(() => {
     AsyncStorage.setItem('user_xp', xp.toString()).catch(e => console.error("Failed to save XP", e));
   }, [xp]);
+
+  const setProMode = async (val: boolean) => {
+    setProModeState(val);
+    try {
+      await AsyncStorage.setItem('paper_promode', val ? 'true' : 'false');
+    } catch (e) {
+      console.error("Failed to save Pro Mode state", e);
+    }
+  };
 
   // Give XP when they get an answer right!
   const addXp = (amount: number) => {
@@ -59,7 +74,7 @@ export const GamificationProvider = ({ children }: { children: React.ReactNode }
   }
 
   return (
-    <GamificationContext.Provider value={{ xp, addXp, currentRank, nextRank, progressPercent }}>
+    <GamificationContext.Provider value={{ xp, addXp, currentRank, nextRank, progressPercent, proMode, setProMode }}>
       {children}
     </GamificationContext.Provider>
   );

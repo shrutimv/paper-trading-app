@@ -1,8 +1,12 @@
 // components/PuzzleCard.tsx
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
 
 export default function PuzzleCard() {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.card}>
       <Image 
@@ -25,18 +29,18 @@ export default function PuzzleCard() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   card: { 
     borderRadius: 20, 
     overflow: "hidden", 
-    backgroundColor: "#ffffff", 
+    backgroundColor: colors.card,
     elevation: 3,
-    shadowColor: "#000",
+    shadowColor: colors.shadowColor,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.15,
     shadowRadius: 12,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: colors.border,
   },
   image: { 
     width: "100%", 
@@ -49,10 +53,10 @@ const styles = StyleSheet.create({
   title: { 
     fontSize: 18, 
     fontWeight: "800", 
-    color: "#0F172A",
+    color: colors.text,
   },
   desc: { 
-    color: "#64748B", 
+    color: colors.textSecondary, 
     fontSize: 13,
     lineHeight: 18,
     marginTop: 6, 
@@ -65,17 +69,19 @@ const styles = StyleSheet.create({
   },
   badge: { 
     borderRadius: 8, 
-    backgroundColor: "#EFF6FF", 
+    backgroundColor: colors.border, 
     paddingHorizontal: 12, 
     paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.isDark ? "#334155" : "#CBD5E1",
   },
   badgeText: {
-    color: "#2563EB",
+    color: colors.accent,
     fontWeight: "700",
     fontSize: 12,
   },
   cta: { 
-    backgroundColor: "#0f62fe", 
+    backgroundColor: colors.accent,
     paddingHorizontal: 16, 
     paddingVertical: 10, 
     borderRadius: 10,
@@ -86,4 +92,3 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
 });
-

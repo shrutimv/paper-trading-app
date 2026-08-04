@@ -1,13 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { useGamification } from '../context/GamificationContext';
 
 export default function AuthScreen() {
+  const router = useRouter();
+  const { colors, isDark, toggleTheme } = useTheme();
+  const { proMode, setProMode } = useGamification();
+  const styles = getStyles(colors);
+
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const router = useRouter();
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -55,6 +61,7 @@ export default function AuthScreen() {
       <TextInput 
         style={styles.input} 
         placeholder="Email" 
+        placeholderTextColor={colors.textSecondary}
         value={email} 
         onChangeText={setEmail} 
         autoCapitalize="none"
@@ -62,6 +69,7 @@ export default function AuthScreen() {
       <TextInput 
         style={styles.input} 
         placeholder="Password" 
+        placeholderTextColor={colors.textSecondary}
         value={password} 
         onChangeText={setPassword} 
         secureTextEntry 
@@ -82,19 +90,72 @@ export default function AuthScreen() {
       <TouchableOpacity style={styles.guestBtn} onPress={handleGuest}>
         <Text style={styles.guestBtnText}>Continue as Guest</Text>
       </TouchableOpacity>
+
+      {/* QUICK PRE-CONFIGURE SETTINGS SEGMENT */}
+      <View style={styles.settingsForm}>
+        <Text style={styles.settingsTitle}>Pre-Configure App Settings</Text>
+        
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>Dark Theme</Text>
+          <Switch 
+            value={isDark} 
+            onValueChange={toggleTheme} 
+            trackColor={{ false: '#767577', true: colors.accent }}
+            thumbColor={isDark ? '#f4f3f4' : '#f4f3f4'}
+          />
+        </View>
+
+        <View style={styles.settingRow}>
+          <Text style={styles.settingLabel}>Pro Mode (Skip Locks)</Text>
+          <Switch 
+            value={proMode} 
+            onValueChange={setProMode} 
+            trackColor={{ false: '#767577', true: colors.accent }}
+            thumbColor={proMode ? '#f4f3f4' : '#f4f3f4'}
+          />
+        </View>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 30, justifyContent: 'center' },
-  logoText: { fontSize: 32, fontWeight: '900', color: '#0f62fe', textAlign: 'center', marginBottom: 10 },
-  subtitle: { fontSize: 18, color: '#6b7280', textAlign: 'center', marginBottom: 40 },
-  input: { backgroundColor: '#f3f4f6', padding: 15, borderRadius: 12, marginBottom: 15, fontSize: 16 },
-  mainBtn: { backgroundColor: '#0f62fe', padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 10 },
+const getStyles = (colors: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background, padding: 30, justifyContent: 'center' },
+  logoText: { fontSize: 32, fontWeight: '900', color: colors.accent, textAlign: 'center', marginBottom: 10 },
+  subtitle: { fontSize: 18, color: colors.textSecondary, textAlign: 'center', marginBottom: 30 },
+  input: { backgroundColor: colors.card, padding: 15, borderRadius: 12, marginBottom: 15, fontSize: 16, color: colors.text, borderWidth: 1, borderColor: colors.border },
+  mainBtn: { backgroundColor: colors.accent, padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 10 },
   btnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
-  toggleText: { color: '#0f62fe', textAlign: 'center', marginTop: 20, fontWeight: '600' },
-  divider: { height: 1, backgroundColor: '#e5e7eb', marginVertical: 30 },
-  guestBtn: { borderWidth: 1, borderColor: '#0f62fe', padding: 15, borderRadius: 12, alignItems: 'center' },
-  guestBtnText: { color: '#0f62fe', fontWeight: 'bold' }
+  toggleText: { color: colors.accent, textAlign: 'center', marginTop: 20, fontWeight: '600' },
+  divider: { height: 1, backgroundColor: colors.border, marginVertical: 25 },
+  guestBtn: { borderWidth: 1, borderColor: colors.accent, padding: 15, borderRadius: 12, alignItems: 'center' },
+  guestBtnText: { color: colors.accent, fontWeight: 'bold' },
+
+  settingsForm: {
+    marginTop: 35,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  settingsTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  settingLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  }
 });
