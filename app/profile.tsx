@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- 1. IMPORT HOOK
+import { BASE_URL } from "@/src/config/api";
 
 // IMPORT BOTH GLOBAL CONTEXTS!
 import { RANKS, useGamification } from '../context/GamificationContext';
@@ -16,7 +17,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  
+
   const { balance } = useTrading();
   const { xp, currentRank, nextRank, progressPercent } = useGamification();
   const [isRankModalOpen, setIsRankModalOpen] = useState(false);
@@ -41,15 +42,15 @@ export default function ProfileScreen() {
       if (progressKeys.length > 0) {
         await AsyncStorage.multiRemove(progressKeys);
       }
-      await AsyncStorage.removeItem('user_xp'); 
+      await AsyncStorage.removeItem('user_xp');
     } catch (e) {
       console.error("Failed to clear progress", e);
     }
   };
 
   const handleUpgrade = async () => {
-    await clearProgress(); 
-    await AsyncStorage.removeItem('userSession'); 
+    await clearProgress();
+    await AsyncStorage.removeItem('userSession');
     router.replace('/auth');
   };
 
@@ -58,17 +59,38 @@ export default function ProfileScreen() {
       "Log Out",
       "This will clear your progress on this device. Are you sure?",
       [
-        { text: "Cancel", style: "cancel" },
-        { 
-          text: "Log Out", 
-          style: 'destructive',
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Log Out",
+          style: "destructive",
           onPress: async () => {
-            await clearProgress(); 
-            await AsyncStorage.removeItem('userSession'); 
-            router.dismissAll();
-            router.replace('/auth');
-          }
-        }
+            try {
+              // Destroy server session
+              await fetch(`${BASE_URL}/api/auth/logout`, {
+                method: "GET", // or POST if your backend uses POST
+                credentials: "include",
+              });
+
+              // Clear local progress
+              await clearProgress();
+
+              // Clear local session
+              await AsyncStorage.removeItem("userSession");
+
+              // Remove all previous screens
+              router.dismissAll();
+
+              // Navigate to login
+              router.replace("/auth");
+            } catch (err) {
+              console.error(err);
+              Alert.alert("Error", "Unable to log out.");
+            }
+          },
+        },
       ]
     );
   };
@@ -84,7 +106,7 @@ export default function ProfileScreen() {
   return (
     // <-- 3. INJECT DYNAMIC PADDING TOP AND BOTTOM -->
     <View style={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
-      
+
       {/* <-- 4. DYNAMIC BACK BUTTON PLACEMENT --> */}
       <TouchableOpacity style={[styles.backBtn, { top: insets.top + 15 }]} onPress={() => router.back()}>
         <Ionicons name="arrow-back" size={28} color="#111827" />
@@ -94,16 +116,25 @@ export default function ProfileScreen() {
         <View style={styles.avatarContainer}>
           <Ionicons name="person-circle-outline" size={70} color="#cbd5e1" />
         </View>
-        <Text style={styles.name}>{user?.isGuest ? "Guest User" : "Trader"}</Text>
-        
+        <Text style={styles.name}>
+          {user?.isGuest ? "Guest User" : user?.username}
+        </Text>
+
         <View style={styles.walletPill}>
-          <Ionicons name="wallet-outline" size={16} color="#0f62fe" style={{ marginRight: 6 }} />
-          <Text style={styles.walletText}>{formatCurrency(balance)}</Text>
+          <Ionicons
+            name="wallet-outline"
+            size={16}
+            color="#0f62fe"
+            style={{ marginRight: 6 }}
+          />
+          <Text style={styles.walletText}>
+            {formatCurrency(user?.balance ?? 0)}
+          </Text>
         </View>
       </View>
 
-      <TouchableOpacity 
-        style={[styles.rankCard, { borderColor: currentRank.color + '40' }]} 
+      <TouchableOpacity
+        style={[styles.rankCard, { borderColor: currentRank.color + '40' }]}
         onPress={() => setIsRankModalOpen(true)}
         activeOpacity={0.8}
       >
@@ -130,19 +161,19 @@ export default function ProfileScreen() {
           <TouchableOpacity style={styles.menuItem} onPress={handleUpgrade}>
             <View style={styles.menuIconInfo}>
               <Ionicons name="log-in-outline" size={22} color="#0f62fe" />
-              <Text style={[styles.menuText, { color: '#0f62fe', fontWeight:'bold' }]}>
+              <Text style={[styles.menuText, { color: '#0f62fe', fontWeight: 'bold' }]}>
                 Login/Signup to Save Progress
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={22} color="#9ca3af" />
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={styles.menuItem} onPress={() => {}}>
-            <View style={styles.menuIconInfo}>
-              <Ionicons name="settings-outline" size={22} color="#4b5563" />
-              <Text style={styles.menuText}>Settings</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color="#9ca3af" />
+        <TouchableOpacity style={styles.menuItem} onPress={() => { }}>
+          <View style={styles.menuIconInfo}>
+            <Ionicons name="settings-outline" size={22} color="#4b5563" />
+            <Text style={styles.menuText}>Settings</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color="#9ca3af" />
         </TouchableOpacity>
       </View>
 
@@ -154,7 +185,7 @@ export default function ProfileScreen() {
       <Modal visible={isRankModalOpen} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { paddingBottom: insets.bottom > 0 ? insets.bottom + 20 : 40 }]}>
-            
+
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Rank Journey</Text>
               <TouchableOpacity onPress={() => setIsRankModalOpen(false)}>
@@ -164,16 +195,16 @@ export default function ProfileScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={styles.journeyLine} />
-              
+
               {RANKS.map((rank) => {
                 const isCurrent = rank.name === currentRank.name;
                 const isPassed = xp >= rank.minXp;
-                
+
                 return (
                   <View key={rank.name} style={[styles.journeyItem, isCurrent && styles.journeyItemCurrent]}>
-                    
+
                     <View style={[styles.node, { backgroundColor: isPassed ? rank.color : '#e2e8f0', borderColor: isCurrent ? '#fff' : 'transparent', borderWidth: isCurrent ? 3 : 0 }]} />
-                    
+
                     <View style={styles.journeyTextContainer}>
                       <Text style={[styles.journeyRankName, { color: isPassed ? rank.color : '#94a3b8' }]}>
                         {rank.name}
@@ -207,14 +238,14 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   // Removed hardcoded paddingTop: 60 from container!
   container: { flex: 1, backgroundColor: '#f8f9fa', paddingHorizontal: 20 },
-  
+
   // Removed hardcoded top: 50 from backBtn!
   backBtn: { position: 'absolute', left: 20, zIndex: 10, padding: 4 },
-  
+
   header: { alignItems: 'center', marginTop: 10, marginBottom: 30 },
   avatarContainer: { marginBottom: 10, backgroundColor: '#fff', borderRadius: 50, padding: 2, elevation: 2, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
   name: { fontSize: 24, fontWeight: '900', color: '#111827' },
-  
+
   walletPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginTop: 8 },
   walletText: { color: '#0f62fe', fontWeight: '800', fontSize: 14 },
 
@@ -222,11 +253,11 @@ const styles = StyleSheet.create({
   rankCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   rankSubText: { color: '#6b7280', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 },
   rankTitle: { fontSize: 28, fontWeight: '900', textTransform: 'uppercase' },
-  
+
   rankInfoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 },
   xpText: { fontSize: 16, fontWeight: '800', color: '#111827' },
   tapDetailsText: { fontSize: 12, fontWeight: '600', color: '#9ca3af' },
-  
+
   track: { width: '100%', height: 10, backgroundColor: '#f1f5f9', borderRadius: 5, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 5 },
 
@@ -234,7 +265,7 @@ const styles = StyleSheet.create({
   menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
   menuIconInfo: { flexDirection: 'row', alignItems: 'center', gap: 15 },
   menuText: { fontSize: 16, color: '#374151', fontWeight: '600' },
-  
+
   logoutBtn: { backgroundColor: '#fef2f2', padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 'auto', borderWidth: 1, borderColor: '#fee2e2' },
   logoutText: { color: '#ef4444', fontWeight: '800', fontSize: 15 },
 
@@ -243,16 +274,16 @@ const styles = StyleSheet.create({
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
   modalTitle: { fontSize: 24, fontWeight: '900', color: '#111827' },
-  
+
   journeyLine: { position: 'absolute', left: 15, top: 20, bottom: 20, width: 2, backgroundColor: '#f1f5f9', zIndex: 1 },
   journeyItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 30, paddingLeft: 8, zIndex: 2 },
   journeyItemCurrent: { backgroundColor: '#f8fafc', padding: 15, borderRadius: 16, marginLeft: -7, borderWidth: 1, borderColor: '#f1f5f9' },
-  
+
   node: { width: 16, height: 16, borderRadius: 8, marginRight: 20 },
   journeyTextContainer: { flex: 1 },
   journeyRankName: { fontSize: 18, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
   journeyXpText: { fontSize: 13, color: '#6b7280', fontWeight: '600', marginTop: 2 },
-  
+
   currentBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   currentBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
 });
