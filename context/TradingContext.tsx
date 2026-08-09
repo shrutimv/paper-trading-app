@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { BASE_URL } from '@/src/config/api';
+import { useAuth } from './AuthContext';
 
 // Types
 export type Holding = { 
@@ -13,11 +16,25 @@ export type Holding = {
 export type WatchlistStock = { symbol: string; shortname: string; exchange: string; };
 
 type TradingContextType = {
+  isGuest?: boolean;
+  setIsGuest?: React.Dispatch<React.SetStateAction<boolean>>;
   balance: number;
   holdings: Holding[];
   watchlist: WatchlistStock[];
-  buyStock: (symbol: string, name: string, price: number, quantity: number, productType?: 'cnc' | 'mis', stopLoss?: number) => Promise<boolean>;
-  sellStock: (symbol: string, price: number, quantity: number, productType?: 'cnc' | 'mis') => Promise<boolean>;
+  buyStock: (
+    symbol: string, 
+    name: string, 
+    price: number, 
+    quantity: number, 
+    productType?: 'cnc' | 'mis', 
+    stopLoss?: number
+  ) => Promise<boolean>;
+  sellStock: (
+    symbol: string, 
+    price: number, 
+    quantity: number, 
+    productType?: 'cnc' | 'mis'
+  ) => Promise<boolean>;
   addToWatchlist: (stock: WatchlistStock) => void;
   removeFromWatchlist: (symbol: string) => void;
   totalInvestment: number;
@@ -29,37 +46,66 @@ const TradingContext = createContext<TradingContextType | undefined>(undefined);
 const STARTING_BALANCE = 100000;
 
 export const TradingProvider = ({ children }: { children: React.ReactNode }) => {
+  const { user, isGuest, refreshUser } = useAuth();
   const [balance, setBalance] = useState<number>(STARTING_BALANCE);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
 
-  // Load Saved Data
+  // Load Saved Data or Sync with Backend User
   useEffect(() => {
     const loadData = async () => {
       try {
-        const savedBalance = await AsyncStorage.getItem('paper_balance');
-        const savedHoldings = await AsyncStorage.getItem('paper_holdings');
-        const savedWatchlist = await AsyncStorage.getItem('paper_watchlist');
-        
-        if (savedBalance !== null) setBalance(parseFloat(savedBalance));
-        if (savedHoldings !== null) setHoldings(JSON.parse(savedHoldings));
-        if (savedWatchlist !== null) setWatchlist(JSON.parse(savedWatchlist));
-      } catch (e) { console.error("Failed to load trading data", e); }
+        if (user && !isGuest) {
+          // Logged in user: set balance from backend user
+          if (typeof user.balance === 'number') {
+            setBalance(user.balance);
+          }
+          // Fetch holdings from backend if available
+          try {
+            const res = await axios.get(`${BASE_URL}/api/trade/holdings`, { withCredentials: true });
+            if (res.data && Array.isArray(res.data.holdings)) {
+              setHoldings(res.data.holdings);
+            }
+          } catch {
+            // Fallback to local storage if holdings endpoint is not populated yet
+            const savedHoldings = await AsyncStorage.getItem(`paper_holdings_${user.id || 'user'}`);
+            if (savedHoldings) setHoldings(JSON.parse(savedHoldings));
+          }
+        } else {
+          // Guest mode: load from AsyncStorage
+          const savedBalance = await AsyncStorage.getItem('paper_balance');
+          const savedHoldings = await AsyncStorage.getItem('paper_holdings');
+          const savedWatchlist = await AsyncStorage.getItem('paper_watchlist');
+          
+          if (savedBalance !== null) setBalance(parseFloat(savedBalance));
+          if (savedHoldings !== null) setHoldings(JSON.parse(savedHoldings));
+          if (savedWatchlist !== null) setWatchlist(JSON.parse(savedWatchlist));
+        }
+      } catch (e) { 
+        console.error("Failed to load trading data", e); 
+      }
     };
     loadData();
-  }, []);
+  }, [user, isGuest]);
 
   // Save Data on Change
   useEffect(() => {
     const saveData = async () => {
       try {
-        await AsyncStorage.setItem('paper_balance', balance.toString());
-        await AsyncStorage.setItem('paper_holdings', JSON.stringify(holdings));
-        await AsyncStorage.setItem('paper_watchlist', JSON.stringify(watchlist));
-      } catch (e) { console.error("Failed to save trading data", e); }
+        if (user && !isGuest) {
+          await AsyncStorage.setItem(`paper_holdings_${user.id || 'user'}`, JSON.stringify(holdings));
+          await AsyncStorage.setItem(`paper_watchlist_${user.id || 'user'}`, JSON.stringify(watchlist));
+        } else {
+          await AsyncStorage.setItem('paper_balance', balance.toString());
+          await AsyncStorage.setItem('paper_holdings', JSON.stringify(holdings));
+          await AsyncStorage.setItem('paper_watchlist', JSON.stringify(watchlist));
+        }
+      } catch (e) { 
+        console.error("Failed to save trading data", e); 
+      }
     };
     saveData();
-  }, [balance, holdings, watchlist]);
+  }, [balance, holdings, watchlist, user, isGuest]);
 
   // --- Watchlist Actions ---
   const addToWatchlist = (stock: WatchlistStock) => {
@@ -72,7 +118,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     setWatchlist(prev => prev.filter(s => s.symbol !== symbol));
   };
 
-  // --- BUY / SELL LOGIC ---
+  // --- BUY LOGIC ---
   const buyStock = async (
     symbol: string, 
     name: string, 
@@ -86,7 +132,28 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     
     if (balance < cost) return false;
 
-    setBalance(prev => prev - cost);
+    // If user is logged in, attempt backend API record
+    if (user && !isGuest) {
+      try {
+        const response = await axios.post(
+          `${BASE_URL}/api/trade/buy`,
+          { symbol, quantity, price, name, productType, stopLoss },
+          { withCredentials: true }
+        );
+        if (response.data?.balance !== undefined) {
+          setBalance(response.data.balance);
+        } else {
+          setBalance(prev => prev - cost);
+        }
+        if (refreshUser) await refreshUser();
+      } catch (err) {
+        console.log("Backend trade buy failed, recording locally", err);
+        setBalance(prev => prev - cost);
+      }
+    } else {
+      setBalance(prev => prev - cost);
+    }
+
     setHoldings(prev => {
       const existing = prev.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
       if (existing) {
@@ -102,6 +169,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     return true;
   };
 
+  // --- SELL LOGIC ---
   const sellStock = async (
     symbol: string, 
     price: number, 
@@ -113,12 +181,31 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
 
     let revenue = price * quantity;
     if (productType === 'mis') {
-      // Leveraged return formula: current value - 80% of purchase value
-      // This nets the original 20% margin + or - the full P&L amount.
       revenue = (price * quantity) - (existing.averagePrice * quantity * 0.80);
     }
 
-    setBalance(prev => prev + revenue);
+    // If user is logged in, attempt backend API record
+    if (user && !isGuest) {
+      try {
+        const response = await axios.post(
+          `${BASE_URL}/api/trade/sell`,
+          { symbol, quantity, price, productType },
+          { withCredentials: true }
+        );
+        if (response.data?.balance !== undefined) {
+          setBalance(response.data.balance);
+        } else {
+          setBalance(prev => prev + revenue);
+        }
+        if (refreshUser) await refreshUser();
+      } catch (err) {
+        console.log("Backend trade sell failed, recording locally", err);
+        setBalance(prev => prev + revenue);
+      }
+    } else {
+      setBalance(prev => prev + revenue);
+    }
+
     setHoldings(prev => {
       if (existing.quantity === quantity) {
         return prev.filter(h => !(h.symbol === symbol && (h.productType || 'cnc') === productType));
@@ -138,6 +225,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
 
   return (
     <TradingContext.Provider value={{ 
+      isGuest,
       balance, 
       holdings, 
       watchlist, 

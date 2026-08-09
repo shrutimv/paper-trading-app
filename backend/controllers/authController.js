@@ -66,3 +66,16 @@ module.exports.logout = (req, res, next) => {
     });
   });
 };
+
+module.exports.getCurrentUser = async (req, res) => {
+    const user = await User.findById(req.user._id);
+
+    res.status(200).json({
+        user: {
+            id: user._id,
+            username: user.username,
+            email: user.email,
+            balance: user.balance
+        }
+    });
+};

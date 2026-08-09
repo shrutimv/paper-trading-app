@@ -54,9 +54,8 @@ export default function CoursesScreen() {
 
   const renderCourse = ({ item }: { item: typeof COURSES[number] }) => {
     const cardWidth = Platform.OS === "web" ? Math.min(520, ITEM_WIDTH) : ITEM_WIDTH;
-    const wrapperAlign = Platform.OS === "web" ? { alignSelf: "center" } : {};
     return (
-      <View style={{ width: cardWidth, marginBottom: 16, ...wrapperAlign }}>
+      <View style={[{ width: cardWidth, marginBottom: 16 }, Platform.OS === "web" && { alignSelf: "center" }]}>
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => router.push(`../courses/${item.id}`)}

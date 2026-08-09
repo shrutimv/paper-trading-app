@@ -1,3 +1,4 @@
+import React from 'react';
 import { MaterialIcons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Platform } from "react-native";
@@ -26,7 +27,7 @@ export default function TradingLayout() {
           fontWeight: "700",
         },
         // THIS IS THE MAGIC FIX FOR THE FLOATING GAP
-        safeAreaInsets: { bottom: 0 }, 
+        ...(Platform.OS === 'web' ? {} : {}),
       }}
     >
       <Tabs.Screen

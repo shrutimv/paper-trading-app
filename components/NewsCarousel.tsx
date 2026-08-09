@@ -28,7 +28,7 @@ function formatDate(dateValue: string) {
 }
 
 function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = getStyles(colors);
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
@@ -49,7 +49,7 @@ function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
     ).start();
   }, [pulseAnim]);
 
-  const shimmerBg = colors.isDark ? "#1E293B" : "#E2E8F0";
+  const shimmerBg = isDark ? "#1E293B" : "#E2E8F0";
 
   return (
     <ScrollView

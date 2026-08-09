@@ -27,6 +27,7 @@ const SUCCESS_THRESHOLD = SLIDER_WIDTH - KNOB_SIZE - 8;
 
 interface WatchlistProps { showSearch?: boolean; limit?: number; onBuyComplete?: () => void; }
 interface LivePriceData { price: number; change: number; changePercent: number; }
+const formatCurrency = (val: number) => `₹${val?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`;
 
 export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete }: WatchlistProps) {
   const router = useRouter();

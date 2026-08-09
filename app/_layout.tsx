@@ -7,6 +7,7 @@ import { StyleSheet, Text } from 'react-native';
 import Animated, { FadeIn, ZoomIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 
+import { AuthProvider } from '../context/AuthContext';
 import { GamificationProvider } from '../context/GamificationContext';
 import { TradingProvider } from '../context/TradingContext';
 import { ThemeProvider as CustomThemeProvider, useTheme } from '../context/ThemeContext';
@@ -41,13 +42,15 @@ function CustomSplash({ isDark }: { isDark: boolean }) {
 
 export default function RootLayout() {
   return (
-    <CustomThemeProvider>
-      <GamificationProvider>
-        <TradingProvider>
-          <RootLayoutContent />
-        </TradingProvider>
-      </GamificationProvider>
-    </CustomThemeProvider>
+    <AuthProvider>
+      <CustomThemeProvider>
+        <GamificationProvider>
+          <TradingProvider>
+            <RootLayoutContent />
+          </TradingProvider>
+        </GamificationProvider>
+      </CustomThemeProvider>
+    </AuthProvider>
   );
 }
 
