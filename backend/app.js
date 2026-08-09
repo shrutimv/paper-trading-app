@@ -11,6 +11,7 @@ const passport = require("passport");
 const LocalStrategy = require("passport-local");
 
 const authRoutes = require("./routes/authRoutes");
+const tradeRoutes = require("./routes/tradeRoutes");
 
 connectDB();
 
@@ -21,6 +22,8 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+
 
 //mongostore config
 const store = MongoStore.create({
@@ -58,6 +61,9 @@ passport.deserializeUser(User.deserializeUser());
 
 //auth
 app.use("/api/auth", authRoutes);
+
+//buy
+app.use("/api/trade", tradeRoutes);
 
 
 app.get("/",(req,res)=>{

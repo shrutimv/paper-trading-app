@@ -1,8 +1,7 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BASE_URL } from "@/src/config/api";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { BASE_URL } from "@/src/config/api";
 import {
   Alert,
   StyleSheet,
@@ -11,11 +10,17 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useAuth } from "../context/AuthContext";
 
 
 
 export default function AuthScreen() {
   const router = useRouter();
+
+  const {
+    login,
+    continueAsGuest,
+  } = useAuth();
 
   const [isLogin, setIsLogin] = useState(true);
 
@@ -60,10 +65,13 @@ export default function AuthScreen() {
           return;
         }
 
-        await AsyncStorage.setItem(
-          "userSession",
-          JSON.stringify(data.user)
-        );
+        await login({
+          id: data.user.id || data.user._id,
+          username: data.user.username,
+          email: data.user.email,
+          balance: data.user.balance,
+          isGuest: false,
+        });
 
         router.replace("/(tabs)");
       } else {
@@ -89,10 +97,13 @@ export default function AuthScreen() {
 
         Alert.alert("Success", "Account created successfully!");
 
-        await AsyncStorage.setItem(
-          "userSession",
-          JSON.stringify(data.user)
-        );
+        await login({
+          id: data.user.id || data.user._id,
+          username: data.user.username,
+          email: data.user.email,
+          balance: data.user.balance,
+          isGuest: false,
+        });
 
         router.replace("/(tabs)");
       }
@@ -102,13 +113,13 @@ export default function AuthScreen() {
     }
   };
 
+
   const handleGuest = async () => {
-    await AsyncStorage.setItem(
-      "userSession",
-      JSON.stringify({ isGuest: true })
-    );
+
+    await continueAsGuest();
 
     router.replace("/(tabs)");
+
   };
 
   return (

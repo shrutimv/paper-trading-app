@@ -1,28 +1,36 @@
-import { MaterialIcons, Ionicons } from "@expo/vector-icons";
-import React, { useState, useEffect } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-import { useTrading, Holding } from "../../../context/TradingContext";
+import { useAuth } from "@/context/AuthContext";
+import { getHoldings } from "@/src/services/tradeService";
+import { Holding, useTrading } from "../../../context/TradingContext";
 import { API_BASE_URL } from "../../../src/config";
 
 const formatCurrency = (val: number) => "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function HoldingsScreen() {
   const { holdings, watchlist, sellStock, totalInvestment } = useTrading();
-  
+
   const [liveData, setLiveData] = useState<Record<string, { price: number, changePercent: number }>>({});
   const [isFetching, setIsFetching] = useState(false);
 
   const [isSellModalOpen, setIsSellModalOpen] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState<Holding | null>(null);
   const [sellQuantity, setSellQuantity] = useState('1');
+  const { isGuest } = useAuth();
+
+  const [backendHoldings, setBackendHoldings] = useState<Holding[]>([]);
+  const displayedHoldings = isGuest
+  ? holdings
+  : backendHoldings;
 
   useEffect(() => {
     const fetchLivePrices = async () => {
-      if (holdings.length === 0 && watchlist.length === 0) return;
+      if (displayedHoldings.length === 0 && watchlist.length === 0) return;
       setIsFetching(true);
       const newData: Record<string, { price: number, changePercent: number }> = {};
-      const symbolsToFetch = Array.from(new Set([...holdings.map(h => h.symbol), ...watchlist.map(w => w.symbol)]));
+      const symbolsToFetch = Array.from(new Set([...displayedHoldings.map(h => h.symbol), ...watchlist.map(w => w.symbol)]));
 
       try {
         await Promise.all(
@@ -47,7 +55,24 @@ export default function HoldingsScreen() {
     fetchLivePrices();
   }, [holdings, watchlist]);
 
-  const currentValue = holdings.reduce((sum, item) => {
+  useEffect(() => {
+
+    if (isGuest) return;
+
+    const loadHoldings = async () => {
+      try {
+        const data = await getHoldings();
+        setBackendHoldings(data);
+      } catch (err) {
+        console.log(err);
+      }
+    };
+
+    loadHoldings();
+
+  }, []);
+
+  const currentValue = displayedHoldings.reduce((sum, item) => {
     const livePrice = liveData[item.symbol]?.price || item.averagePrice;
     return sum + (livePrice * item.quantity);
   }, 0);
@@ -57,14 +82,14 @@ export default function HoldingsScreen() {
 
   const openSellModal = (holding: Holding) => {
     setSelectedHolding(holding);
-    setSellQuantity(holding.quantity.toString()); 
+    setSellQuantity(holding.quantity.toString());
     setIsSellModalOpen(true);
   };
 
   const handleConfirmSell = async () => {
     if (!selectedHolding) return;
     const qty = parseInt(sellQuantity);
-    
+
     if (isNaN(qty) || qty <= 0 || qty > selectedHolding.quantity) {
       Alert.alert("Invalid Quantity", `You only own ${selectedHolding.quantity} shares.`);
       return;
@@ -89,7 +114,7 @@ export default function HoldingsScreen() {
   const modalLivePrice = selectedHolding ? (liveData[selectedHolding.symbol]?.price || 0) : 0;
   const modalAvgPrice = selectedHolding?.averagePrice || 0;
   const qtyToSell = parseInt(sellQuantity) || 0;
-  
+
   const investedInSoldShares = qtyToSell * modalAvgPrice;
   const totalValueReceived = qtyToSell * modalLivePrice;
   const projectedPL = totalValueReceived - investedInSoldShares;
@@ -143,7 +168,7 @@ export default function HoldingsScreen() {
                     <View>
                       <Text style={styles.instrumentSymbol}>{item.symbol.replace('.NS', '')}</Text>
                       <Text style={styles.instrumentSub}>
-                        Qty: <Text style={{fontWeight: '700', color: '#111'}}>{item.quantity}</Text> • Avg: {formatCurrency(item.averagePrice)}
+                        Qty: <Text style={{ fontWeight: '700', color: '#111' }}>{item.quantity}</Text> • Avg: {formatCurrency(item.averagePrice)}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
@@ -229,13 +254,13 @@ export default function HoldingsScreen() {
       {/* ========================================= */}
       <Modal visible={isSellModalOpen} transparent={true} animationType="slide">
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
-          
+
           <View style={styles.modalContent}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Sell {selectedHolding?.symbol.replace('.NS', '')}</Text>
-                <Text style={styles.modalSub}>LTP: <Text style={{fontWeight: '800', color: '#111'}}>{formatCurrency(modalLivePrice)}</Text></Text>
+                <Text style={styles.modalSub}>LTP: <Text style={{ fontWeight: '800', color: '#111' }}>{formatCurrency(modalLivePrice)}</Text></Text>
               </View>
               <TouchableOpacity onPress={() => setIsSellModalOpen(false)}>
                 <Ionicons name="close-circle" size={28} color="#9ca3af" />
@@ -248,9 +273,9 @@ export default function HoldingsScreen() {
                 <Text style={styles.inputLabel}>Shares to Sell</Text>
                 <Text style={styles.maxText}>Owned: {selectedHolding?.quantity}</Text>
               </View>
-              <TextInput 
-                style={[styles.numberInput, { color: '#ef4444' }]} 
-                keyboardType="number-pad" 
+              <TextInput
+                style={[styles.numberInput, { color: '#ef4444' }]}
+                keyboardType="number-pad"
                 value={sellQuantity}
                 onChangeText={setSellQuantity}
                 maxLength={5}
@@ -259,7 +284,7 @@ export default function HoldingsScreen() {
 
             {/* THE EXPLICIT MATH BREAKDOWN */}
             <View style={styles.breakdownBox}>
-              
+
               <Text style={styles.mathHeader}>Your Investment</Text>
               <View style={styles.mathRow}>
                 <Text style={styles.mathEquation}>{formatCurrency(modalAvgPrice)} × {qtyToSell} shares</Text>
@@ -311,7 +336,7 @@ const styles = StyleSheet.create({
   marketValue: { fontSize: 16, fontWeight: "700", marginVertical: 4 },
   green: { color: "#16a34a", fontSize: 12, fontWeight: '600' },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  
+
   // NEW INSTRUMENT CARD STYLES
   instrumentsContainer: { gap: 12, marginBottom: 20 },
   instrumentCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
@@ -326,7 +351,7 @@ const styles = StyleSheet.create({
 
   greenText: { color: "#16a34a", fontWeight: '700' },
   redText: { color: "#ef4444", fontWeight: '700' },
-  
+
   emptyBox: { backgroundColor: '#fff', padding: 24, borderRadius: 16, alignItems: 'center', marginBottom: 20 },
   emptyText: { color: '#6b7280', textAlign: 'center', fontStyle: 'italic' },
 
@@ -351,7 +376,7 @@ const styles = StyleSheet.create({
   inputLabel: { fontSize: 14, fontWeight: '600', color: '#4b5563', marginBottom: 8 },
   maxText: { fontSize: 13, color: '#2563eb', fontWeight: '600' },
   numberInput: { backgroundColor: '#fef2f2', borderRadius: 12, fontSize: 28, fontWeight: '800', padding: 12, textAlign: 'center', borderWidth: 1, borderColor: '#fecaca' },
-  
+
   // Modal Math Breakdown Styles
   breakdownBox: { backgroundColor: '#f8fafc', padding: 16, borderRadius: 12, marginBottom: 24, borderWidth: 1, borderColor: '#e2e8f0' },
   mathHeader: { fontSize: 12, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', marginBottom: 6, letterSpacing: 0.5 },
@@ -361,7 +386,7 @@ const styles = StyleSheet.create({
   dividerRow: { borderTopWidth: 1, borderTopColor: '#e2e8f0', marginVertical: 10 },
   breakdownLabel: { fontSize: 14, color: '#475569', fontWeight: '500' },
   breakdownValue: { fontSize: 14, fontWeight: '600', color: '#0f172a' },
-  
+
   fullWidthBtn: { width: '100%', backgroundColor: '#ef4444', paddingVertical: 18, borderRadius: 12, alignItems: 'center' },
   fullWidthBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 1 },
 });

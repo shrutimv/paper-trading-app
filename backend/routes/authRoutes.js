@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const passport = require("passport");
 const LocalStrategy = require("passport-local");
+const isLoggedIn = require("../middleware/isLoggedIn");
 
 const authController = require("../controllers/authController");
 
@@ -32,5 +33,7 @@ router.post("/login", (req, res, next) => {
 });
 router.get("/logout", authController.logout);
 router.post("/logout", authController.logout);
+
+router.get("/me", isLoggedIn, authController.getCurrentUser);
 
 module.exports = router;

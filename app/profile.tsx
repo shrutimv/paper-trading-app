@@ -1,39 +1,31 @@
+import { BASE_URL } from "@/src/config/api";
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- 1. IMPORT HOOK
-import { BASE_URL } from "@/src/config/api";
+import { useAuth } from "../context/AuthContext";
 
 // IMPORT BOTH GLOBAL CONTEXTS!
 import { RANKS, useGamification } from '../context/GamificationContext';
-import { useTrading } from '../context/TradingContext';
 
 const formatCurrency = (val: number) => "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets(); // <-- 2. INITIALIZE HOOK
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
-  const { balance } = useTrading();
+  const {
+    user,
+    loading,
+    logout,
+  } = useAuth();
   const { xp, currentRank, nextRank, progressPercent } = useGamification();
   const [isRankModalOpen, setIsRankModalOpen] = useState(false);
 
-  useEffect(() => { loadUser(); }, []);
 
-  const loadUser = async () => {
-    try {
-      const session = await AsyncStorage.getItem('userSession');
-      if (session) setUser(JSON.parse(session));
-    } catch (e) {
-      console.error("Failed to load user", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   const clearProgress = async () => {
     try {
@@ -50,8 +42,8 @@ export default function ProfileScreen() {
 
   const handleUpgrade = async () => {
     await clearProgress();
-    await AsyncStorage.removeItem('userSession');
-    router.replace('/auth');
+    await logout();
+    router.replace("/auth");
   };
 
   const handleLogout = () => {
@@ -70,21 +62,19 @@ export default function ProfileScreen() {
             try {
               // Destroy server session
               await fetch(`${BASE_URL}/api/auth/logout`, {
-                method: "GET", // or POST if your backend uses POST
+                method: "POST",
                 credentials: "include",
               });
 
               // Clear local progress
               await clearProgress();
 
-              // Clear local session
-              await AsyncStorage.removeItem("userSession");
+              // Update AuthContext + remove AsyncStorage
+              await logout();
 
               // Remove all previous screens
               router.dismissAll();
 
-              // Navigate to login
-              router.replace("/auth");
             } catch (err) {
               console.error(err);
               Alert.alert("Error", "Unable to log out.");

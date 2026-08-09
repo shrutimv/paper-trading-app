@@ -12,6 +12,7 @@
   "type": "commonjs",
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "axios": "^1.19.0",
     "bcrypt": "^6.0.0",
     "connect-flash": "^0.1.1",
     "connect-mongo": "^6.0.0",
