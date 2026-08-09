@@ -9,16 +9,18 @@ import { useTheme } from '../context/ThemeContext';
 // IMPORT BOTH GLOBAL CONTEXTS!
 import { RANKS, useGamification } from '../context/GamificationContext';
 import { useTrading } from '../context/TradingContext';
+import { useAuth } from '../context/AuthContext';
 
-const formatCurrency = (val: number) => "₳" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCurrency = (val: number) => "₹" + (val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets(); // <-- 2. INITIALIZE HOOK
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { colors, isDark, toggleTheme } = useTheme();
   const styles = getStyles(colors);
   
-  const [user, setUser] = useState<any>(null);
+  const { user: authUser, logout: authLogout } = useAuth();
+  const [localUser, setLocalUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
   const { balance } = useTrading();
@@ -30,13 +32,15 @@ export default function ProfileScreen() {
   const loadUser = async () => {
     try {
       const session = await AsyncStorage.getItem('userSession');
-      if (session) setUser(JSON.parse(session));
+      if (session) setLocalUser(JSON.parse(session));
     } catch (e) {
       console.error("Failed to load user", e);
     } finally {
       setLoading(false);
     }
   };
+
+  const user = authUser || localUser;
 
   const clearProgress = async () => {
     try {
@@ -54,13 +58,14 @@ export default function ProfileScreen() {
   const handleUpgrade = async () => {
     await clearProgress(); 
     await AsyncStorage.removeItem('userSession'); 
+    if (authLogout) await authLogout();
     router.replace('/auth');
   };
 
   const handleLogout = () => {
     Alert.alert(
       "Log Out",
-      "This will clear your progress on this device. Are you sure?",
+      "This will clear your session on this device. Are you sure?",
       [
         { text: "Cancel", style: "cancel" },
         { 
@@ -69,6 +74,7 @@ export default function ProfileScreen() {
           onPress: async () => {
             await clearProgress(); 
             await AsyncStorage.removeItem('userSession'); 
+            if (authLogout) await authLogout();
             router.dismissAll();
             router.replace('/auth');
           }
@@ -86,10 +92,13 @@ export default function ProfileScreen() {
   }
 
   return (
-    // <-- 3. INJECT DYNAMIC PADDING TOP AND BOTTOM -->
-    <View style={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom > 0 ? insets.bottom : 20 }]}>
+    <ScrollView 
+      style={{ flex: 1, backgroundColor: colors.background }}
+      contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 60 }]}
+      showsVerticalScrollIndicator={false}
+    >
       
-      {/* <-- 4. DYNAMIC BACK BUTTON PLACEMENT --> */}
+      {/* <-- DYNAMIC BACK BUTTON PLACEMENT --> */}
       <TouchableOpacity style={[styles.backBtn, { top: insets.top + 15 }]} onPress={() => router.back()}>
         <Ionicons name="arrow-back" size={28} color={colors.text} />
       </TouchableOpacity>
@@ -225,7 +234,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-    </View>
+    </ScrollView>
   );
 }
 
