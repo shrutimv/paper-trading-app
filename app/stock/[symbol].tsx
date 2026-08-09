@@ -21,12 +21,12 @@ import { API_BASE_URL } from '../../src/config';
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-const fmt = (val: number) => '₳' + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (val: number) => '₹' + (val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtCompact = (val: number): string => {
-  if (val >= 10_000_000) return '₳' + (val / 10_000_000).toFixed(2) + ' Cr';
-  if (val >= 100_000)    return '₳' + (val / 100_000).toFixed(2) + ' L';
-  if (val >= 1_000)      return '₳' + (val / 1_000).toFixed(2) + ' K';
-  return '₳' + val.toFixed(2);
+  if (val >= 10_000_000) return '₹' + (val / 10_000_000).toFixed(2) + ' Cr';
+  if (val >= 100_000)    return '₹' + (val / 100_000).toFixed(2) + ' L';
+  if (val >= 1_000)      return '₹' + (val / 1_000).toFixed(2) + ' K';
+  return '₹' + (val || 0).toFixed(2);
 };
 
 const makeYLabel = (yOff: number) => (raw: string): string => {
@@ -241,6 +241,37 @@ export default function StockDetailScreen() {
               </View>
               <Text style={[S.changePct, { color: accent }]}>{isUp ? '+' : ''}{pct}%</Text>
               <Text style={S.changeRange}>· {activeRange.label}</Text>
+            </View>
+
+            {/* MARKET TIMING STATUS BADGE */}
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: stockMeta?.isMarketOpen ? 'rgba(8,153,129,0.12)' : 'rgba(242,54,69,0.12)',
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 8,
+              marginTop: 10,
+              alignSelf: 'flex-start',
+              borderWidth: 1,
+              borderColor: stockMeta?.isMarketOpen ? 'rgba(8,153,129,0.3)' : 'rgba(242,54,69,0.3)',
+            }}>
+              <View style={{
+                width: 7,
+                height: 7,
+                borderRadius: 4,
+                backgroundColor: stockMeta?.isMarketOpen ? '#089981' : '#f23645',
+                marginRight: 6,
+              }} />
+              <Text style={{
+                color: stockMeta?.isMarketOpen ? '#089981' : '#f23645',
+                fontSize: 11,
+                fontWeight: '700',
+              }}>
+                {stockMeta?.isMarketOpen 
+                  ? '🟢 Market Open (09:15 - 15:30 IST)' 
+                  : '🔴 Market Closed • Showing data up to 3:30 PM IST'}
+              </Text>
             </View>
           </View>
 

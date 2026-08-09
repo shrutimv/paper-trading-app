@@ -6,9 +6,27 @@ import pandas as pd
 from cachetools import TTLCache, cached
 import math
 from typing import List, Dict, Tuple, Any
+from datetime import datetime, timezone, timedelta
 
 # cache for search/info/history
-cache = TTLCache(maxsize=512, ttl=300)  # 5 minutes by default
+cache = TTLCache(maxsize=512, ttl=180)  # 3 minutes by default
+
+
+def check_indian_market_status() -> dict:
+    """Returns whether the Indian Stock Market (NSE/BSE) is currently in session."""
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(ist)
+    is_weekday = now.weekday() < 5  # Mon (0) to Fri (4)
+    market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    is_open = is_weekday and (market_open <= now <= market_close)
+    return {
+        "isMarketOpen": is_open,
+        "marketState": "OPEN" if is_open else "CLOSED",
+        "marketHours": "09:15 - 15:30 IST",
+        "currentTimeIST": now.strftime("%Y-%m-%d %H:%M:%S"),
+        "statusMessage": "Live Market Session" if is_open else "Market Closed • Showing Last Session (3:30 PM IST)",
+    }
 
 
 def _normalize_item(item: dict) -> dict:
@@ -87,21 +105,38 @@ def pick_best_symbol(results: List[dict], company_name: str, preferred: str = "A
 def fetch_yf_info_and_history(yf_symbol: str, period: str = "5Y", interval: str = "1d") -> Tuple[dict, List[dict]]:
     """
     Fetch yfinance Ticker info and history for a symbol.
-    Returns (info_dict, history_list).
-    This function is cached.
+    Outside market hours, falls back to the most recent active session so charts are never blank.
     """
     ticker = yf.Ticker(yf_symbol)
     try:
         info = ticker.info or {}
     except Exception:
         info = {}
+    
     try:
         hist = ticker.history(period=period, interval=interval, actions=False)
     except Exception:
         hist = pd.DataFrame()
+
+    # Fallback for intraday outside market hours / holidays / weekends
+    if (hist.empty or len(hist) < 2) and period.lower() in ("1d", "5d"):
+        try:
+            hist_fallback = ticker.history(period="5d" if period.lower() == "1d" else "1mo", interval=interval, actions=False)
+            if not hist_fallback.empty:
+                hist_fallback = hist_fallback.dropna(subset=["Close"])
+                # Extract the most recent trading session
+                dates = pd.to_datetime(hist_fallback.index).date
+                if len(dates) > 0:
+                    if period.lower() == "1d":
+                        last_date = dates[-1]
+                        hist = hist_fallback[dates == last_date]
+                    else:
+                        hist = hist_fallback
+        except Exception:
+            pass
+
     history_list: List[dict] = []
     if not hist.empty:
-        # drop rows with NaN Close (incomplete rows)
         hist = hist.dropna(subset=["Close"])
         for idx, row in hist.iterrows():
             date_str = pd.to_datetime(idx).strftime("%Y-%m-%d %H:%M:%S")
@@ -149,15 +184,25 @@ def get_stock_history(yf_symbol: str, period: str = "5Y", interval: str = "1d", 
 def get_stock_data_by_symbol(yf_symbol: str, period: str = "5Y", interval: str = "1d", max_points: int = 0, compact: bool = False) -> dict:
     """
     Direct lookup by Yahoo symbol (e.g. 'TCS.NS' or '532540.BO').
-    Returns dict: { selected, meta, history } same shape as get_stock_data.
     """
     if not yf_symbol or not str(yf_symbol).strip():
         return {"error": "symbol_required"}
     yf_symbol = yf_symbol.strip()
     try:
-        info, _ = fetch_yf_info_and_history(yf_symbol, period=period, interval=interval)
+        info, history = fetch_yf_info_and_history(yf_symbol, period=period, interval=interval)
     except Exception as e:
         return {"error": "yf_error", "detail": str(e)}
+
+    market_status = check_indian_market_status()
+
+    # Price resolution fallback
+    last_close = history[-1]["close"] if history else None
+    resolved_price = (
+        info.get("regularMarketPrice") or
+        last_close or
+        info.get("previousClose") or
+        info.get("currentPrice")
+    )
 
     selected = {
         "symbol": yf_symbol,
@@ -169,16 +214,23 @@ def get_stock_data_by_symbol(yf_symbol: str, period: str = "5Y", interval: str =
     meta = {
         "symbol": yf_symbol,
         "resolved_name": info.get("longName") or info.get("shortName") or selected.get("shortname"),
-        "currency": info.get("currency"),
-        "regularMarketPrice": info.get("regularMarketPrice") or info.get("previousClose"),
-        "previousClose": info.get("previousClose"),
+        "currency": info.get("currency") or "INR",
+        "regularMarketPrice": resolved_price,
+        "previousClose": info.get("previousClose") or resolved_price,
         "marketCap": info.get("marketCap"),
         "trailingPE": info.get("trailingPE"),
         "sector": info.get("sector"),
         "industry": info.get("industry"),
+        "isMarketOpen": market_status["isMarketOpen"],
+        "marketState": market_status["marketState"],
+        "marketHours": market_status["marketHours"],
+        "statusMessage": market_status["statusMessage"],
     }
 
-    history = get_stock_history(yf_symbol, period=period, interval=interval, max_points=max_points, compact=compact)
+    if max_points and max_points > 0:
+        history = _downsample_history(history, max_points)
+    if compact:
+        history = [{"date": h["date"], "close": h["close"]} for h in history]
 
     return {
         "selected": selected,
@@ -199,21 +251,4 @@ def get_stock_data(company_name: str, preferred_exchange: str = "Auto", period: 
     if not selected:
         return {"error": "symbol_not_found", "search_results": results}
     yf_symbol = selected["symbol"]
-    info, _ = fetch_yf_info_and_history(yf_symbol, period=period, interval=interval)
-    meta = {
-        "symbol": yf_symbol,
-        "resolved_name": info.get("longName") or info.get("shortName") or selected.get("shortname"),
-        "currency": info.get("currency"),
-        "regularMarketPrice": info.get("regularMarketPrice") or info.get("previousClose"),
-        "previousClose": info.get("previousClose"),
-        "marketCap": info.get("marketCap"),
-        "trailingPE": info.get("trailingPE"),
-        "sector": info.get("sector"),
-        "industry": info.get("industry"),
-    }
-    history = get_stock_history(yf_symbol, period=period, interval=interval, max_points=max_points, compact=compact)
-    return {
-        "selected": selected,
-        "meta": meta,
-        "history": history
-    }
+    return get_stock_data_by_symbol(yf_symbol, period=period, interval=interval, max_points=max_points, compact=compact)

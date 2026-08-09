@@ -57,7 +57,8 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
   const [stopLossActive, setStopLossActive] = useState(false);
   const [stopLossTrigger, setStopLossTrigger] = useState('');
 
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'loading' | 'success' | 'error' }>({ visible: false, message: '', type: 'success' });
 
   const pan = useRef(new Animated.Value(0)).current;
   const lastHapticValue = useRef(0);
@@ -70,6 +71,7 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
   }, [watchlist]);
 
   const handleConfirmBuy = async () => {
+    if (isPlacingOrder) return;
     const qty = parseInt(quantity);
     if (!selectedStock || isNaN(qty) || qty <= 0) {
       Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
@@ -81,7 +83,7 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
     const livePrice = liveData[symbol]?.price;
 
     if (!livePrice) {
-      setToast({ visible: true, message: "Price unavailable.", type: 'error' });
+      setToast({ visible: true, message: "Live price unavailable.", type: 'error' });
       Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
       return;
     }
@@ -89,26 +91,46 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
     const tradePrice = orderType === 'limit' ? parseFloat(limitPrice) || livePrice : livePrice;
     const slVal = stopLossActive ? parseFloat(stopLossTrigger) || undefined : undefined;
 
-    const success = await buyStock(symbol, shortName, tradePrice, qty, productType, slVal);
-    
-    if (success) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setToast({
-        visible: true,
-        message: `Bought ${qty} shares of ${symbol.replace('.NS', '')} (${productType.toUpperCase()})`,
-        type: 'success'
-      });
-      setIsBuyModalOpen(false);
-      pan.setValue(0);
-      if (onBuyComplete) onBuyComplete();
-    } else {
+    // Trigger instant loading notification
+    setIsPlacingOrder(true);
+    setToast({
+      visible: true,
+      message: `Placing order for ${qty}x ${symbol.replace('.NS', '')}...`,
+      type: 'loading',
+    });
+
+    try {
+      const success = await buyStock(symbol, shortName, tradePrice, qty, productType, slVal);
+      
+      if (success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setToast({
+          visible: true,
+          message: `Order Executed! Bought ${qty} ${symbol.replace('.NS', '')} (${productType.toUpperCase()})`,
+          type: 'success',
+        });
+        setIsBuyModalOpen(false);
+        pan.setValue(0);
+        if (onBuyComplete) onBuyComplete();
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        setToast({
+          visible: true,
+          message: "Order Failed: Insufficient Margin Available.",
+          type: 'error',
+        });
+        Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
+      }
+    } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setToast({
         visible: true,
-        message: "Insufficient Margin Available.",
-        type: 'error'
+        message: "Order Failed: Network or Server Error.",
+        type: 'error',
       });
       Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
+    } finally {
+      setIsPlacingOrder(false);
     }
   };
 
@@ -116,8 +138,9 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !isPlacingOrder,
       onPanResponderMove: (_, gestureState) => {
+        if (isPlacingOrder) return;
         if (gestureState.dx >= 0 && gestureState.dx <= SUCCESS_THRESHOLD) {
           pan.setValue(gestureState.dx);
 
@@ -128,6 +151,7 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
         }
       },
       onPanResponderRelease: (_, gestureState) => {
+        if (isPlacingOrder) return;
         lastHapticValue.current = 0; 
         if (gestureState.dx >= SUCCESS_THRESHOLD - 15) {
           Animated.spring(pan, { toValue: SUCCESS_THRESHOLD, useNativeDriver: true }).start(() => {
@@ -435,18 +459,27 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
             </View>
 
             {/* Swipe to Confirm Button */}
-            <View style={[styles.sliderTrack, balance < requiredMargin && { opacity: 0.5 }]}>
+            <View style={[styles.sliderTrack, (balance < requiredMargin || isPlacingOrder) && { opacity: 0.7 }]}>
               <Text style={styles.sliderPlaceholder}>
-                {balance >= requiredMargin ? 'SLIDE TO BUY' : 'INSUFFICIENT FUNDS'}
+                {isPlacingOrder
+                  ? 'EXECUTING ORDER...'
+                  : balance >= requiredMargin
+                  ? 'SLIDE TO BUY'
+                  : 'INSUFFICIENT FUNDS'}
               </Text>
               
-              {balance >= requiredMargin && (
+              {balance >= requiredMargin && !isPlacingOrder && (
                 <Animated.View 
                   style={[styles.sliderKnob, { transform: [{ translateX: pan }] }]} 
                   {...panResponder.panHandlers}
                 >
                   <Ionicons name="chevron-forward" size={28} color="#fff" />
                 </Animated.View>
+              )}
+              {isPlacingOrder && (
+                <View style={[styles.sliderKnob, { right: 8, left: undefined }]}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
               )}
             </View>
           </View>

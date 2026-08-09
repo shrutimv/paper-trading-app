@@ -7,39 +7,43 @@ const transactionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-
     symbol: {
       type: String,
       required: true,
     },
-
     companyName: {
       type: String,
-      required: true,
+      default: "",
     },
-
     type: {
       type: String,
       enum: ["BUY", "SELL"],
       required: true,
     },
-
+    productType: {
+      type: String,
+      enum: ["cnc", "mis"],
+      default: "cnc",
+    },
     quantity: {
       type: Number,
       required: true,
-      min: 1,
     },
-
     price: {
       type: Number,
       required: true,
-      min: 0,
     },
-
     totalAmount: {
       type: Number,
       required: true,
-      min: 0,
+    },
+    stopLoss: {
+      type: Number,
+    },
+    status: {
+      type: String,
+      enum: ["EXECUTED", "PENDING", "CANCELLED"],
+      default: "EXECUTED",
     },
   },
   {
@@ -47,4 +51,6 @@ const transactionSchema = new mongoose.Schema(
   }
 );
 
-module.exports = mongoose.model("Transaction", transactionSchema);
+const Transaction = mongoose.model("Transaction", transactionSchema);
+
+module.exports = Transaction;

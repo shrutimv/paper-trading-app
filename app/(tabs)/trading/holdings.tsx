@@ -5,7 +5,7 @@ import { useTheme } from "../../../context/ThemeContext";
 import { Holding, useTrading } from "../../../context/TradingContext";
 import { API_BASE_URL } from "../../../src/config";
 
-const formatCurrency = (val: number) => "₳" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatCurrency = (val: number) => "₹" + (val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function HoldingsScreen() {
   const { colors } = useTheme();
@@ -33,9 +33,10 @@ export default function HoldingsScreen() {
             const response = await fetch(`${API_BASE_URL}/stock?symbol=${symbol}`);
             const data = await response.json();
             if (data && data.meta) {
-              const price = data.meta.regularMarketPrice;
-              const prevClose = data.meta.previousClose;
-              newData[symbol] = { price, changePercent: ((price - prevClose) / prevClose) * 100 };
+              const price = data.meta.regularMarketPrice || data.meta.previousClose || 0;
+              const prevClose = data.meta.previousClose || price;
+              const changePct = prevClose > 0 ? ((price - prevClose) / prevClose) * 100 : 0;
+              newData[symbol] = { price, changePercent: changePct };
             }
           })
         );
@@ -73,23 +74,23 @@ export default function HoldingsScreen() {
       return;
     }
 
-    const livePrice = liveData[selectedHolding.symbol]?.price;
-    if (!livePrice) {
-      Alert.alert("Error", "Live price unavailable.");
+    const effectivePrice = liveData[selectedHolding.symbol]?.price || selectedHolding.averagePrice || 0;
+    if (effectivePrice <= 0) {
+      Alert.alert("Error", "Unable to determine selling price.");
       return;
     }
 
-    const success = await sellStock(selectedHolding.symbol, livePrice, qty, selectedHolding.productType || 'cnc');
+    const success = await sellStock(selectedHolding.symbol, effectivePrice, qty, selectedHolding.productType || 'cnc');
     if (success) {
-      Alert.alert("Trade Successful! 💰", `Sold ${qty} shares of ${selectedHolding.symbol.replace('.NS', '')}`);
+      Alert.alert("Trade Successful! 💰", `Sold ${qty} shares of ${selectedHolding.symbol.replace('.NS', '')} for ${formatCurrency(effectivePrice * qty)}`);
       setIsSellModalOpen(false);
     } else {
-      Alert.alert("Trade Failed", "Something went wrong.");
+      Alert.alert("Trade Failed", "Something went wrong executing the sell order.");
     }
   };
 
   // --- MODAL EXPLICIT MATH CALCULATIONS ---
-  const modalLivePrice = selectedHolding ? (liveData[selectedHolding.symbol]?.price || 0) : 0;
+  const modalLivePrice = selectedHolding ? (liveData[selectedHolding.symbol]?.price || selectedHolding.averagePrice || 0) : 0;
   const modalAvgPrice = selectedHolding?.averagePrice || 0;
   const qtyToSell = parseInt(sellQuantity) || 0;
   
