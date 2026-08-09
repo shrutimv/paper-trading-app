@@ -98,7 +98,7 @@ export default function ProfileScreen() {
         <View style={styles.avatarContainer}>
           <Ionicons name="person-circle-outline" size={70} color="#cbd5e1" />
         </View>
-        <Text style={styles.name}>{user?.isGuest ? "Guest User" : "Trader"}</Text>
+        <Text style={styles.name}>{user?.username || (user?.isGuest ? "Guest User" : "Trader")}</Text>
         
         <View style={styles.walletPill}>
           <Ionicons name="wallet-outline" size={16} color={colors.accent} style={{ marginRight: 6 }} />

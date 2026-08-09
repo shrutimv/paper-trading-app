@@ -21,6 +21,7 @@ import PaperTradingCard from "../../components/PaperTradingCard";
 import PuzzleCard from "../../components/PuzzleCard";
 import SmallCard from "../../components/SmallCard";
 import SmallCourseCard from "../../components/SmallCourseCard";
+import { useAuth } from "../../context/AuthContext";
 
 // --- THE ANIMATED CARD WRAPPER ---
 const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: string }) => {
@@ -63,7 +64,8 @@ const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: 
 
 export default function Home() {
   const router = useRouter(); 
-  const [user, setUser] = useState<any>(null);
+  const { user: authUser, isGuest } = useAuth();
+  const [localUser, setLocalUser] = useState<any>(null);
   const { colors } = useTheme();
   const styles = getStyles(colors);
 
@@ -72,7 +74,7 @@ export default function Home() {
       try {
         const session = await AsyncStorage.getItem('userSession');
         if (session) {
-          setUser(JSON.parse(session));
+          setLocalUser(JSON.parse(session));
         }
       } catch (e) {
         console.error("Failed to load user session", e);
@@ -80,6 +82,18 @@ export default function Home() {
     };
     loadUser();
   }, []);
+
+  const currentUser = authUser || localUser;
+  const username = currentUser?.username 
+    ? currentUser.username 
+    : (isGuest || currentUser?.isGuest ? "Guest Trader" : "Trader");
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good Morning,";
+    if (hour < 17) return "Good Afternoon,";
+    return "Good Evening,";
+  };
 
   return (
     <ScrollView
@@ -91,9 +105,9 @@ export default function Home() {
         
         {/* --- PREMIUM DYNAMIC HEADER --- */}
         <Animated.View entering={FadeInUp.duration(600).delay(50)} style={styles.header}>
-          <Text style={styles.greeting}>Good Morning,</Text>
+          <Text style={styles.greeting}>{getGreeting()}</Text>
           <Text style={styles.username}>
-            {user?.isGuest ? "Guest User" : "Jaspreet"} 
+            {username}
           </Text>
         </Animated.View>
 

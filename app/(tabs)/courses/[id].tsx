@@ -225,6 +225,10 @@ export default function CourseDetails() {
                     resizeMode={"cover" as ResizeMode}
                     onLoadStart={() => setVideoLoading(true)}
                     onLoad={() => setVideoLoading(false)}
+                    onError={(e) => {
+                      console.log("Video load error:", e);
+                      setVideoLoading(false);
+                    }}
                   />
                   {videoLoading && (
                     <View
