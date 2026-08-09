@@ -2,6 +2,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import {
+  Alert,
   Dimensions,
   FlatList,
   Platform,
@@ -77,7 +78,13 @@ export default function CoursesScreen() {
           <Text style={styles.greeting}>LEARNING HUB</Text>
           <Text style={styles.title}>Active Courses</Text>
         </View>
-        <TouchableOpacity style={styles.notificationBtn} onPress={() => console.log("notifications")}>
+        <TouchableOpacity 
+          style={styles.notificationBtn} 
+          onPress={() => Alert.alert(
+            "🔔 Learning Notifications",
+            "• New module added: Derivatives & Options Strategy!\n• Complete your Daily Puzzle to earn +50 XP.\n• Pro Tip: Always define your risk-to-reward ratio before trading."
+          )}
+        >
           <MaterialIcons name="notifications-none" size={22} color={colors.accent} />
         </TouchableOpacity>
       </View>

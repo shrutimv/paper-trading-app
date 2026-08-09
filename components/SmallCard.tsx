@@ -1,6 +1,6 @@
 // components/SmallCard.tsx
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../context/ThemeContext";
 
 type SmallCardProps = {
@@ -8,13 +8,14 @@ type SmallCardProps = {
   subtitle: string;
   progress?: number;
   tag?: string;
+  onPress?: () => void;
 };
 
-export default function SmallCard({ title, subtitle, progress, tag }: SmallCardProps) {
+export default function SmallCard({ title, subtitle, progress, tag, onPress }: SmallCardProps) {
   const { colors } = useTheme();
   const styles = getStyles(colors);
 
-  return (
+  const content = (
     <View style={styles.card}>
       <Text style={styles.title} numberOfLines={1}>
         {title}
@@ -24,7 +25,7 @@ export default function SmallCard({ title, subtitle, progress, tag }: SmallCardP
       </Text>
 
       {progress !== undefined ? (
-        <View style={{ marginTop: "auto" }}>
+        <View style={{ marginTop: "auto", paddingTop: 8 }}>
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
           </View>
@@ -41,15 +42,25 @@ export default function SmallCard({ title, subtitle, progress, tag }: SmallCardP
       ) : null}
     </View>
   );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={{ flex: 1 }}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return content;
 }
 
 const getStyles = (colors: any) => StyleSheet.create({
   card: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 12,
-    marginVertical: 8,
+    borderRadius: 14,
+    padding: 14,
+    marginVertical: 6,
     marginRight: 8,
     borderWidth: 1,
     borderColor: colors.border,
@@ -59,8 +70,8 @@ const getStyles = (colors: any) => StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
   },
-  title: { fontSize: 16, fontWeight: "700", color: colors.text },
-  subtitle: { color: colors.textSecondary, marginTop: 6, fontSize: 12 },
+  title: { fontSize: 15, fontWeight: "800", color: colors.text },
+  subtitle: { color: colors.textSecondary, marginTop: 4, fontSize: 12, lineHeight: 16 },
   progressBar: {
     height: 6,
     backgroundColor: colors.border,
@@ -71,16 +82,16 @@ const getStyles = (colors: any) => StyleSheet.create({
   tag: {
     marginTop: 8,
     alignSelf: "flex-start",
-    backgroundColor: colors.border,
+    backgroundColor: colors.isDark ? "rgba(16, 185, 129, 0.15)" : "#dcfce7",
     borderWidth: 1,
-    borderColor: colors.isDark ? "#334155" : "#CBD5E1",
+    borderColor: colors.isDark ? "rgba(16, 185, 129, 0.3)" : "#bbf7d0",
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
     borderRadius: 8,
   },
   tagText: {
-    fontSize: 12,
-    color: colors.isDark ? "#34D399" : "#15803d", // Emerald text
-    fontWeight: "700",
+    fontSize: 11,
+    color: colors.isDark ? "#34D399" : "#15803d",
+    fontWeight: "800",
   },
 });

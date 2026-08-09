@@ -55,6 +55,26 @@ export default function ProfileScreen() {
     }
   };
 
+  const [isFaqModalOpen, setIsFaqModalOpen] = useState(false);
+
+  const handleResetProgressOnly = () => {
+    Alert.alert(
+      "Reset Learning Progress",
+      "Are you sure you want to reset all completed modules and XP back to 0?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            await clearProgress();
+            Alert.alert("Success", "Your learning progress and XP have been reset.");
+          },
+        },
+      ]
+    );
+  };
+
   const handleUpgrade = async () => {
     await clearProgress(); 
     await AsyncStorage.removeItem('userSession'); 
@@ -180,17 +200,24 @@ export default function ProfileScreen() {
             thumbColor={proMode ? '#f4f3f4' : '#f4f3f4'}
           />
         </View>
-        <TouchableOpacity style={styles.menuItem} onPress={() => {}}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleResetProgressOnly}>
             <View style={styles.menuIconInfo}>
-              <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
-              <Text style={[styles.menuText, { color: colors.text }]}>Settings</Text>
+              <Ionicons name="refresh-outline" size={22} color={colors.textSecondary} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Reset Learning Progress</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setIsFaqModalOpen(true)}>
+            <View style={styles.menuIconInfo}>
+              <Ionicons name="help-circle-outline" size={22} color={colors.textSecondary} />
+              <Text style={[styles.menuText, { color: colors.text }]}>Trading Guide & FAQs</Text>
             </View>
             <Ionicons name="chevron-forward" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Log Out & Reset Progress</Text>
+        <Text style={styles.logoutText}>Log Out & Reset Session</Text>
       </TouchableOpacity>
 
       {/* THE RANK JOURNEY MODAL */}
@@ -236,6 +263,53 @@ export default function ProfileScreen() {
               })}
             </ScrollView>
 
+          </View>
+        </View>
+      </Modal>
+
+      {/* THE TRADING GUIDE & FAQS MODAL */}
+      <Modal visible={isFaqModalOpen} transparent={true} animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: '80%', paddingBottom: insets.bottom > 0 ? insets.bottom + 20 : 30 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Paper Trading Guide</Text>
+              <TouchableOpacity onPress={() => setIsFaqModalOpen(false)}>
+                <Ionicons name="close-circle" size={32} color="#9ca3af" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 14, paddingTop: 6 }}>
+                <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>📈 CNC vs MIS (Product Types)</Text>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
+                    • <Text style={{ fontWeight: '700', color: colors.text }}>CNC (Cash & Carry)</Text>: Delivery trading for multi-day holding. 100% cash margin required.{"\n"}
+                    • <Text style={{ fontWeight: '700', color: colors.text }}>MIS (Intraday)</Text>: Same-day trading with <Text style={{ fontWeight: '700', color: '#16a34a' }}>5x leverage (20% margin)</Text>. Must be squared off before 3:30 PM.
+                  </Text>
+                </View>
+
+                <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>🛡️ Stop-Loss (SL) Protection</Text>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
+                    Automatically triggers a market sell order if the price falls below your designated trigger price, preserving capital.
+                  </Text>
+                </View>
+
+                <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>⏰ Market Hours (NSE / BSE)</Text>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
+                    Indian markets operate Monday to Friday from <Text style={{ fontWeight: '700', color: colors.text }}>09:15 AM to 03:30 PM IST</Text>. Outside market hours, last closing session data is displayed.
+                  </Text>
+                </View>
+
+                <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>🏆 Rank Advancement & XP</Text>
+                  <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
+                    Earn XP by completing daily learning roadmap lessons and price action puzzles to climb from Bronze to Diamond rank!
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>

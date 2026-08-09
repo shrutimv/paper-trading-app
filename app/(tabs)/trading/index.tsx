@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from 'expo-haptics';
 import { useRouter } from "expo-router";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Modal,
@@ -28,6 +30,114 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SLIDER_WIDTH = SCREEN_WIDTH - 48; 
 const KNOB_SIZE = 54;
 const SUCCESS_THRESHOLD = SLIDER_WIDTH - KNOB_SIZE - 8;
+
+export interface IpoItem {
+  id: string;
+  name: string;
+  symbol: string;
+  priceBand: string;
+  cutoffPrice: number;
+  lotSize: number;
+  minInvestment: number;
+  issueSize: string;
+  dates: string;
+  gmp: string;
+  gmpPositive: boolean;
+  subscription: string;
+  status: 'OPEN' | 'UPCOMING' | 'CLOSED';
+}
+
+export interface IpoApplication {
+  id: string;
+  ipoId: string;
+  name: string;
+  symbol: string;
+  lots: number;
+  shares: number;
+  amountBlocked: number;
+  bidPrice: number;
+  appliedDate: string;
+  allotmentDate: string;
+  status: 'BID_PLACED' | 'ALLOTTED' | 'NOT_ALLOTTED';
+}
+
+const IPO_DATA: IpoItem[] = [
+  {
+    id: 'ipo-swiggy',
+    name: 'Swiggy Limited',
+    symbol: 'SWIGGY',
+    priceBand: '₹371 - ₹390',
+    cutoffPrice: 390,
+    lotSize: 38,
+    minInvestment: 14820,
+    issueSize: '₹11,327 Cr',
+    dates: '06 Nov - 08 Nov',
+    gmp: '+₹25 (+6.4%)',
+    gmpPositive: true,
+    subscription: '3.59x',
+    status: 'OPEN',
+  },
+  {
+    id: 'ipo-hyundai',
+    name: 'Hyundai Motor India Ltd',
+    symbol: 'HYUNDAI',
+    priceBand: '₹1,865 - ₹1,960',
+    cutoffPrice: 1960,
+    lotSize: 7,
+    minInvestment: 13720,
+    issueSize: '₹27,870 Cr',
+    dates: '15 Oct - 17 Oct',
+    gmp: '+₹65 (+3.3%)',
+    gmpPositive: true,
+    subscription: '2.37x',
+    status: 'OPEN',
+  },
+  {
+    id: 'ipo-ntpc',
+    name: 'NTPC Green Energy Ltd',
+    symbol: 'NTPCGREEN',
+    priceBand: '₹102 - ₹108',
+    cutoffPrice: 108,
+    lotSize: 138,
+    minInvestment: 14904,
+    issueSize: '₹10,000 Cr',
+    dates: '19 Nov - 22 Nov',
+    gmp: '+₹18 (+16.7%)',
+    gmpPositive: true,
+    subscription: '8.40x',
+    status: 'UPCOMING',
+  },
+  {
+    id: 'ipo-ather',
+    name: 'Ather Energy Ltd',
+    symbol: 'ATHER',
+    priceBand: '₹310 - ₹325',
+    cutoffPrice: 325,
+    lotSize: 46,
+    minInvestment: 14950,
+    issueSize: '₹4,500 Cr',
+    dates: 'Upcoming (Q4)',
+    gmp: '+₹52 (+16.0%)',
+    gmpPositive: true,
+    subscription: '5.10x',
+    status: 'UPCOMING',
+  },
+  {
+    id: 'ipo-bajaj',
+    name: 'Bajaj Housing Finance Ltd',
+    symbol: 'BAJAJHFL',
+    priceBand: '₹66 - ₹70',
+    cutoffPrice: 70,
+    lotSize: 214,
+    minInvestment: 14980,
+    issueSize: '₹6,560 Cr',
+    dates: '09 Sep - 11 Sep',
+    gmp: '+₹75 (+107%)',
+    gmpPositive: true,
+    subscription: '67.4x',
+    status: 'CLOSED',
+  },
+];
 
 const SUBTAB_DATA = {
   recommendations: [
@@ -58,13 +168,15 @@ const SUBTAB_DATA = {
   ]
 };
 
+const STORAGE_KEY_IPOS = '@papertrade:ipoApplications';
+
 export default function TradingDashboard() {
   const router = useRouter();
-  const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
 
   const { balance, holdings, buyStock, sellStock, totalInvestment, setHoldings, setBalance } = useTrading();
-  const { xp, proMode } = useGamification();
+  const { xp, proMode, addXp } = useGamification();
 
   // Gamification states
   const limitUnlocked = proMode || xp >= 500;
@@ -72,7 +184,8 @@ export default function TradingDashboard() {
   const intradayUnlocked = proMode || xp >= 3000;
 
   // Tabs & Search States
-  const [activeSubtab, setActiveSubtab] = useState<'recommendations' | 'gainers' | 'climbers' | 'losers' | 'etfs'>('recommendations');
+  const [activeSubtab, setActiveSubtab] = useState<'recommendations' | 'ipos' | 'gainers' | 'climbers' | 'losers' | 'etfs'>('recommendations');
+  const [ipoTab, setIpoTab] = useState<'live' | 'myBids'>('live');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -86,15 +199,45 @@ export default function TradingDashboard() {
   const [limitPrice, setLimitPrice] = useState('');
   const [stopLossActive, setStopLossActive] = useState(false);
   const [stopLossTrigger, setStopLossTrigger] = useState('');
+
+  // IPO States
+  const [isIpoModalOpen, setIsIpoModalOpen] = useState(false);
+  const [selectedIpo, setSelectedIpo] = useState<IpoItem | null>(null);
+  const [ipoLots, setIpoLots] = useState(1);
+  const [useCutoff, setUseCutoff] = useState(true);
+  const [myApplications, setMyApplications] = useState<IpoApplication[]>([]);
   
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' as 'success' | 'error' });
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'loading' | 'success' | 'error' }>({ visible: false, message: '', type: 'success' });
 
   const pan = useRef(new Animated.Value(0)).current;
   const lastHapticValue = useRef(0);
   const confirmActionRef = useRef<(() => void) | null>(null);
 
   const formatCurrency = (value: number) => {
-    return "₳" + value.toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+    return "₹" + (value || 0).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  };
+
+  useEffect(() => {
+    loadIpoApplications();
+  }, []);
+
+  const loadIpoApplications = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY_IPOS);
+      if (stored) {
+        setMyApplications(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.warn("Failed to load IPO applications", e);
+    }
+  };
+
+  const saveIpoApplications = async (apps: IpoApplication[]) => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY_IPOS, JSON.stringify(apps));
+    } catch (e) {
+      console.warn("Failed to save IPO applications", e);
+    }
   };
 
   const handleSearch = async (text: string) => {
@@ -112,6 +255,7 @@ export default function TradingDashboard() {
     setSelectedStock({
       symbol: stock.symbol,
       shortname: stock.shortname,
+      price: stock.price,
     });
     setQuantity('1');
     setProductType('cnc');
@@ -132,7 +276,7 @@ export default function TradingDashboard() {
 
     const symbol = selectedStock.symbol;
     const shortName = selectedStock.shortname;
-    const livePrice = selectedStock.price || 100; // Fallback default price
+    const livePrice = selectedStock.price || 100;
 
     const tradePrice = orderType === 'limit' ? parseFloat(limitPrice) || livePrice : livePrice;
     const slVal = stopLossActive ? parseFloat(stopLossTrigger) || undefined : undefined;
@@ -200,41 +344,130 @@ export default function TradingDashboard() {
     }
   };
 
-  // Simulate end of day market close
+  // Simulate Market Close (3:30 PM Square-Off for MIS)
   const handleMarketCloseSimulation = async () => {
-    const misPositions = holdings.filter(h => h.productType === 'mis');
-    if (misPositions.length === 0) {
+    const misHoldings = holdings.filter(h => h.productType === 'mis');
+    if (misHoldings.length === 0) {
       setToast({
         visible: true,
-        message: "No active Intraday (MIS) positions to square off.",
-        type: 'error'
+        message: "No open intraday MIS positions to square off.",
+        type: 'success'
       });
       return;
     }
 
-    let netBalanceCredit = 0;
-    for (const pos of misPositions) {
-      // Simulate close price with a minor random change (+/- 1.5%)
-      const closePrice = pos.averagePrice * (1 + (Math.random() * 0.03 - 0.015));
-      const revenue = (closePrice * pos.quantity) - (pos.averagePrice * pos.quantity * 0.80);
-      netBalanceCredit += revenue;
+    Alert.alert(
+      "Simulate 3:30 PM Auto Square-Off",
+      `Are you sure you want to trigger 3:30 PM market close? All ${misHoldings.length} MIS intraday positions will be automatically squared off at current market prices.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Auto Square-Off", 
+          style: "destructive",
+          onPress: async () => {
+            let totalRealized = 0;
+            for (const pos of misHoldings) {
+              await sellStock(pos.symbol, pos.averagePrice, pos.quantity, 'mis');
+              totalRealized += pos.quantity;
+            }
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setToast({
+              visible: true,
+              message: `3:30 PM Square-Off Complete: ${totalRealized} MIS shares closed.`,
+              type: 'success'
+            });
+          }
+        }
+      ]
+    );
+  };
+
+  // --- IPO BIDDING HANDLERS ---
+  const openIpoBidModal = (ipo: IpoItem) => {
+    setSelectedIpo(ipo);
+    setIpoLots(1);
+    setUseCutoff(true);
+    setIsIpoModalOpen(true);
+  };
+
+  const handleApplyIpo = async () => {
+    if (!selectedIpo) return;
+    const totalAmount = ipoLots * selectedIpo.minInvestment;
+
+    if (balance < totalAmount) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setToast({
+        visible: true,
+        message: "Insufficient balance to place IPO bid.",
+        type: 'error',
+      });
+      return;
     }
 
-    setBalance(prev => prev + netBalanceCredit);
-    setHoldings(prev => prev.filter(h => h.productType !== 'mis'));
-    
+    // Deduct blocked amount from balance
+    setBalance(prev => prev - totalAmount);
+
+    const newApp: IpoApplication = {
+      id: `IPO-${Math.floor(100000 + Math.random() * 900000)}`,
+      ipoId: selectedIpo.id,
+      name: selectedIpo.name,
+      symbol: selectedIpo.symbol,
+      lots: ipoLots,
+      shares: ipoLots * selectedIpo.lotSize,
+      amountBlocked: totalAmount,
+      bidPrice: selectedIpo.cutoffPrice,
+      appliedDate: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+      allotmentDate: 'Allotment in 3 Days',
+      status: 'BID_PLACED',
+    };
+
+    const updated = [newApp, ...myApplications];
+    setMyApplications(updated);
+    await saveIpoApplications(updated);
+
+    if (addXp) addXp(50); // XP reward for participating in IPO!
+
+    setIsIpoModalOpen(false);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setToast({
       visible: true,
-      message: `Market Close Simulation Complete! Auto-squared ${misPositions.length} positions.`,
-      type: 'success'
+      message: `IPO Bid Placed! App #${newApp.id} (+50 XP) 🚀`,
+      type: 'success',
     });
   };
 
-  const modalLivePrice = selectedStock ? selectedStock.price || 100 : 100;
-  const calTradePrice = orderType === 'limit' ? parseFloat(limitPrice) || modalLivePrice : modalLivePrice;
-  const calTradeValue = calTradePrice * (parseInt(quantity) || 0);
-  const requiredMargin = productType === 'mis' ? calTradeValue * 0.20 : calTradeValue;
+  const handleCancelIpoBid = (app: IpoApplication) => {
+    Alert.alert(
+      "Cancel IPO Application",
+      `Are you sure you want to cancel your bid for ${app.name}? ${formatCurrency(app.amountBlocked)} will be immediately unblocked and refunded to your virtual cash balance.`,
+      [
+        { text: "Keep Bid", style: "cancel" },
+        {
+          text: "Cancel Bid",
+          style: "destructive",
+          onPress: async () => {
+            setBalance(prev => prev + app.amountBlocked);
+            const filtered = myApplications.filter(a => a.id !== app.id);
+            setMyApplications(filtered);
+            await saveIpoApplications(filtered);
+
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setToast({
+              visible: true,
+              message: `Bid #${app.id} Cancelled. Refunded ${formatCurrency(app.amountBlocked)}`,
+              type: 'success',
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  // Margin calculation for Buy Modal
+  const modalLivePrice = selectedStock?.price || 100;
+  const tradePrice = orderType === 'limit' ? parseFloat(limitPrice) || modalLivePrice : modalLivePrice;
+  const tradeValue = tradePrice * (parseInt(quantity) || 0);
+  const requiredMargin = productType === 'mis' ? tradeValue * 0.20 : tradeValue;
 
   return (
     <PageTransition>
@@ -338,13 +571,14 @@ export default function TradingDashboard() {
           >
             {[
               { id: 'recommendations', label: 'Recommendations' },
+              { id: 'ipos', label: '🚀 IPOs & Bids' },
               { id: 'gainers', label: 'Top Return' },
               { id: 'climbers', label: 'Top Climb' },
               { id: 'losers', label: 'Top Loss' },
               { id: 'etfs', label: 'ETFs & Indices' }
             ].map((tab) => (
               <TouchableOpacity 
-                key={tab.id}
+                key={tab.id} 
                 style={[styles.subtabBtn, activeSubtab === tab.id && styles.subtabBtnActive]}
                 onPress={() => setActiveSubtab(tab.id as any)}
               >
@@ -355,34 +589,181 @@ export default function TradingDashboard() {
             ))}
           </ScrollView>
 
-          {/* 4. SUBTAB STOCK LISTINGS */}
-          <View style={styles.listSection}>
-            {SUBTAB_DATA[activeSubtab].map((stock) => {
-              const isUp = stock.changePercent >= 0;
-              return (
-                <View key={stock.symbol} style={styles.stockRowCard}>
-                  <TouchableOpacity 
-                    style={{ flex: 1 }} 
-                    onPress={() => router.push(`/stock/${stock.symbol}`)}
-                  >
-                    <Text style={styles.stockSymbolText}>{stock.symbol.replace('.NS', '')}</Text>
-                    <Text style={styles.stockNameText} numberOfLines={1}>{stock.shortname}</Text>
-                  </TouchableOpacity>
+          {/* 4. SUBTAB LISTINGS */}
+          {activeSubtab === 'ipos' ? (
+            /* --- IPO SECTION --- */
+            <View style={styles.listSection}>
+              {/* IPO Sub-toggle */}
+              <View style={styles.ipoNavRow}>
+                <TouchableOpacity 
+                  style={[styles.ipoNavBtn, ipoTab === 'live' && styles.ipoNavBtnActive]}
+                  onPress={() => setIpoTab('live')}
+                >
+                  <Text style={[styles.ipoNavText, ipoTab === 'live' && styles.ipoNavTextActive]}>
+                    🔥 Live & Upcoming ({IPO_DATA.length})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.ipoNavBtn, ipoTab === 'myBids' && styles.ipoNavBtnActive]}
+                  onPress={() => setIpoTab('myBids')}
+                >
+                  <Text style={[styles.ipoNavText, ipoTab === 'myBids' && styles.ipoNavTextActive]}>
+                    📋 My Bids ({myApplications.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-                  <View style={styles.stockPriceCol}>
-                    <Text style={styles.stockPriceText}>{formatCurrency(stock.price)}</Text>
-                    <Text style={[styles.stockChangeText, { color: isUp ? '#16a34a' : '#dc2626' }]}>
-                      {isUp ? '+' : ''}{stock.changePercent.toFixed(2)}%
-                    </Text>
+              {ipoTab === 'live' ? (
+                /* LIVE IPOS LIST */
+                IPO_DATA.map((ipo) => {
+                  const isOpen = ipo.status === 'OPEN';
+                  const isUpcoming = ipo.status === 'UPCOMING';
+                  return (
+                    <View key={ipo.id} style={styles.ipoCard}>
+                      <View style={styles.ipoHeaderRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.ipoTitle}>{ipo.name}</Text>
+                          <Text style={styles.ipoDates}>{ipo.dates}</Text>
+                        </View>
+                        <View style={[
+                          styles.ipoStatusBadge,
+                          isOpen ? styles.ipoStatusOpen : isUpcoming ? styles.ipoStatusUpcoming : styles.ipoStatusClosed
+                        ]}>
+                          <Text style={[
+                            styles.ipoStatusText,
+                            isOpen ? styles.ipoStatusTextOpen : isUpcoming ? styles.ipoStatusTextUpcoming : styles.ipoStatusTextClosed
+                          ]}>
+                            {isOpen ? '🟢 BID OPEN' : isUpcoming ? '🟡 UPCOMING' : '🟣 CLOSED'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* KEY METRICS GRID */}
+                      <View style={styles.ipoMetricsGrid}>
+                        <View style={styles.ipoMetricCol}>
+                          <Text style={styles.ipoMetricLabel}>Price Band</Text>
+                          <Text style={styles.ipoMetricVal}>{ipo.priceBand}</Text>
+                        </View>
+                        <View style={styles.ipoMetricCol}>
+                          <Text style={styles.ipoMetricLabel}>Min Investment</Text>
+                          <Text style={styles.ipoMetricVal}>{formatCurrency(ipo.minInvestment)}</Text>
+                        </View>
+                        <View style={styles.ipoMetricCol}>
+                          <Text style={styles.ipoMetricLabel}>Est. GMP Gain</Text>
+                          <Text style={[styles.ipoMetricVal, { color: '#16a34a' }]}>{ipo.gmp}</Text>
+                        </View>
+                      </View>
+
+                      {/* SUBSCRIPTION PROGRESS */}
+                      <View style={styles.ipoSubRow}>
+                        <Text style={styles.ipoSubText}>Subscription: <Text style={{ fontWeight: '800', color: colors.text }}>{ipo.subscription}</Text></Text>
+                        <Text style={styles.ipoSubText}>Issue: <Text style={{ fontWeight: '700' }}>{ipo.issueSize}</Text></Text>
+                      </View>
+
+                      {/* ACTION BUTTON */}
+                      {isOpen ? (
+                        <TouchableOpacity 
+                          style={styles.ipoApplyBtn}
+                          onPress={() => openIpoBidModal(ipo)}
+                        >
+                          <Ionicons name="rocket-outline" size={16} color="#fff" style={{ marginRight: 6 }} />
+                          <Text style={styles.ipoApplyBtnText}>Apply for IPO ({ipo.lotSize} Shares / Lot)</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.ipoUpcomingBanner}>
+                          <Text style={styles.ipoUpcomingBannerText}>
+                            {isUpcoming ? '🔔 Bidding opens soon • Add to Watchlist' : 'Closed for subscription'}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
+              ) : (
+                /* MY IPO APPLICATIONS LIST */
+                myApplications.length === 0 ? (
+                  <View style={styles.emptyCard}>
+                    <Ionicons name="document-text-outline" size={40} color={colors.textSecondary} style={{ marginBottom: 8 }} />
+                    <Text style={styles.emptyText}>You haven't placed any IPO bids yet.</Text>
+                    <TouchableOpacity 
+                      style={[styles.ipoNavBtnActive, { paddingHorizontal: 16, paddingVertical: 8, marginTop: 12, borderRadius: 10 }]}
+                      onPress={() => setIpoTab('live')}
+                    >
+                      <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>Browse Live IPOs</Text>
+                    </TouchableOpacity>
                   </View>
+                ) : (
+                  myApplications.map((app) => (
+                    <View key={app.id} style={styles.ipoAppCard}>
+                      <View style={styles.ipoHeaderRow}>
+                        <View>
+                          <Text style={styles.ipoTitle}>{app.name}</Text>
+                          <Text style={styles.ipoAppId}>Application #{app.id} • {app.appliedDate}</Text>
+                        </View>
+                        <View style={[styles.ipoStatusBadge, styles.ipoStatusOpen]}>
+                          <Text style={[styles.ipoStatusText, styles.ipoStatusTextOpen]}>BID PLACED</Text>
+                        </View>
+                      </View>
 
-                  <TouchableOpacity style={styles.stockRowBuy} onPress={() => openBuyModal(stock)}>
-                    <Text style={styles.stockRowBuyText}>BUY</Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
+                      <View style={[styles.ipoMetricsGrid, { marginVertical: 10 }]}>
+                        <View style={styles.ipoMetricCol}>
+                          <Text style={styles.ipoMetricLabel}>Lots Applied</Text>
+                          <Text style={styles.ipoMetricVal}>{app.lots} ({app.shares} sh)</Text>
+                        </View>
+                        <View style={styles.ipoMetricCol}>
+                          <Text style={styles.ipoMetricLabel}>Bid Price</Text>
+                          <Text style={styles.ipoMetricVal}>{formatCurrency(app.bidPrice)}</Text>
+                        </View>
+                        <View style={styles.ipoMetricCol}>
+                          <Text style={styles.ipoMetricLabel}>Amount Blocked</Text>
+                          <Text style={[styles.ipoMetricVal, { color: '#2563eb' }]}>{formatCurrency(app.amountBlocked)}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.ipoAppActionRow}>
+                        <Text style={styles.ipoAllotmentText}>⏳ {app.allotmentDate}</Text>
+                        <TouchableOpacity 
+                          style={styles.cancelBidBtn}
+                          onPress={() => handleCancelIpoBid(app)}
+                        >
+                          <Text style={styles.cancelBidText}>Cancel Bid & Refund</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+                )
+              )}
+            </View>
+          ) : (
+            /* STOCK SUBTAB LISTINGS */
+            <View style={styles.listSection}>
+              {SUBTAB_DATA[activeSubtab].map((stock) => {
+                const isUp = stock.changePercent >= 0;
+                return (
+                  <View key={stock.symbol} style={styles.stockRowCard}>
+                    <TouchableOpacity 
+                      style={{ flex: 1 }} 
+                      onPress={() => router.push(`/stock/${stock.symbol}`)}
+                    >
+                      <Text style={styles.stockSymbolText}>{stock.symbol.replace('.NS', '')}</Text>
+                      <Text style={styles.stockNameText} numberOfLines={1}>{stock.shortname}</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.stockPriceCol}>
+                      <Text style={styles.stockPriceText}>{formatCurrency(stock.price)}</Text>
+                      <Text style={[styles.stockChangeText, { color: isUp ? '#16a34a' : '#dc2626' }]}>
+                        {isUp ? '+' : ''}{stock.changePercent.toFixed(2)}%
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity style={styles.stockRowBuy} onPress={() => openBuyModal(stock)}>
+                      <Text style={styles.stockRowBuyText}>BUY</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
           {/* 5. PORTFOLIO SEGMENTS (POSITIONS & CNC HOLDINGS) */}
           <View style={styles.portfolioContainer}>
@@ -436,91 +817,77 @@ export default function TradingDashboard() {
                 </View>
               ))
             )}
-
           </View>
 
         </ScrollView>
 
-        {/* 6. MODAL BUY SHEET */}
+        {/* 6. ADVANCED TRADING BUY MODAL */}
         <Modal visible={isBuyModalOpen} transparent={true} animationType="slide">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               
+              {/* Modal Header */}
               <View style={styles.modalHeader}>
                 <View>
-                  <Text style={styles.modalTitle}>Buy {selectedStock?.symbol.replace('.NS', '')}</Text>
-                  <Text style={styles.modalPrice}>{formatCurrency(modalLivePrice)}</Text>
+                  <Text style={styles.modalTitle}>{selectedStock?.symbol?.replace('.NS', '')}</Text>
+                  <Text style={styles.modalSub}>{selectedStock?.shortname}</Text>
                 </View>
                 <TouchableOpacity onPress={() => setIsBuyModalOpen(false)}>
-                  <Ionicons name="close-circle" size={32} color={colors.textSecondary} />
+                  <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
                 </TouchableOpacity>
               </View>
 
-              {!limitUnlocked && (
-                <View style={styles.bannerBox}>
-                  <Text style={styles.bannerText}>
-                    💡 Novice Mode Active. Earn 500 XP in quizzes to unlock Limit Orders & Stop-Loss protection!
+              {/* CNC vs MIS Selection */}
+              <View style={styles.segmentRow}>
+                <TouchableOpacity 
+                  style={[styles.segmentBtn, productType === 'cnc' && styles.segmentBtnActive]}
+                  onPress={() => setProductType('cnc')}
+                >
+                  <Text style={[styles.segmentBtnText, productType === 'cnc' && styles.segmentBtnTextActive]}>
+                    Longterm (CNC)
                   </Text>
-                </View>
-              )}
+                </TouchableOpacity>
 
-              {/* Product Selection Tab Segment */}
-              <View style={styles.optionSection}>
-                <Text style={styles.sectionLabel}>Product Type</Text>
-                <View style={styles.tabTrack}>
-                  <TouchableOpacity 
-                    style={[styles.tabSegment, productType === 'cnc' && styles.tabSegmentActive]}
-                    onPress={() => setProductType('cnc')}
-                  >
-                    <Text style={[styles.tabSegmentText, productType === 'cnc' && styles.tabSegmentTextActive]}>
-                      Long-Term (CNC)
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={[
-                      styles.tabSegment, 
-                      productType === 'mis' && styles.tabSegmentActive,
-                      !intradayUnlocked && styles.tabSegmentLocked
-                    ]}
-                    onPress={() => intradayUnlocked ? setProductType('mis') : null}
-                  >
-                    <Text style={[styles.tabSegmentText, productType === 'mis' && styles.tabSegmentTextActive]}>
-                      {intradayUnlocked ? 'Intraday (MIS 5x)' : '🔒 Intraday (Gold)'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity 
+                  style={[
+                    styles.segmentBtn, 
+                    productType === 'mis' && styles.segmentBtnActive,
+                    !intradayUnlocked && { opacity: 0.4 }
+                  ]}
+                  onPress={() => intradayUnlocked ? setProductType('mis') : null}
+                >
+                  <Text style={[styles.segmentBtnText, productType === 'mis' && styles.segmentBtnTextActive]}>
+                    {intradayUnlocked ? "Intraday (MIS 5x)" : "🔒 MIS (Gold)"}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Order Type Selection Tab Segment */}
-              <View style={styles.optionSection}>
-                <Text style={styles.sectionLabel}>Order Type</Text>
-                <View style={styles.tabTrack}>
-                  <TouchableOpacity 
-                    style={[styles.tabSegment, orderType === 'market' && styles.tabSegmentActive]}
-                    onPress={() => setOrderType('market')}
-                  >
-                    <Text style={[styles.tabSegmentText, orderType === 'market' && styles.tabSegmentTextActive]}>
-                      Market
-                    </Text>
-                  </TouchableOpacity>
+              {/* Market vs Limit Order Selection */}
+              <View style={styles.segmentRow}>
+                <TouchableOpacity 
+                  style={[styles.segmentBtn, orderType === 'market' && styles.segmentBtnActive]}
+                  onPress={() => setOrderType('market')}
+                >
+                  <Text style={[styles.segmentBtnText, orderType === 'market' && styles.segmentBtnTextActive]}>
+                    Market Order
+                  </Text>
+                </TouchableOpacity>
 
-                  <TouchableOpacity 
-                    style={[
-                      styles.tabSegment, 
-                      orderType === 'limit' && styles.tabSegmentActive,
-                      !limitUnlocked && styles.tabSegmentLocked
-                    ]}
-                    onPress={() => limitUnlocked ? setOrderType('limit') : null}
-                  >
-                    <Text style={[styles.tabSegmentText, orderType === 'limit' && styles.tabSegmentTextActive]}>
-                      {limitUnlocked ? 'Limit Price' : '🔒 Limit (Bronze)'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity 
+                  style={[
+                    styles.segmentBtn, 
+                    orderType === 'limit' && styles.segmentBtnActive,
+                    !limitUnlocked && { opacity: 0.4 }
+                  ]}
+                  onPress={() => limitUnlocked ? setOrderType('limit') : null}
+                >
+                  <Text style={[styles.segmentBtnText, orderType === 'limit' && styles.segmentBtnTextActive]}>
+                    {limitUnlocked ? "Limit Order" : "🔒 Limit (Bronze)"}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Quantity Selection */}
+              {/* Quantity Counter */}
               <View style={styles.counterRow}>
                 <Text style={styles.inputLabel}>Quantity</Text>
                 <View style={styles.counterGroup}>
@@ -542,7 +909,7 @@ export default function TradingDashboard() {
                 </View>
               </View>
 
-              {/* Limit Price Input */}
+              {/* Limit Price Input Field */}
               {orderType === 'limit' && (
                 <View style={styles.inputRow}>
                   <Text style={styles.inputLabel}>Limit Price</Text>
@@ -557,7 +924,7 @@ export default function TradingDashboard() {
                 </View>
               )}
 
-              {/* Stop Loss (SL) Protection */}
+              {/* Stop Loss (SL) Protection Feature */}
               {stopLossUnlocked ? (
                 <View style={styles.optionSection}>
                   <TouchableOpacity 
@@ -594,7 +961,7 @@ export default function TradingDashboard() {
                 </View>
               )}
 
-              {/* Margin Calculations */}
+              {/* Margin Calculation Summary */}
               <View style={styles.marginBox}>
                 <View style={styles.marginRow}>
                   <Text style={styles.marginLabel}>Required Margin:</Text>
@@ -627,12 +994,110 @@ export default function TradingDashboard() {
           </View>
         </Modal>
 
+        {/* 7. IPO BIDDING MODAL */}
+        <Modal visible={isIpoModalOpen} transparent={true} animationType="slide">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>{selectedIpo?.name}</Text>
+                  <Text style={styles.modalSub}>Price Band: {selectedIpo?.priceBand}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setIsIpoModalOpen(false)}>
+                  <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* LOT SELECTOR */}
+              <View style={styles.counterRow}>
+                <View>
+                  <Text style={styles.inputLabel}>Number of Lots</Text>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    {selectedIpo ? ipoLots * selectedIpo.lotSize : 0} Shares ({selectedIpo?.lotSize} shares/lot)
+                  </Text>
+                </View>
+
+                <View style={styles.counterGroup}>
+                  <TouchableOpacity 
+                    style={styles.countBtn} 
+                    onPress={() => setIpoLots(l => Math.max(1, l - 1))}
+                  >
+                    <Ionicons name="remove" size={22} color={colors.text} />
+                  </TouchableOpacity>
+                  
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: colors.text, paddingHorizontal: 14 }}>
+                    {ipoLots}
+                  </Text>
+
+                  <TouchableOpacity 
+                    style={styles.countBtn} 
+                    onPress={() => setIpoLots(l => Math.min(10, l + 1))}
+                  >
+                    <Ionicons name="add" size={22} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* CUT-OFF TOGGLE */}
+              <TouchableOpacity 
+                style={[styles.optionSection, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                onPress={() => setUseCutoff(!useCutoff)}
+              >
+                <View>
+                  <Text style={styles.sectionLabel}>Apply at Cut-Off Price</Text>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                    Bid at highest price (₹{selectedIpo?.cutoffPrice}) for highest allotment probability
+                  </Text>
+                </View>
+                <Ionicons 
+                  name={useCutoff ? "checkbox" : "square-outline"} 
+                  size={24} 
+                  color={useCutoff ? colors.accent : colors.textSecondary} 
+                />
+              </TouchableOpacity>
+
+              {/* MARGIN BREAKDOWN */}
+              <View style={styles.marginBox}>
+                <View style={styles.marginRow}>
+                  <Text style={styles.marginLabel}>Total Amount to Block:</Text>
+                  <Text style={[styles.marginValue, { color: '#2563eb', fontSize: 18 }]}>
+                    {selectedIpo ? formatCurrency(ipoLots * selectedIpo.minInvestment) : '₹0'}
+                  </Text>
+                </View>
+                <View style={styles.marginRow}>
+                  <Text style={styles.marginLabel}>Available Balance:</Text>
+                  <Text style={[styles.marginValue, { color: balance >= (selectedIpo ? ipoLots * selectedIpo.minInvestment : 0) ? '#16a34a' : '#dc2626' }]}>
+                    {formatCurrency(balance)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* SUBMIT BUTTON */}
+              <TouchableOpacity 
+                style={[
+                  styles.ipoApplyModalBtn,
+                  balance < (selectedIpo ? ipoLots * selectedIpo.minInvestment : 0) && { opacity: 0.5 }
+                ]}
+                disabled={balance < (selectedIpo ? ipoLots * selectedIpo.minInvestment : 0)}
+                onPress={handleApplyIpo}
+              >
+                <Ionicons name="flash" size={18} color="#fff" style={{ marginRight: 6 }} />
+                <Text style={styles.ipoApplyModalBtnText}>
+                  {balance >= (selectedIpo ? ipoLots * selectedIpo.minInvestment : 0)
+                    ? `Submit Bid & Block ${selectedIpo ? formatCurrency(ipoLots * selectedIpo.minInvestment) : ''}`
+                    : 'Insufficient Balance'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
       </SafeAreaView>
     </PageTransition>
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -662,7 +1127,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   simulateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#dc2626', // Warning Red
+    backgroundColor: '#dc2626',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
@@ -677,7 +1142,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   walletCard: {
     padding: 20,
     borderRadius: 24,
-    backgroundColor: colors.isDark ? '#1D2433' : colors.card,
+    backgroundColor: isDark ? '#1D2433' : colors.card,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: colors.border,
@@ -749,27 +1214,26 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 48,
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: 16,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
     color: colors.text,
+    fontSize: 14,
     fontWeight: '600',
   },
-  
   resultsDropdown: {
     backgroundColor: colors.card,
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 8,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 20,
     elevation: 4,
   },
   resultItem: {
@@ -780,37 +1244,21 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  resultSymbol: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  resultName: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    maxWidth: SCREEN_WIDTH * 0.5,
-  },
-  rowBuyBtn: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  rowBuyBtnText: {
-    color: '#fff',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
+  resultSymbol: { fontSize: 15, fontWeight: '800', color: colors.text },
+  resultName: { fontSize: 12, color: colors.textSecondary, maxWidth: 180 },
+  rowBuyBtn: { backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
+  rowBuyBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
 
   subtabsContainer: {
-    paddingBottom: 16,
+    gap: 8,
+    paddingBottom: 4,
+    marginBottom: 16,
   },
   subtabBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
     backgroundColor: colors.card,
-    marginRight: 10,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -819,16 +1267,17 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderColor: colors.accent,
   },
   subtabBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.textSecondary,
   },
   subtabBtnTextActive: {
     color: '#fff',
+    fontWeight: '800',
   },
 
   listSection: {
-    gap: 12,
+    gap: 10,
     marginBottom: 20,
   },
   stockRowCard: {
@@ -852,52 +1301,237 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   stockPriceCol: {
     alignItems: 'flex-end',
-    marginRight: 16,
+    marginRight: 14,
   },
   stockPriceText: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 15,
+    fontWeight: '800',
     color: colors.text,
   },
   stockChangeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     marginTop: 2,
   },
   stockRowBuy: {
-    backgroundColor: colors.accent,
-    paddingHorizontal: 16,
+    backgroundColor: 'rgba(37, 99, 235, 0.12)',
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
   stockRowBuyText: {
-    color: '#fff',
+    color: '#2563eb',
     fontWeight: '800',
     fontSize: 12,
   },
 
+  // IPO Specific Styles
+  ipoNavRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ipoNavBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  ipoNavBtnActive: {
+    backgroundColor: colors.accent,
+  },
+  ipoNavText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  ipoNavTextActive: {
+    color: '#fff',
+    fontWeight: '800',
+  },
+
+  ipoCard: {
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.shadowColor,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 6,
+  },
+  ipoHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  ipoTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  ipoDates: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  ipoStatusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  ipoStatusOpen: { backgroundColor: 'rgba(34, 197, 94, 0.12)' },
+  ipoStatusUpcoming: { backgroundColor: 'rgba(245, 158, 11, 0.12)' },
+  ipoStatusClosed: { backgroundColor: 'rgba(148, 163, 184, 0.15)' },
+  ipoStatusText: { fontSize: 10, fontWeight: '800' },
+  ipoStatusTextOpen: { color: '#16a34a' },
+  ipoStatusTextUpcoming: { color: '#d97706' },
+  ipoStatusTextClosed: { color: '#64748b' },
+
+  ipoMetricsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 12,
+  },
+  ipoMetricCol: {},
+  ipoMetricLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  ipoMetricVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  ipoSubRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 2,
+  },
+  ipoSubText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  ipoApplyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    paddingVertical: 12,
+    borderRadius: 12,
+    elevation: 2,
+  },
+  ipoApplyBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  ipoUpcomingBanner: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f1f5f9',
+    borderRadius: 10,
+  },
+  ipoUpcomingBannerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+
+  ipoAppCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 8,
+  },
+  ipoAppId: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  ipoAppActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  ipoAllotmentText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.accent,
+  },
+  cancelBidBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  cancelBidText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ef4444',
+  },
+
+  ipoApplyModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#2563eb',
+    paddingVertical: 14,
+    borderRadius: 14,
+    marginTop: 10,
+  },
+  ipoApplyModalBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+
+  // Portfolio Segments
   portfolioContainer: {
     marginTop: 10,
   },
   portfolioSectionHeader: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.text,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   emptyCard: {
     backgroundColor: colors.card,
-    borderRadius: 16,
     padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
-    justifyContent: 'center',
     borderWidth: 1,
-    borderStyle: 'dashed',
     borderColor: colors.border,
+    borderStyle: 'dashed',
   },
   emptyText: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textSecondary,
+    fontWeight: '600',
   },
   portfolioRowCard: {
     flexDirection: 'row',
@@ -907,7 +1541,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   portSymbol: {
     fontSize: 15,
@@ -921,13 +1555,13 @@ const getStyles = (colors: any) => StyleSheet.create({
     marginLeft: 8,
   },
   miniBadgeText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '800',
   },
   portDetails: {
     fontSize: 12,
     color: colors.textSecondary,
-    marginTop: 4,
+    marginTop: 2,
   },
   squareOffBtn: {
     borderWidth: 1,
@@ -937,44 +1571,182 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 8,
   },
   squareOffText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: colors.accent,
-    fontSize: 11,
-    fontWeight: 'bold',
   },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: colors.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 50, borderWidth: 1, borderColor: colors.border },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: colors.text },
-  modalPrice: { fontSize: 18, fontWeight: '700', color: colors.isDark ? '#34D399' : '#16a34a', marginTop: 4 },
-  
-  bannerBox: { backgroundColor: colors.isDark ? 'rgba(59, 130, 246, 0.1)' : '#eff6ff', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: colors.border },
-  bannerText: { fontSize: 12, color: colors.accent, fontWeight: '600', lineHeight: 16 },
-
-  optionSection: { marginBottom: 16 },
-  sectionLabel: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, marginBottom: 8 },
-  tabTrack: { flexDirection: 'row', backgroundColor: colors.border, borderRadius: 12, padding: 3, borderWidth: 0.5, borderColor: colors.border },
-  tabSegment: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 9 },
-  tabSegmentActive: { backgroundColor: colors.card, elevation: 1 },
-  tabSegmentLocked: { opacity: 0.6 },
-  tabSegmentText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
-  tabSegmentTextActive: { color: colors.text },
-
-  counterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 8 },
-  inputLabel: { fontSize: 14, fontWeight: '700', color: colors.textSecondary },
-  counterGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.border, borderRadius: 12, padding: 3 },
-  countBtn: { padding: 8, backgroundColor: colors.card, borderRadius: 9, elevation: 1 },
-  quantityInput: { fontSize: 18, fontWeight: '900', marginHorizontal: 12, width: 50, textAlign: 'center', color: colors.text },
-
-  inputRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  numericTextInput: { fontSize: 16, fontWeight: '800', borderBottomWidth: 1.5, borderBottomColor: colors.accent, width: 100, textAlign: 'right', color: colors.text, paddingVertical: 4 },
-
-  marginBox: { backgroundColor: colors.background, padding: 16, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
-  marginRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  marginLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-  marginValue: { fontSize: 15, fontWeight: '800', color: colors.text },
-
-  sliderTrack: { height: 60, backgroundColor: colors.border, borderRadius: 30, justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', borderWidth: 1, borderColor: colors.isDark ? '#334155' : '#CBD5E1' },
-  sliderPlaceholder: { fontSize: 14, fontWeight: '900', color: colors.textSecondary, letterSpacing: 1 },
-  sliderKnob: { position: 'absolute', left: 4, width: 52, height: 52, backgroundColor: '#10B981', borderRadius: 26, justifyContent: 'center', alignItems: 'center', elevation: 4 }
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  modalSub: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 12,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  segmentBtnActive: {
+    backgroundColor: colors.card,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textSecondary,
+  },
+  segmentBtnTextActive: {
+    color: colors.text,
+    fontWeight: '800',
+  },
+  counterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 12,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  counterGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
+    borderRadius: 12,
+    padding: 4,
+  },
+  countBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: colors.card,
+  },
+  quantityInput: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: 'center',
+    minWidth: 50,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 8,
+  },
+  numericTextInput: {
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    minWidth: 100,
+    textAlign: 'right',
+  },
+  optionSection: {
+    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  marginBox: {
+    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+    padding: 14,
+    borderRadius: 14,
+    marginVertical: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: 8,
+  },
+  marginRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  marginLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  marginValue: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  sliderTrack: {
+    height: 58,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+    borderRadius: 29,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    marginTop: 6,
+  },
+  sliderPlaceholder: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: colors.textSecondary,
+    letterSpacing: 1.5,
+  },
+  sliderKnob: {
+    position: 'absolute',
+    left: 2,
+    width: KNOB_SIZE,
+    height: KNOB_SIZE,
+    borderRadius: KNOB_SIZE / 2,
+    backgroundColor: '#16a34a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
 });

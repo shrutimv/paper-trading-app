@@ -521,6 +521,32 @@ export default function StockDetailScreen() {
               />
             </View>
           </View>
+
+          {/* TRADE ACTION BUTTON */}
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={{
+              backgroundColor: C.green,
+              borderRadius: 14,
+              paddingVertical: 16,
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: 16,
+              flexDirection: 'row',
+              gap: 8,
+              shadowColor: C.green,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 4,
+            }}
+            onPress={() => router.push('/(tabs)/trading')}
+          >
+            <Ionicons name="flash" size={18} color="#ffffff" />
+            <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800' }}>
+              Trade {sym} on Virtual Exchange
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
       </View>
     </>

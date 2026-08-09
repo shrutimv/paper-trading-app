@@ -1,8 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { useTheme } from "../../context/ThemeContext";
 import {
+  Alert,
   Animated as RNAnimated,
   Image,
   Platform,
@@ -66,7 +68,7 @@ export default function Home() {
   const router = useRouter(); 
   const { user: authUser, isGuest } = useAuth();
   const [localUser, setLocalUser] = useState<any>(null);
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const styles = getStyles(colors);
 
   useEffect(() => {
@@ -113,29 +115,50 @@ export default function Home() {
 
         {/* --- PREMIUM STATS TILES --- */}
         <View style={styles.statsContainer}>
-          <Animated.View entering={FadeInDown.duration(600).delay(100)} style={[styles.statTile, styles.streakTile]}>
-            <Image source={require("../../assets/images/header/streak.png")} style={styles.statIcon} />
-            <View>
-              <Text style={[styles.statLabel, styles.streakLabel]}>Streak</Text>
-              <Text style={[styles.statValue, styles.streakValue]}>11 days</Text>
-            </View>
-          </Animated.View>
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => Alert.alert(
+              "🔥 11-Day Trading Streak!", 
+              "You're on fire! Complete daily puzzles and paper trades to maintain your streak multiplier and advance to the next rank."
+            )}
+            style={{ flex: 1 }}
+          >
+            <Animated.View entering={FadeInDown.duration(600).delay(100)} style={[styles.statTile, styles.streakTile]}>
+              <Image source={require("../../assets/images/header/streak.png")} style={styles.statIcon} />
+              <View>
+                <Text style={[styles.statLabel, styles.streakLabel]}>Streak</Text>
+                <Text style={[styles.statValue, styles.streakValue]}>11 days</Text>
+              </View>
+            </Animated.View>
+          </TouchableOpacity>
 
-          <Animated.View entering={FadeInDown.duration(600).delay(200)} style={[styles.statTile, styles.puzzlesTile]}>
-            <Image source={require("../../assets/images/header/puzzel.png")} style={styles.statIcon} />
-            <View>
-              <Text style={[styles.statLabel, styles.puzzlesLabel]}>Puzzles</Text>
-              <Text style={[styles.statValue, styles.puzzlesValue]}>48</Text>
-            </View>
-          </Animated.View>
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => router.push("/(tabs)/puzzles")}
+            style={{ flex: 1 }}
+          >
+            <Animated.View entering={FadeInDown.duration(600).delay(200)} style={[styles.statTile, styles.puzzlesTile]}>
+              <Image source={require("../../assets/images/header/puzzel.png")} style={styles.statIcon} />
+              <View>
+                <Text style={[styles.statLabel, styles.puzzlesLabel]}>Puzzles</Text>
+                <Text style={[styles.statValue, styles.puzzlesValue]}>48</Text>
+              </View>
+            </Animated.View>
+          </TouchableOpacity>
 
-          <Animated.View entering={FadeInDown.duration(600).delay(300)} style={[styles.statTile, styles.coursesTile]}>
-            <Image source={require("../../assets/images/header/courses.png")} style={styles.statIcon} />
-            <View>
-              <Text style={[styles.statLabel, styles.coursesLabel]}>Courses</Text>
-              <Text style={[styles.statValue, styles.coursesValue]}>3</Text>
-            </View>
-          </Animated.View>
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => router.push("/(tabs)/courses")}
+            style={{ flex: 1 }}
+          >
+            <Animated.View entering={FadeInDown.duration(600).delay(300)} style={[styles.statTile, styles.coursesTile]}>
+              <Image source={require("../../assets/images/header/courses.png")} style={styles.statIcon} />
+              <View>
+                <Text style={[styles.statLabel, styles.coursesLabel]}>Courses</Text>
+                <Text style={[styles.statValue, styles.coursesValue]}>3</Text>
+              </View>
+            </Animated.View>
+          </TouchableOpacity>
         </View>
 
         {/* --- PUZZLES SECTION --- */}
@@ -157,9 +180,24 @@ export default function Home() {
         {/* --- HORIZONTAL SKILLS CAROUSEL --- */}
         <Animated.View entering={FadeInDown.duration(600).delay(450)} style={{ marginTop: 15 }}>
           <HorizontalCardCarousel cardWidth={260} cardSpacing={14}>
-            <SmallCard title="Reading Volume" subtitle="Understand trade volume." progress={0.6} />
-            <SmallCard title="Risk Management" subtitle="Learn to mitigate losses." tag="Popular" />
-            <SmallCard title="Support & Resistance" subtitle="Identify key price levels." progress={0.15} />
+            <SmallCard 
+              title="Reading Volume" 
+              subtitle="Understand trade volume & price action." 
+              progress={0.6} 
+              onPress={() => router.push("/(tabs)/courses/c1")}
+            />
+            <SmallCard 
+              title="Risk Management" 
+              subtitle="Learn stop-losses and risk mitigation." 
+              tag="Popular" 
+              onPress={() => router.push("/(tabs)/courses/c3")}
+            />
+            <SmallCard 
+              title="Support & Resistance" 
+              subtitle="Identify institutional supply & demand zones." 
+              progress={0.15} 
+              onPress={() => router.push("/(tabs)/courses/c2")}
+            />
           </HorizontalCardCarousel>
         </Animated.View>
 
@@ -172,7 +210,7 @@ export default function Home() {
             </TouchableOpacity>
           </View>
 
-          <AnimatedTabCard href="/(tabs)/courses">
+          <AnimatedTabCard href="/(tabs)/courses/c1">
             <View style={styles.cardWrapper}>
               <CourseCard />
             </View>
@@ -180,9 +218,9 @@ export default function Home() {
 
           <View style={styles.smallCoursesRow}>
             <View style={{ width: "48%" }}>
-              <AnimatedTabCard href="/(tabs)/courses">
+              <AnimatedTabCard href="/(tabs)/courses/c3">
                 <SmallCourseCard
-                  title="Intro to ETFs"
+                  title="Intro to Derivatives"
                   subtitle="Beginner"
                   progressLabel="25% complete"
                   image={require("../../assets/images/smallCourses/1.png")}
@@ -191,7 +229,7 @@ export default function Home() {
             </View>
 
             <View style={{ width: "48%" }}>
-              <AnimatedTabCard href="/(tabs)/courses">
+              <AnimatedTabCard href="/(tabs)/courses/c5">
                 <SmallCourseCard
                   title="Fundamental Analysis"
                   subtitle="Intermediate"
@@ -214,6 +252,53 @@ export default function Home() {
               <PaperTradingCard />
             </View>
           </AnimatedTabCard>
+        </Animated.View>
+
+        {/* --- UPCOMING IPOS SECTION --- */}
+        <Animated.View entering={FadeInDown.duration(600).delay(580)}>
+          <View style={[styles.sectionHeader, { marginTop: 30 }]}>
+            <Text style={styles.sectionTitle}>Upcoming IPOs</Text>
+            <TouchableOpacity onPress={() => router.push("/(tabs)/trading")}>
+              <Text style={styles.link}>View all</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            onPress={() => router.push("/(tabs)/trading")}
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 20,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              shadowColor: colors.shadowColor,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 8,
+              elevation: 3,
+            }}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(37, 99, 235, 0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="rocket" size={20} color="#2563eb" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>Swiggy Limited</Text>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '600' }}>Price: ₹371 - ₹390 • Lot: 38 sh</Text>
+                </View>
+              </View>
+              <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>🟢 BID OPEN</Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', padding: 10, borderRadius: 12 }}>
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>Est. Listing Gain: <Text style={{ fontWeight: '800', color: '#16a34a' }}>+₹25 (+6.4% GMP)</Text></Text>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#2563eb' }}>Apply with ₹14,820 →</Text>
+            </View>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* --- MARKET NEWS SECTION (API DRIVEN) --- */}
@@ -269,17 +354,19 @@ const getStyles = (colors: any) => StyleSheet.create({
   statsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 30,
+    paddingHorizontal: 16,
+    marginBottom: 25,
+    gap: 10,
   },
   statTile: {
-    flexDirection: "row",
+    flexDirection: "column",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    justifyContent: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 8,
     borderRadius: 18,
-    width: "31%",
-    backgroundColor: colors.card, // Dark Blue-Slate
+    width: "100%",
+    backgroundColor: colors.card,
     borderColor: colors.border,
     borderWidth: 1,
     shadowColor: colors.shadowColor,
@@ -291,38 +378,47 @@ const getStyles = (colors: any) => StyleSheet.create({
   streakTile: {},
   streakLabel: {
     color: colors.textSecondary,
+    textAlign: "center",
   },
   streakValue: {
     color: "#FB923C", // Orange glow
+    textAlign: "center",
   },
   puzzlesTile: {},
   puzzlesLabel: {
     color: colors.textSecondary,
+    textAlign: "center",
   },
   puzzlesValue: {
     color: "#C084FC", // Purple glow
+    textAlign: "center",
   },
   coursesTile: {},
   coursesLabel: {
     color: colors.textSecondary,
+    textAlign: "center",
   },
   coursesValue: {
     color: "#34D399", // Emerald glow
+    textAlign: "center",
   },
   
   statIcon: {
-    width: 24,
-    height: 24,
-    marginRight: 8,
+    width: 32,
+    height: 32,
+    marginBottom: 8,
     resizeMode: "contain",
   },
   statLabel: {
-    fontWeight: "600",
+    fontWeight: "700",
     fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
   statValue: {
-    fontWeight: "800",
-    fontSize: 14,
+    fontWeight: "900",
+    fontSize: 16,
     marginTop: 2,
   },
 
