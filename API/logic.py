@@ -203,6 +203,22 @@ def _downsample_history(history: List[dict], max_points: int) -> List[dict]:
     return result
 
 
+def fetch_yf_info_and_history(yf_symbol: str, period: str = "5d", interval: str = "15m") -> Tuple[dict, List[dict]]:
+    """Compatibility wrapper for fetch_stock_chart."""
+    meta, history = fetch_stock_chart(yf_symbol, period=period, interval=interval)
+    return meta, history
+
+
+def get_stock_history(yf_symbol: str, period: str = "5d", interval: str = "15m", max_points: int = 0, compact: bool = False) -> List[dict]:
+    """Fetch history and optionally downsample/compact it."""
+    _, history = fetch_stock_chart(yf_symbol, period=period, interval=interval)
+    if max_points and max_points > 0:
+        history = _downsample_history(history, max_points)
+    if compact:
+        return [{"date": h["date"], "close": h["close"]} for h in history]
+    return history
+
+
 def get_stock_data_by_symbol(yf_symbol: str, period: str = "5d", interval: str = "15m", max_points: int = 0, compact: bool = False) -> dict:
     """Direct lookup by Yahoo symbol."""
     if not yf_symbol or not str(yf_symbol).strip():
