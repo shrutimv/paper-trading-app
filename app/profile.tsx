@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useRouter, Stack } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- 1. IMPORT HOOK
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
 // IMPORT BOTH GLOBAL CONTEXTS!
@@ -92,28 +92,34 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView 
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 60 }]}
-      showsVerticalScrollIndicator={false}
-    >
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
+      <Stack.Screen options={{ headerShown: false }} />
       
-      {/* <-- DYNAMIC BACK BUTTON PLACEMENT --> */}
-      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 15 }]} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={28} color={colors.text} />
-      </TouchableOpacity>
-
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <Ionicons name="person-circle-outline" size={70} color="#cbd5e1" />
-        </View>
-        <Text style={styles.name}>{user?.username || (user?.isGuest ? "Guest User" : "Trader")}</Text>
-        
-        <View style={styles.walletPill}>
-          <Ionicons name="wallet-outline" size={16} color={colors.accent} style={{ marginRight: 6 }} />
-          <Text style={styles.walletText}>{formatCurrency(balance)}</Text>
-        </View>
+      {/* ── TOP NAV BAR ── */}
+      <View style={styles.topNavBar}>
+        <TouchableOpacity style={styles.navBackBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={styles.navTitle}>Profile</Text>
+        <View style={{ width: 40 }} />
       </View>
+
+      <ScrollView 
+        style={{ flex: 1, backgroundColor: colors.background }}
+        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 60 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <View style={styles.avatarContainer}>
+            <Ionicons name="person-circle-outline" size={70} color="#cbd5e1" />
+          </View>
+          <Text style={styles.name}>{user?.username || (user?.isGuest ? "Guest User" : "Trader")}</Text>
+          
+          <View style={styles.walletPill}>
+            <Ionicons name="wallet-outline" size={16} color={colors.accent} style={{ marginRight: 6 }} />
+            <Text style={styles.walletText}>{formatCurrency(balance)}</Text>
+          </View>
+        </View>
 
       <TouchableOpacity 
         style={[styles.rankCard, { borderColor: currentRank.color + '40' }]} 
@@ -234,15 +240,39 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 const getStyles = (colors: any) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20 },
-  
-  backBtn: { position: 'absolute', left: 20, zIndex: 10, padding: 4 },
+  topNavBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  navBackBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  navTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: colors.text,
+  },
+  container: { backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: 10 },
   
   header: { alignItems: 'center', marginTop: 10, marginBottom: 30 },
   avatarContainer: { marginBottom: 10, backgroundColor: colors.card, borderRadius: 50, padding: 2, elevation: 2, shadowColor: colors.shadowColor, shadowOpacity: 0.1, shadowRadius: 10 },
