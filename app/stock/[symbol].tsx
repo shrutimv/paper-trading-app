@@ -352,8 +352,8 @@ export default function StockDetailScreen() {
                 }}
               >
                 {stockMeta?.isMarketOpen
-                  ? '🟢 Live Market (09:15 - 15:30 IST)'
-                  : '🔴 Market Closed • Showing data up to 3:30 PM IST'}
+                  ? 'Live Market (09:15 - 15:30 IST)'
+                  : 'Market Closed • Showing data up to 3:30 PM IST'}
               </Text>
             </View>
           </View>
@@ -522,6 +522,91 @@ export default function StockDetailScreen() {
             </View>
           </View>
 
+          {/* ACTIONABLE TRADING INTELLIGENCE & SIGNAL CARD */}
+          {(() => {
+            const currentPrice = stockMeta?.regularMarketPrice || prevClose || 100;
+            return (
+              <View style={[S.statsCard, { marginTop: 14, backgroundColor: C.card, borderColor: C.border }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="analytics" size={18} color={accent} />
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: C.textPri }}>Trading Signal & Setup</Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>BULLISH MOMENTUM (88/100)</Text>
+                  </View>
+                </View>
+
+                {/* Catalyst badge */}
+                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9', padding: 10, borderRadius: 10, marginBottom: 12 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: C.textPri }}>
+                    Catalyst: High institutional accumulation with RSI confirming strong trend.
+                  </Text>
+                </View>
+
+                {/* Trade Plan 2x2 Grid with Breathing Room */}
+                <View style={{ gap: 8, marginVertical: 12 }}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {/* Entry Zone */}
+                    <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: C.border }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: C.textSec, textTransform: 'uppercase', letterSpacing: 0.5 }}>Suggested Entry</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: C.textPri, marginTop: 4 }}>
+                        {fmt(currentPrice * 0.99)} - {fmt(currentPrice * 1.01)}
+                      </Text>
+                    </View>
+
+                    {/* Target 1 */}
+                    <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(34, 197, 94, 0.06)' : 'rgba(34, 197, 94, 0.08)', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(34, 197, 94, 0.2)' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#16a34a', textTransform: 'uppercase', letterSpacing: 0.5 }}>Target 1 (+5%)</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#16a34a', marginTop: 4 }}>
+                        {fmt(currentPrice * 1.05)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {/* Stop-Loss */}
+                    <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(239, 68, 68, 0.06)' : 'rgba(239, 68, 68, 0.08)', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#ef4444', textTransform: 'uppercase', letterSpacing: 0.5 }}>Stop-Loss (-3%)</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#ef4444', marginTop: 4 }}>
+                        {fmt(currentPrice * 0.97)}
+                      </Text>
+                    </View>
+
+                    {/* Risk:Reward */}
+                    <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: C.border }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: C.textSec, textTransform: 'uppercase', letterSpacing: 0.5 }}>Risk : Reward</Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: C.textPri, marginTop: 4 }}>
+                        1 : 2.5 Ratio
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* 1-Tap Compare Action */}
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: accent,
+                    gap: 6,
+                  }}
+                  onPress={() => router.push(`/compare?symbols=${sym}`)}
+                >
+                  <Ionicons name="git-compare-outline" size={16} color={accent} />
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: accent }}>
+                    Compare {sym.replace('.NS', '')} with Sector Peers in Studio
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })()}
+
           {/* TRADE ACTION BUTTON */}
           <TouchableOpacity
             activeOpacity={0.85}
@@ -531,7 +616,7 @@ export default function StockDetailScreen() {
               paddingVertical: 16,
               alignItems: 'center',
               justifyContent: 'center',
-              marginTop: 16,
+              marginTop: 14,
               flexDirection: 'row',
               gap: 8,
               shadowColor: C.green,

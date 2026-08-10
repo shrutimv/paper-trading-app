@@ -290,7 +290,7 @@ export default function Home() {
                 </View>
               </View>
               <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
-                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>🟢 BID OPEN</Text>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>BID OPEN</Text>
               </View>
             </View>
 

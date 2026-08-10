@@ -99,6 +99,7 @@ function RootLayoutContent() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="profile" options={{ headerShown: false }} />
           <Stack.Screen name="stock/[symbol]" options={{ headerShown: false }} />
+          <Stack.Screen name="compare" options={{ headerShown: false }} />
           <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           <Stack.Screen name="learn" options={{ headerShown: false }} /> 

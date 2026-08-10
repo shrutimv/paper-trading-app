@@ -91,69 +91,68 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
     const tradePrice = orderType === 'limit' ? parseFloat(limitPrice) || livePrice : livePrice;
     const slVal = stopLossActive ? parseFloat(stopLossTrigger) || undefined : undefined;
 
-    // Trigger instant loading notification
-    setIsPlacingOrder(true);
+    // 1. INSTANT UI FEEDBACK (Close modal immediately & slide smoothly)
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setIsBuyModalOpen(false);
+    pan.setValue(0);
+
     setToast({
       visible: true,
-      message: `Placing order for ${qty}x ${symbol.replace('.NS', '')}...`,
+      message: `Placing order for ${qty} shares of ${symbol.replace('.NS', '')}...`,
       type: 'loading',
     });
 
-    try {
-      const success = await buyStock(symbol, shortName, tradePrice, qty, productType, slVal);
-      
-      if (success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // 2. ASYNC BACKGROUND EXECUTION
+    (async () => {
+      try {
+        const success = await buyStock(symbol, shortName, tradePrice, qty, productType, slVal);
+        if (success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setToast({
+            visible: true,
+            message: `Order Executed: ${qty} shares of ${symbol.replace('.NS', '')} bought (${productType.toUpperCase()})`,
+            type: 'success',
+          });
+          if (onBuyComplete) onBuyComplete();
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setToast({
+            visible: true,
+            message: "Order Failed: Insufficient Margin Available.",
+            type: 'error',
+          });
+        }
+      } catch (e) {
         setToast({
           visible: true,
-          message: `Order Executed! Bought ${qty} ${symbol.replace('.NS', '')} (${productType.toUpperCase()})`,
-          type: 'success',
-        });
-        setIsBuyModalOpen(false);
-        pan.setValue(0);
-        if (onBuyComplete) onBuyComplete();
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setToast({
-          visible: true,
-          message: "Order Failed: Insufficient Margin Available.",
+          message: "Order Failed: Connection Error.",
           type: 'error',
         });
-        Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
+      } finally {
+        setTimeout(() => {
+          setToast(t => ({ ...t, visible: false }));
+        }, 3500);
       }
-    } catch (e) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setToast({
-        visible: true,
-        message: "Order Failed: Network or Server Error.",
-        type: 'error',
-      });
-      Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
-    } finally {
-      setIsPlacingOrder(false);
-    }
+    })();
   };
 
   confirmActionRef.current = handleConfirmBuy;
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => !isPlacingOrder,
+      onStartShouldSetPanResponder: () => true,
       onPanResponderMove: (_, gestureState) => {
-        if (isPlacingOrder) return;
-        if (gestureState.dx >= 0 && gestureState.dx <= SUCCESS_THRESHOLD) {
-          pan.setValue(gestureState.dx);
+        const clamped = Math.max(0, Math.min(gestureState.dx, SUCCESS_THRESHOLD));
+        pan.setValue(clamped);
 
-          if (Math.abs(gestureState.dx - lastHapticValue.current) > 20) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
-            lastHapticValue.current = gestureState.dx;
-          }
+        if (Math.abs(gestureState.dx - lastHapticValue.current) > 20) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
+          lastHapticValue.current = gestureState.dx;
         }
       },
       onPanResponderRelease: (_, gestureState) => {
-        if (isPlacingOrder) return;
         lastHapticValue.current = 0; 
-        if (gestureState.dx >= SUCCESS_THRESHOLD - 15) {
+        if (gestureState.dx >= SUCCESS_THRESHOLD * 0.65) {
           Animated.spring(pan, { toValue: SUCCESS_THRESHOLD, useNativeDriver: true }).start(() => {
             confirmActionRef.current?.();
           });

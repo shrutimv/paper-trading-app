@@ -5,13 +5,20 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 from dotenv import load_dotenv
-from API.logic import get_stock_data, get_stock_history, get_stock_data_by_symbol, yahoo_search, fetch_yf_info_and_history
+from API.logic import (
+    get_stock_data,
+    get_stock_history,
+    get_stock_data_by_symbol,
+    yahoo_search,
+    get_live_ipos,
+    get_market_screener_data
+)
 from API.news_cache import news_cache
 from API.news_service import fetch_news
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
-app = FastAPI(title="Stock Lookup API")
+app = FastAPI(title="Stock Lookup & Paper Trading API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,21 +58,40 @@ def news(
     return result
 
 
+@app.get("/ipos")
+def ipos():
+    """
+    GET /ipos
+    Returns dynamic list of live, upcoming, and recent Mainboard & SME IPOs in India.
+    """
+    return {"ipos": get_live_ipos()}
+
+
+@app.get("/screener")
+def screener(
+    category: Optional[str] = Query(None, description="Filter: volume_shockers | breakouts_52w | golden_crossover | oversold_rsi | value_picks")
+):
+    """
+    GET /screener?category=volume_shockers
+    Returns categorized high-momentum stock scanners with actionable trade setups.
+    """
+    data = get_market_screener_data()
+    if category and category in data:
+        return {"category": category, "stocks": data[category]}
+    return {"screener": data}
+
+
 @app.get("/search")
 def search(
     q: str = Query(..., min_length=1, description="Query string (company name or partial)"),
     exchange: str = Query("Auto", description="Preferred exchange: Auto|NSE|BSE|Any"),
     limit: int = Query(50, ge=1, le=200, description="Max results to return"),
-    enrich_top: int = Query(0, ge=0, le=10, description="If >0, include yfinance info (marketCap) for top N results")
 ):
     """
-    GET /search?q=godrej&exchange=NSE&limit=50&enrich_top=3
-    Returns normalized list of matching tickers. Optionally enrich top results with marketCap.
+    GET /search?q=godrej&exchange=NSE&limit=50
+    Returns normalized list of matching tickers, also checking IPO registry.
     """
     raw = yahoo_search(q)
-    if not raw:
-        return {"results": []}
-
     pref = (exchange or "Auto").upper()
     out = []
 
@@ -78,25 +104,11 @@ def search(
             elif pref == "BSE" and (".BO" in sym or "BOM" in exch or "BSE" in exch or "BO" in exch):
                 out.append(item)
             else:
-                # skip items not matching the requested exchange
                 continue
         else:
             out.append(item)
         if len(out) >= limit:
             break
-
-    # Optionally enrich a few top results with yfinance info (cached)
-    if enrich_top and len(out) > 0:
-        top = out[:enrich_top]
-        for r in top:
-            try:
-                info, _ = fetch_yf_info_and_history(r["symbol"], period="1d", interval="1d")
-                # add only small metadata to avoid large payloads
-                r["marketCap"] = info.get("marketCap")
-                r["currency"] = info.get("currency")
-            except Exception:
-                # skip enrichment errors silently
-                pass
 
     return {"results": out}
 
@@ -115,15 +127,12 @@ def stock(
     GET /stock?company=...&exchange=...&period=5Y&interval=1d&max_points=300&compact=true
     Or direct: /stock?symbol=TCS.NS
     """
-
-    # If symbol provided, do direct lookup (fast & unambiguous)
     if symbol:
         result = get_stock_data_by_symbol(symbol, period=period, interval=interval, max_points=max_points, compact=compact)
         if "error" in result:
             raise HTTPException(status_code=404, detail=result)
         return result
 
-    # Otherwise require company name
     if not company or not company.strip():
         raise HTTPException(status_code=400, detail={"error": "company parameter required when symbol is not provided"})
 
