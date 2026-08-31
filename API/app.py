@@ -1,6 +1,10 @@
 # app.py
 import os
+import sys
 from pathlib import Path
+# Add the parent directory of this file to sys.path so 'API' imports work from any working directory
+sys.path.append(str(Path(__file__).resolve().parent.parent))
+
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
