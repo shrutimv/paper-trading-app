@@ -281,7 +281,7 @@ export default function ProfileScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={{ gap: 14, paddingTop: 6 }}>
                 <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>📈 CNC vs MIS (Product Types)</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>CNC vs MIS (Product Types)</Text>
                   <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
                     • <Text style={{ fontWeight: '700', color: colors.text }}>CNC (Cash & Carry)</Text>: Delivery trading for multi-day holding. 100% cash margin required.{"\n"}
                     • <Text style={{ fontWeight: '700', color: colors.text }}>MIS (Intraday)</Text>: Same-day trading with <Text style={{ fontWeight: '700', color: '#16a34a' }}>5x leverage (20% margin)</Text>. Must be squared off before 3:30 PM.
@@ -289,21 +289,21 @@ export default function ProfileScreen() {
                 </View>
 
                 <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>🛡️ Stop-Loss (SL) Protection</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>Stop-Loss (SL) Protection</Text>
                   <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
                     Automatically triggers a market sell order if the price falls below your designated trigger price, preserving capital.
                   </Text>
                 </View>
 
                 <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>⏰ Market Hours (NSE / BSE)</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>Market Hours (NSE / BSE)</Text>
                   <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
                     Indian markets operate Monday to Friday from <Text style={{ fontWeight: '700', color: colors.text }}>09:15 AM to 03:30 PM IST</Text>. Outside market hours, last closing session data is displayed.
                   </Text>
                 </View>
 
                 <View style={{ backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>🏆 Rank Advancement & XP</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: colors.text, marginBottom: 4 }}>Rank Advancement & XP</Text>
                   <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 19 }}>
                     Earn XP by completing daily learning roadmap lessons and price action puzzles to climb from Bronze to Diamond rank!
                   </Text>

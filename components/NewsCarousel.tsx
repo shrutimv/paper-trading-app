@@ -10,12 +10,62 @@ import {
   View,
   Image,
   Animated,
+  TextInput,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { fetchNews, type NewsArticle } from "../src/api/newsApi";
 import { useTheme } from "../context/ThemeContext";
 
+const CATEGORIES = [
+  { label: "General", value: "General", sector: undefined, keyword: undefined },
+  { label: "Tech", value: "Tech", sector: "Technology", keyword: undefined },
+  { label: "Finance", value: "Finance", sector: "Finance", keyword: undefined },
+  { label: "Energy", value: "Energy", sector: undefined, keyword: "Energy" },
+  { label: "Automobile", value: "Automobile", sector: undefined, keyword: "Automobile" },
+  { label: "IPOs", value: "IPOs", sector: undefined, keyword: "IPO" },
+];
+
 const AUTO_SCROLL_INTERVAL = 6000;
 const CARD_WIDTH = 300;
+
+function escapeRegExp(string: string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function HighlightedText({
+  text,
+  query,
+  style,
+  highlightStyle,
+}: {
+  text: string;
+  query: string;
+  style: any;
+  highlightStyle?: any;
+}) {
+  if (!query || !query.trim()) {
+    return <Text style={style}>{text}</Text>;
+  }
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const parts = text.split(new RegExp(`(${escapeRegExp(normalizedQuery)})`, "gi"));
+
+  return (
+    <Text style={style}>
+      {parts.map((part, i) => {
+        const isMatch = part.toLowerCase() === normalizedQuery;
+        return (
+          <Text
+            key={i}
+            style={isMatch ? [style, { fontWeight: "800", color: "#2563eb", backgroundColor: "rgba(37, 99, 235, 0.08)" }, highlightStyle] : style}
+          >
+            {part}
+          </Text>
+        );
+      })}
+    </Text>
+  );
+}
 
 function formatDate(dateValue: string) {
   const date = new Date(dateValue);
@@ -79,41 +129,54 @@ function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
 }
 
 export default function NewsCarousel() {
-  const { colors } = useTheme();
-  const styles = getStyles(colors);
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors, isDark);
 
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState("General");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [inputQuery, setInputQuery] = useState("");
+
   const scrollRef = useRef<ScrollView | null>(null);
   const activeIndex = useRef(0);
   const { width } = useWindowDimensions();
   const cardWidth = Math.min(CARD_WIDTH, width * 0.85);
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadNews = async (catVal: string, searchVal: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      let sector: string | undefined = undefined;
+      let keyword: string | undefined = undefined;
 
-    const loadNews = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetchNews();
-        if (!isMounted) return;
-        setArticles(response.articles || []);
-      } catch {
-        if (!isMounted) return;
-        setError("Unable to load market news. Please try again later.");
-      } finally {
-        if (isMounted) setLoading(false);
+      if (searchVal.trim().length > 0) {
+        keyword = searchVal.trim();
+      } else {
+        const cat = CATEGORIES.find((c) => c.value === catVal);
+        if (cat) {
+          sector = cat.sector;
+          keyword = cat.keyword;
+        }
       }
-    };
 
-    loadNews();
+      const response = await fetchNews(sector, keyword);
+      setArticles(response.articles || []);
+      
+      // Reset scroll position to the first card
+      activeIndex.current = 0;
+      scrollRef.current?.scrollTo({ x: 0, y: 0, animated: true });
+    } catch {
+      setError("Unable to load market news. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  useEffect(() => {
+    loadNews(selectedCategory, searchQuery);
+  }, [selectedCategory, searchQuery]);
 
   useEffect(() => {
     if (!articles.length) return;
@@ -130,6 +193,27 @@ export default function NewsCarousel() {
     return () => clearInterval(interval);
   }, [articles.length, cardWidth]);
 
+  const handleSearchSubmit = () => {
+    if (inputQuery.trim().length > 0) {
+      setSelectedCategory("");
+      setSearchQuery(inputQuery);
+    } else {
+      handleClearSearch();
+    }
+  };
+
+  const handleClearSearch = () => {
+    setInputQuery("");
+    setSearchQuery("");
+    setSelectedCategory("General");
+  };
+
+  const handleCategoryPress = (value: string) => {
+    setInputQuery("");
+    setSearchQuery("");
+    setSelectedCategory(value);
+  };
+
   const handleOpen = async (url: string) => {
     try {
       const supported = await Linking.canOpenURL(url);
@@ -141,9 +225,85 @@ export default function NewsCarousel() {
     }
   };
 
+  const activeKeyword = searchQuery || CATEGORIES.find(c => c.value === selectedCategory)?.keyword || "";
+  const qLower = activeKeyword.toLowerCase().trim();
+  const hasDirectMatch = activeKeyword ? articles.some(
+    (article) =>
+      article.title.toLowerCase().includes(qLower) ||
+      article.description.toLowerCase().includes(qLower)
+  ) : true;
+
+  const renderHeader = () => (
+    <View>
+      {/* Search Input Bar */}
+      <View style={[styles.searchBarContainer, { backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "#f8fafc" }]}>
+        <Ionicons name="search-outline" size={18} color={colors.textSecondary} style={styles.searchIcon} />
+        <TextInput
+          style={[styles.searchInput, { color: colors.text }]}
+          placeholder="Search news by keywords (e.g. Zomato, EV)..."
+          placeholderTextColor={colors.textSecondary}
+          value={inputQuery}
+          onChangeText={setInputQuery}
+          onSubmitEditing={handleSearchSubmit}
+          returnKeyType="search"
+        />
+        {(inputQuery.length > 0 || searchQuery.length > 0) && (
+          <TouchableOpacity onPress={handleClearSearch} style={styles.clearBtn}>
+            <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Category Chips row */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsContent}
+        style={styles.chipsScrollView}
+      >
+        {CATEGORIES.map((cat) => {
+          const isActive = selectedCategory === cat.value && searchQuery === "";
+          return (
+            <TouchableOpacity
+              key={cat.value}
+              onPress={() => handleCategoryPress(cat.value)}
+              style={[
+                styles.chip,
+                isActive ? styles.chipActive : styles.chipInactive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  isActive ? styles.chipTextActive : styles.chipTextInactive,
+                ]}
+              >
+                {cat.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {/* Direct Match Warning Banner */}
+      {activeKeyword !== "" && !hasDirectMatch && articles.length > 0 && (
+        <View style={styles.noMatchBanner}>
+          <Ionicons name="information-circle-outline" size={16} color={isDark ? "#fbbf24" : "#b45309"} style={{ marginRight: 6 }} />
+          <Text style={styles.noMatchBannerText}>
+            {searchQuery 
+              ? `No direct matches found for "${searchQuery}". Showing related market news.`
+              : `Showing related news for ${selectedCategory}.`
+            }
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.container}>
+        {renderHeader()}
         <NewsSkeleton cardWidth={cardWidth} />
       </View>
     );
@@ -151,22 +311,36 @@ export default function NewsCarousel() {
 
   if (error) {
     return (
-      <View style={styles.stateContainer}>
-        <Text style={[styles.stateText, { color: "#b91c1c" }]}>{error}</Text>
+      <View style={styles.container}>
+        {renderHeader()}
+        <View style={styles.stateContainer}>
+          <Text style={[styles.stateText, { color: "#b91c1c" }]}>{error}</Text>
+          <TouchableOpacity onPress={handleClearSearch} style={styles.resetBtn}>
+            <Text style={styles.resetBtnText}>Retry News</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   if (!articles.length) {
     return (
-      <View style={styles.stateContainer}>
-        <Text style={styles.stateText}>No news available right now.</Text>
+      <View style={styles.container}>
+        {renderHeader()}
+        <View style={styles.stateContainer}>
+          <Ionicons name="newspaper-outline" size={44} color={colors.textSecondary} style={{ marginBottom: 12 }} />
+          <Text style={styles.stateText}>No articles found matching your criteria.</Text>
+          <TouchableOpacity onPress={handleClearSearch} style={styles.resetBtn}>
+            <Text style={styles.resetBtnText}>Clear Search & Filters</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
+      {renderHeader()}
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -190,12 +364,18 @@ export default function NewsCarousel() {
               </View>
             )}
             <View style={styles.cardBody}>
-              <Text style={styles.cardTitle} numberOfLines={2}>
-                {article.title}
-              </Text>
-              <Text style={styles.cardDescription} numberOfLines={3}>
-                {article.description}
-              </Text>
+              <HighlightedText
+                text={article.title}
+                query={activeKeyword}
+                style={styles.cardTitle}
+                highlightStyle={{ backgroundColor: "rgba(37, 99, 235, 0.12)" }}
+              />
+              <HighlightedText
+                text={article.description}
+                query={activeKeyword}
+                style={styles.cardDescription}
+                highlightStyle={{ backgroundColor: "rgba(37, 99, 235, 0.12)" }}
+              />
               <Text style={styles.cardDate}>{formatDate(article.published_at)}</Text>
             </View>
           </TouchableOpacity>
@@ -205,9 +385,9 @@ export default function NewsCarousel() {
   );
 }
 
-const getStyles = (colors: any) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: {
-    paddingTop: 12,
+    paddingTop: 4,
     paddingBottom: 24,
   },
   scrollContent: {
@@ -243,6 +423,7 @@ const getStyles = (colors: any) => StyleSheet.create({
   },
   cardBody: {
     padding: 16,
+    minHeight: 150,
   },
   cardTitle: {
     fontSize: 15,
@@ -261,14 +442,106 @@ const getStyles = (colors: any) => StyleSheet.create({
     color: colors.textSecondary,
   },
   stateContainer: {
-    minHeight: 120,
+    minHeight: 180,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
   stateText: {
-    marginTop: 8,
     fontSize: 14,
     color: colors.textSecondary,
+    textAlign: "center",
+  },
+  searchBarContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    paddingHorizontal: 12,
+    height: 46,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "500",
+    height: "100%",
+    paddingVertical: 8,
+  },
+  clearBtn: {
+    padding: 6,
+  },
+  chipsScrollView: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  chipsContent: {
+    paddingRight: 8,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  chipActive: {
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
+  },
+  chipInactive: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+  },
+  chipText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  chipTextActive: {
+    color: "#ffffff",
+  },
+  chipTextInactive: {
+    color: colors.textSecondary,
+  },
+  resetBtn: {
+    marginTop: 16,
+    backgroundColor: "#2563eb",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    shadowColor: "#2563eb",
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  resetBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 13,
+  },
+  noMatchBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 10,
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    backgroundColor: isDark ? "rgba(217, 119, 6, 0.1)" : "#fef3c7",
+    borderColor: isDark ? "rgba(217, 119, 6, 0.2)" : "#fde68a",
+  },
+  noMatchBannerText: {
+    fontSize: 12,
+    fontWeight: "600",
+    flex: 1,
+    color: isDark ? "#fbbf24" : "#b45309",
   },
 });

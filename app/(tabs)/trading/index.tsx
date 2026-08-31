@@ -442,7 +442,7 @@ export default function TradingDashboard() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setToast({
       visible: true,
-      message: `IPO Bid Placed for ${selectedIpo.name}! (+50 XP) 🚀`,
+      message: `IPO Bid Placed for ${selectedIpo.name}! (+50 XP)`,
       type: 'success',
     });
   };
@@ -745,7 +745,7 @@ export default function TradingDashboard() {
                   onPress={() => setIpoTab('live')}
                 >
                   <Text style={[styles.ipoNavText, ipoTab === 'live' && styles.ipoNavTextActive]}>
-                    🔥 Live & Upcoming ({ipos.length})
+                    Live & Upcoming ({ipos.length})
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
@@ -753,7 +753,7 @@ export default function TradingDashboard() {
                   onPress={() => setIpoTab('myBids')}
                 >
                   <Text style={[styles.ipoNavText, ipoTab === 'myBids' && styles.ipoNavTextActive]}>
-                    📋 My Bids ({myApplications.length})
+                    My Bids ({myApplications.length})
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -811,7 +811,7 @@ export default function TradingDashboard() {
                       {/* HIGHLIGHTS */}
                       {ipo.highlights && (
                         <Text style={styles.ipoHighlightsText} numberOfLines={2}>
-                          💡 {ipo.highlights}
+                          {ipo.highlights}
                         </Text>
                       )}
 
@@ -827,7 +827,7 @@ export default function TradingDashboard() {
                       ) : (
                         <View style={styles.ipoUpcomingBanner}>
                           <Text style={styles.ipoUpcomingBannerText}>
-                            {isUpcoming ? '🔔 Bidding opens soon • Notifications active' : 'Closed for subscription'}
+                            {isUpcoming ? 'Bidding opens soon • Notifications active' : 'Closed for subscription'}
                           </Text>
                         </View>
                       )}

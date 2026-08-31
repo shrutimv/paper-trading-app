@@ -118,7 +118,7 @@ export default function Home() {
           <TouchableOpacity 
             activeOpacity={0.8}
             onPress={() => Alert.alert(
-              "🔥 11-Day Trading Streak!", 
+              "11-Day Trading Streak!", 
               "You're on fire! Complete daily puzzles and paper trades to maintain your streak multiplier and advance to the next rank."
             )}
             style={{ flex: 1 }}

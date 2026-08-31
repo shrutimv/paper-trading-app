@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 import requests
 
 NEWSAPI_URL = "https://newsapi.org/v2/everything"
-BASE_QUERY = "Indian stock market"
+BASE_QUERY = '("stock market" OR "stocks" OR "Sensex" OR "Nifty" OR "NSE" OR "BSE" OR "share market" OR "equities" OR "equity market" OR "IPO") AND (India OR Indian)'
 
 
 def _load_news_api_key() -> str:
@@ -19,11 +19,11 @@ def _load_news_api_key() -> str:
 def _build_query(sector: Optional[str], industry: Optional[str], keyword: Optional[str]) -> str:
     query_parts = [BASE_QUERY]
     if sector:
-        query_parts.append(str(sector).strip())
+        query_parts.append(f'AND ("{sector.strip()}")')
     if industry:
-        query_parts.append(str(industry).strip())
+        query_parts.append(f'AND ("{industry.strip()}")')
     if keyword:
-        query_parts.append(str(keyword).strip())
+        query_parts.append(f'AND ("{keyword.strip()}")')
     return " ".join([part for part in query_parts if part])
 
 
@@ -46,6 +46,7 @@ def fetch_news(
     query = _build_query(sector, industry, keyword)
     params = {
         "q": query,
+        "searchIn": "title,description",
         "apiKey": api_key,
         "language": "en",
         "sortBy": "publishedAt",

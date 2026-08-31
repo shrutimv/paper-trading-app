@@ -81,7 +81,7 @@ export default function CoursesScreen() {
         <TouchableOpacity 
           style={styles.notificationBtn} 
           onPress={() => Alert.alert(
-            "🔔 Learning Notifications",
+            "Learning Notifications",
             "• New module added: Derivatives & Options Strategy!\n• Complete your Daily Puzzle to earn +50 XP.\n• Pro Tip: Always define your risk-to-reward ratio before trading."
           )}
         >

@@ -30,7 +30,7 @@ export default function LevelProgressBar() {
           {nextRank.minXp - xp} XP to reach <Text style={{ fontWeight: '800', color: nextRank.color }}>{nextRank.name}</Text>
         </Text>
       ) : (
-        <Text style={styles.footerText}>Max Rank Achieved! 🏆</Text>
+        <Text style={styles.footerText}>Max Rank Achieved!</Text>
       )}
     </View>
   );
