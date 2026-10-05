@@ -85,7 +85,7 @@ export default function LearnScreen() {
           style={[styles.quizBtn, { backgroundColor: theme.dark }]} 
           onPress={() => router.replace({ pathname: "/quiz", params: { moduleId: idKey, level: level } })}
         >
-          <Text style={styles.btnText}>Start Quiz 📝</Text>
+          <Text style={styles.btnText}>Start Quiz</Text>
         </TouchableOpacity>
       </View>
     </View>

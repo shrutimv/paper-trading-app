@@ -93,7 +93,7 @@ export default function CoursesScreen() {
       <View style={styles.searchWrap}>
         <MaterialIcons name="search" size={20} color="#64748B" />
         <TextInput
-          placeholder="Search topics (e.g. 'Options')"
+          placeholder="Search courses or topics..."
           placeholderTextColor="#94A3B8"
           value={search}
           onChangeText={setSearch}

@@ -116,6 +116,18 @@ def fetch_chart_data(symbol: str, period: str = "5d", interval: str = "15m") -> 
     Handles fallbacks to ensure charts show data even outside active market hours.
     """
     raw_sym = symbol.strip().upper()
+    
+    # Map period aliases to Yahoo Finance valid range strings
+    period_map = {
+        "1m": "1mo",
+        "6m": "6mo",
+        "1y": "1y",
+        "5y": "5y",
+        "1d": "1d",
+        "5d": "5d",
+    }
+    clean_period = period_map.get(period.lower(), period)
+
     candidates = [SYMBOL_ALIASES.get(raw_sym, raw_sym)]
     if not raw_sym.endswith(".NS") and not raw_sym.endswith(".BO"):
         candidates.append(f"{raw_sym}.NS")
@@ -124,7 +136,7 @@ def fetch_chart_data(symbol: str, period: str = "5d", interval: str = "15m") -> 
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     for clean_sym in candidates:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(clean_sym)}?range={period}&interval={interval}&includePrePost=false"
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(clean_sym)}?range={clean_period}&interval={interval}&includePrePost=false"
         try:
             resp = requests.get(url, headers=headers, timeout=8)
             data = resp.json()

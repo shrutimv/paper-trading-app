@@ -82,7 +82,7 @@ export default function HoldingsScreen() {
 
     const success = await sellStock(selectedHolding.symbol, effectivePrice, qty, selectedHolding.productType || 'cnc');
     if (success) {
-      Alert.alert("Trade Successful! 💰", `Sold ${qty} shares of ${selectedHolding.symbol.replace('.NS', '')} for ${formatCurrency(effectivePrice * qty)}`);
+      Alert.alert("Trade Successful!", `Sold ${qty} shares of ${selectedHolding.symbol.replace('.NS', '')} for ${formatCurrency(effectivePrice * qty)}`);
       setIsSellModalOpen(false);
     } else {
       Alert.alert("Trade Failed", "Something went wrong executing the sell order.");

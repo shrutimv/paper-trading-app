@@ -9,9 +9,42 @@ const PUZZLES = [
   {
     id: 1,
     title: "The Hammer Reversal",
-    description: "After a steady downtrend, this candle formed. What happens next?",
+    description: "After a 4-day steep downtrend, a Hammer candlestick forms right at major support. What is the expected price direction?",
     correctAnswer: 'UP',
-    explanation: "Correct! This is a Hammer pattern. The long lower wick shows buyers rejected the lower prices, signaling a bullish reversal."
+    pattern: "HAMMER REVERSAL",
+    explanation: "Correct! The long lower wick shows heavy rejection of low prices by buyers at key support, signaling a strong bullish reversal."
+  },
+  {
+    id: 2,
+    title: "Shooting Star at Resistance",
+    description: "The stock rallied +8% into a key 52-week high resistance, forming a candle with a long upper tail and tiny body. What next?",
+    correctAnswer: 'DOWN',
+    pattern: "SHOOTING STAR",
+    explanation: "Correct! The long upper wick shows sellers aggressively rejected high prices at resistance, signaling a bearish pullback."
+  },
+  {
+    id: 3,
+    title: "Bullish Engulfing Pattern",
+    description: "A large green candle completely covers the previous red candle's body after consolidation. What should a trader do?",
+    correctAnswer: 'UP',
+    pattern: "BULLISH ENGULFING",
+    explanation: "Correct! A Bullish Engulfing pattern confirms buyers have seized complete control from sellers, triggering an upside breakout."
+  },
+  {
+    id: 4,
+    title: "Head & Shoulders Breakdown",
+    description: "Price breaks below the key neckline of a classic Head & Shoulders pattern on 3x average volume. Predict the move:",
+    correctAnswer: 'DOWN',
+    pattern: "BEARISH BREAKDOWN",
+    explanation: "Correct! Head & Shoulders neckline breakdown with high volume is one of the most reliable bearish trend reversal signals."
+  },
+  {
+    id: 5,
+    title: "Golden Crossover (50/200 EMA)",
+    description: "The 50-day moving average crosses above the 200-day moving average on daily charts. What trend does this confirm?",
+    correctAnswer: 'UP',
+    pattern: "GOLDEN CROSSOVER",
+    explanation: "Correct! Golden Crossover is the ultimate institutional confirmation of a long-term bullish trend start!"
   }
 ];
 
@@ -23,6 +56,8 @@ export default function PlayPuzzleScreen() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedGuess, setSelectedGuess] = useState<'UP' | 'DOWN' | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [score, setScore] = useState(0);
+  const [hearts, setHearts] = useState(3);
 
   const popAnim = useRef(new Animated.Value(0)).current;
   const currentPuzzle = PUZZLES[currentIndex];
@@ -33,14 +68,25 @@ export default function PlayPuzzleScreen() {
     setShowResult(true);
 
     if (guess === currentPuzzle.correctAnswer) {
-      addXp(100); 
+      addXp(50); 
+      setScore(prev => prev + 1);
+    } else {
+      setHearts(prev => Math.max(0, prev - 1));
     }
 
     Animated.spring(popAnim, { toValue: 1, friction: 6, tension: 40, useNativeDriver: true }).start();
   };
 
   const nextPuzzle = () => {
-    router.back(); 
+    setShowResult(false);
+    setSelectedGuess(null);
+    popAnim.setValue(0);
+    
+    if (currentIndex < PUZZLES.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    } else {
+      router.back();
+    }
   };
 
   return (
@@ -52,18 +98,40 @@ export default function PlayPuzzleScreen() {
           <Ionicons name="close" size={24} color="#64748B" />
         </TouchableOpacity>
         <View style={styles.progressBarBg}>
-           <View style={styles.progressBarFill} />
+           <View style={[styles.progressBarFill, { width: `${((currentIndex + 1) / PUZZLES.length) * 100}%` }]} />
         </View>
-        <Ionicons name="heart" size={24} color="#EF4444" />
+        <View style={{ flexDirection: 'row', gap: 2 }}>
+          {[1, 2, 3].map(h => (
+            <Ionicons key={h} name="heart" size={20} color={h <= hearts ? "#EF4444" : "#CBD5E1"} />
+          ))}
+        </View>
       </View>
 
       <View style={styles.content}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', letterSpacing: 1 }}>
+            STAGE {currentIndex + 1} OF {PUZZLES.length}
+          </Text>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
+            SCORE: {score} / {PUZZLES.length}
+          </Text>
+        </View>
+
         <Text style={styles.puzzleTitle}>{currentPuzzle.title}</Text>
         <Text style={styles.puzzleDesc}>{currentPuzzle.description}</Text>
 
         <View style={styles.chartContainer}>
-          <Ionicons name="bar-chart" size={80} color="#CBD5E1" />
-          <Text style={{ color: '#94A3B8', marginTop: 10, fontWeight: '700' }}>[Candlestick Snapshot Here]</Text>
+          <View style={styles.patternBadge}>
+            <Text style={styles.patternBadgeText}>{currentPuzzle.pattern}</Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginVertical: 14 }}>
+            <Ionicons name="stats-chart" size={90} color={currentPuzzle.correctAnswer === 'UP' ? '#10B981' : '#EF4444'} />
+          </View>
+
+          <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 13 }}>
+            Identify technical pattern direction
+          </Text>
         </View>
 
         {/* 3D ACTION BUTTONS */}
@@ -79,7 +147,7 @@ export default function PlayPuzzleScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="trending-up" size={32} color={selectedGuess === 'UP' ? '#fff' : '#10B981'} />
-            <Text style={[styles.guessBtnText, { color: selectedGuess === 'UP' ? '#fff' : '#10B981' }]}>BULLISH</Text>
+            <Text style={[styles.guessBtnText, { color: selectedGuess === 'UP' ? '#fff' : '#10B981' }]}>BULLISH (UP)</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -153,6 +221,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
+    position: 'relative',
+  },
+  patternBadge: {
+    position: 'absolute',
+    top: 14,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  patternBadgeText: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#2563eb',
+    letterSpacing: 0.8,
   },
   
   buttonRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 16 },

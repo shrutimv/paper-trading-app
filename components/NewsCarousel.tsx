@@ -240,7 +240,7 @@ export default function NewsCarousel() {
         <Ionicons name="search-outline" size={18} color={colors.textSecondary} style={styles.searchIcon} />
         <TextInput
           style={[styles.searchInput, { color: colors.text }]}
-          placeholder="Search news by keywords (e.g. Zomato, EV)..."
+          placeholder="Search market news by keywords..."
           placeholderTextColor={colors.textSecondary}
           value={inputQuery}
           onChangeText={setInputQuery}

@@ -15,12 +15,29 @@ export type Holding = {
 };
 export type WatchlistStock = { symbol: string; shortname: string; exchange: string; };
 
+export type Transaction = {
+  _id?: string;
+  id?: string;
+  symbol: string;
+  companyName?: string;
+  type: 'BUY' | 'SELL';
+  productType?: 'cnc' | 'mis';
+  quantity: number;
+  price: number;
+  totalAmount: number;
+  stopLoss?: number;
+  status?: string;
+  createdAt: string;
+  pnl?: number;
+};
+
 type TradingContextType = {
   isGuest?: boolean;
   setIsGuest?: React.Dispatch<React.SetStateAction<boolean>>;
   balance: number;
   holdings: Holding[];
   watchlist: WatchlistStock[];
+  transactions: Transaction[];
   buyStock: (
     symbol: string, 
     name: string, 
@@ -40,6 +57,7 @@ type TradingContextType = {
   totalInvestment: number;
   setHoldings: React.Dispatch<React.SetStateAction<Holding[]>>;
   setBalance: React.Dispatch<React.SetStateAction<number>>;
+  fetchTransactions: () => Promise<void>;
 };
 
 const TradingContext = createContext<TradingContextType | undefined>(undefined);
@@ -50,29 +68,45 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
   const [balance, setBalance] = useState<number>(STARTING_BALANCE);
   const [holdings, setHoldings] = useState<Holding[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  const fetchTransactions = async () => {
+    try {
+      if (user && !isGuest) {
+        const res = await axios.get(`${BASE_URL}/api/trade/history`, { withCredentials: true });
+        if (res.data && Array.isArray(res.data.transactions)) {
+          setTransactions(res.data.transactions);
+          return;
+        }
+      }
+      const storageKey = user && !isGuest ? `paper_tx_${user.id || 'user'}` : 'paper_transactions';
+      const savedTx = await AsyncStorage.getItem(storageKey);
+      if (savedTx) {
+        setTransactions(JSON.parse(savedTx));
+      }
+    } catch (e) {
+      console.log("Error loading transaction history:", e);
+    }
+  };
 
   // Load Saved Data or Sync with Backend User
   useEffect(() => {
     const loadData = async () => {
       try {
         if (user && !isGuest) {
-          // Logged in user: set balance from backend user
           if (typeof user.balance === 'number') {
             setBalance(user.balance);
           }
-          // Fetch holdings from backend if available
           try {
             const res = await axios.get(`${BASE_URL}/api/trade/holdings`, { withCredentials: true });
             if (res.data && Array.isArray(res.data.holdings)) {
               setHoldings(res.data.holdings);
             }
           } catch {
-            // Fallback to local storage if holdings endpoint is not populated yet
             const savedHoldings = await AsyncStorage.getItem(`paper_holdings_${user.id || 'user'}`);
             if (savedHoldings) setHoldings(JSON.parse(savedHoldings));
           }
         } else {
-          // Guest mode: load from AsyncStorage
           const savedBalance = await AsyncStorage.getItem('paper_balance');
           const savedHoldings = await AsyncStorage.getItem('paper_holdings');
           const savedWatchlist = await AsyncStorage.getItem('paper_watchlist');
@@ -81,6 +115,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
           if (savedHoldings !== null) setHoldings(JSON.parse(savedHoldings));
           if (savedWatchlist !== null) setWatchlist(JSON.parse(savedWatchlist));
         }
+        await fetchTransactions();
       } catch (e) { 
         console.error("Failed to load trading data", e); 
       }
@@ -92,6 +127,9 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     const saveData = async () => {
       try {
+        const txKey = user && !isGuest ? `paper_tx_${user.id || 'user'}` : 'paper_transactions';
+        await AsyncStorage.setItem(txKey, JSON.stringify(transactions));
+
         if (user && !isGuest) {
           await AsyncStorage.setItem(`paper_holdings_${user.id || 'user'}`, JSON.stringify(holdings));
           await AsyncStorage.setItem(`paper_watchlist_${user.id || 'user'}`, JSON.stringify(watchlist));
@@ -105,7 +143,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       }
     };
     saveData();
-  }, [balance, holdings, watchlist, user, isGuest]);
+  }, [balance, holdings, watchlist, transactions, user, isGuest]);
 
   // --- Watchlist Actions ---
   const addToWatchlist = (stock: WatchlistStock) => {
@@ -132,7 +170,20 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     
     if (balance < cost) return false;
 
-    // If user is logged in, attempt backend API record
+    let newTx: Transaction = {
+      id: Date.now().toString(),
+      symbol,
+      companyName: name || symbol,
+      type: 'BUY',
+      productType,
+      quantity,
+      price,
+      totalAmount: totalValue,
+      stopLoss,
+      status: 'EXECUTED',
+      createdAt: new Date().toISOString(),
+    };
+
     if (user && !isGuest) {
       try {
         const response = await axios.post(
@@ -145,6 +196,13 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
         } else {
           setBalance(prev => prev - cost);
         }
+        if (response.data?.transaction) {
+          newTx = {
+            ...response.data.transaction,
+            id: response.data.transaction._id || Date.now().toString(),
+            createdAt: response.data.transaction.createdAt || new Date().toISOString()
+          };
+        }
         if (refreshUser) await refreshUser();
       } catch (err) {
         console.log("Backend trade buy failed, recording locally", err);
@@ -153,6 +211,8 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     } else {
       setBalance(prev => prev - cost);
     }
+
+    setTransactions(prev => [newTx, ...prev]);
 
     setHoldings(prev => {
       const existing = prev.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
@@ -184,7 +244,22 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       revenue = (price * quantity) - (existing.averagePrice * quantity * 0.80);
     }
 
-    // If user is logged in, attempt backend API record
+    const calculatedPnl = (price - existing.averagePrice) * quantity;
+
+    let newTx: Transaction = {
+      id: Date.now().toString(),
+      symbol,
+      companyName: existing.name || symbol,
+      type: 'SELL',
+      productType,
+      quantity,
+      price,
+      totalAmount: price * quantity,
+      status: 'EXECUTED',
+      createdAt: new Date().toISOString(),
+      pnl: calculatedPnl,
+    };
+
     if (user && !isGuest) {
       try {
         const response = await axios.post(
@@ -197,6 +272,14 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
         } else {
           setBalance(prev => prev + revenue);
         }
+        if (response.data?.transaction) {
+          newTx = {
+            ...response.data.transaction,
+            id: response.data.transaction._id || Date.now().toString(),
+            createdAt: response.data.transaction.createdAt || new Date().toISOString(),
+            pnl: calculatedPnl,
+          };
+        }
         if (refreshUser) await refreshUser();
       } catch (err) {
         console.log("Backend trade sell failed, recording locally", err);
@@ -205,6 +288,8 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     } else {
       setBalance(prev => prev + revenue);
     }
+
+    setTransactions(prev => [newTx, ...prev]);
 
     setHoldings(prev => {
       if (existing.quantity === quantity) {
@@ -229,13 +314,15 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       balance, 
       holdings, 
       watchlist, 
+      transactions,
       buyStock, 
       sellStock, 
       addToWatchlist, 
       removeFromWatchlist, 
       totalInvestment,
       setHoldings,
-      setBalance
+      setBalance,
+      fetchTransactions
     }}>
       {children}
     </TradingContext.Provider>

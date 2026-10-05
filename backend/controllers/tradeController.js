@@ -222,3 +222,17 @@ module.exports.getHoldings = async (req, res) => {
     res.status(500).json({ message: "Unable to fetch holdings." });
   }
 };
+
+module.exports.getTransactionHistory = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({
+      user: req.user._id,
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({ success: true, transactions });
+  } catch (err) {
+    console.error("getTransactionHistory error:", err);
+    res.status(500).json({ message: "Unable to fetch transaction history." });
+  }
+};
+

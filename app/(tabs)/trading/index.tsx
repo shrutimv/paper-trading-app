@@ -90,7 +90,7 @@ export default function TradingDashboard() {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
 
-  const { balance, holdings, buyStock, sellStock, totalInvestment, setHoldings, setBalance } = useTrading();
+  const { balance, holdings, transactions, buyStock, sellStock, totalInvestment, setHoldings, setBalance } = useTrading();
   const { xp, proMode, addXp } = useGamification();
 
   // Gamification states
@@ -99,6 +99,8 @@ export default function TradingDashboard() {
   const intradayUnlocked = proMode || xp >= 3000;
 
   // Main Top Segment Switcher
+  const [topViewTab, setTopViewTab] = useState<'terminal' | 'logs'>('terminal');
+  const [logFilter, setLogFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
   const [mainTab, setMainTab] = useState<'screener' | 'ipos' | 'portfolio'>('screener');
 
   // Screener Filter Category
@@ -503,44 +505,199 @@ export default function TradingDashboard() {
           
           {/* HEADER SECTION */}
           <View style={styles.headerRow}>
-            <View>
+            <TouchableOpacity onPress={() => router.push('/(tabs)')}>
               <Text style={styles.greeting}>MARKET INTELLIGENCE</Text>
               <Text style={styles.username}>Trading Desk</Text>
-            </View>
+            </TouchableOpacity>
             
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
               <TouchableOpacity 
-                style={styles.compareHeaderBtn}
+                style={styles.redStudioHeaderBtn}
                 onPress={() => router.push('/compare')}
               >
-                <Ionicons name="git-compare-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
-                <Text style={styles.compareHeaderBtnText}>Studio</Text>
+                <Ionicons name="git-compare-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
+                <Text style={styles.redStudioHeaderBtnText}>Studio</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.simulateBtn} onPress={handleMarketCloseSimulation}>
-                <Ionicons name="time-outline" size={16} color="#fff" style={{ marginRight: 4 }} />
+                <Ionicons name="time-outline" size={14} color="#ef4444" style={{ marginRight: 4 }} />
                 <Text style={styles.simulateBtnText}>End Day</Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* 1. PORTFOLIO WALLET CARD */}
+          {/* ── TOP VIEW TABS (MATCHING REFERENCE IMAGE) ── */}
+          <View style={styles.topTabBar}>
+            <TouchableOpacity 
+              style={[styles.topTabBtn, topViewTab === 'terminal' && styles.topTabBtnActive]} 
+              onPress={() => setTopViewTab('terminal')}
+              activeOpacity={0.8}
+            >
+              <Ionicons 
+                name="stats-chart" 
+                size={18} 
+                color={topViewTab === 'terminal' ? colors.accent : colors.textSecondary} 
+                style={{ marginBottom: 4 }}
+              />
+              <Text style={[styles.topTabText, topViewTab === 'terminal' && styles.topTabTextActive]}>
+                LIVE TERMINAL
+              </Text>
+              {topViewTab === 'terminal' && <View style={styles.topTabIndicator} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.topTabBtn, topViewTab === 'logs' && styles.topTabBtnActive]} 
+              onPress={() => setTopViewTab('logs')}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <Ionicons 
+                  name="receipt" 
+                  size={18} 
+                  color={topViewTab === 'logs' ? colors.accent : colors.textSecondary} 
+                />
+                {transactions.length > 0 && (
+                  <View style={styles.topTabBadge}>
+                    <Text style={styles.topTabBadgeText}>{transactions.length}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.topTabText, topViewTab === 'logs' && styles.topTabTextActive]}>
+                TRADE LOGS
+              </Text>
+              {topViewTab === 'logs' && <View style={styles.topTabIndicator} />}
+            </TouchableOpacity>
+          </View>
+
+          {topViewTab === 'logs' ? (
+            <View style={{ marginTop: 10, marginBottom: 40 }}>
+              {/* SUMMARY STATS BAR */}
+              <View style={styles.logStatsBar}>
+                <View style={styles.logStatBox}>
+                  <Text style={styles.logStatNumber}>{transactions.length}</Text>
+                  <Text style={styles.logStatLabel}>Executed</Text>
+                </View>
+                <View style={styles.logStatDivider} />
+                <View style={styles.logStatBox}>
+                  <Text style={[styles.logStatNumber, { color: "#10B981" }]}>
+                    {transactions.filter((t) => t.type === "BUY").length}
+                  </Text>
+                  <Text style={styles.logStatLabel}>Buys</Text>
+                </View>
+                <View style={styles.logStatDivider} />
+                <View style={styles.logStatBox}>
+                  <Text style={[styles.logStatNumber, { color: "#EF4444" }]}>
+                    {transactions.filter((t) => t.type === "SELL").length}
+                  </Text>
+                  <Text style={styles.logStatLabel}>Sells</Text>
+                </View>
+              </View>
+
+              {/* FILTER CHIPS */}
+              <View style={styles.logFilterRow}>
+                {(["ALL", "BUY", "SELL"] as const).map((chip) => {
+                  const isActive = logFilter === chip;
+                  return (
+                    <TouchableOpacity
+                      key={chip}
+                      onPress={() => setLogFilter(chip)}
+                      style={[styles.logFilterChip, isActive && styles.activeLogFilterChip]}
+                    >
+                      <Text style={[styles.logFilterChipText, isActive && styles.activeLogFilterChipText]}>
+                        {chip === "ALL" ? "All Orders" : chip === "BUY" ? "Buys" : "Sells"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* TRANSACTIONS LIST */}
+              {transactions.filter(t => logFilter === 'ALL' || t.type === logFilter).length === 0 ? (
+                <View style={styles.emptyLogCard}>
+                  <Ionicons name="receipt-outline" size={40} color={colors.textSecondary} style={{ marginBottom: 8 }} />
+                  <Text style={styles.emptyLogTitle}>No trade logs recorded yet</Text>
+                  <Text style={styles.emptyLogSub}>Execute a buy or sell trade in the Live Terminal to view order execution logs here.</Text>
+                </View>
+              ) : (
+                transactions
+                  .filter(t => logFilter === 'ALL' || t.type === logFilter)
+                  .map((item, idx) => {
+                    const isBuy = item.type === "BUY";
+                    const badgeColor = isBuy ? "#10B981" : "#EF4444";
+                    const badgeBg = isBuy
+                      ? isDark ? "rgba(16, 185, 129, 0.15)" : "#dcfce7"
+                      : isDark ? "rgba(239, 68, 68, 0.15)" : "#fee2e2";
+
+                    return (
+                      <View key={item.id || item._id || idx.toString()} style={styles.logOrderCard}>
+                        <View style={styles.logCardHeader}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.logSymbolText}>{item.symbol}</Text>
+                            <Text style={styles.logCompanyName} numberOfLines={1}>
+                              {item.companyName || item.symbol}
+                            </Text>
+                          </View>
+
+                          <View style={[styles.logBadge, { backgroundColor: badgeBg }]}>
+                            <Ionicons name={isBuy ? "arrow-up" : "arrow-down"} size={12} color={badgeColor} />
+                            <Text style={[styles.logBadgeText, { color: badgeColor }]}>{item.type}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.logMetricsRow}>
+                          <View style={styles.logMetricItem}>
+                            <Text style={styles.logMetricLabel}>Price</Text>
+                            <Text style={styles.logMetricValue}>{formatCurrency(item.price)}</Text>
+                          </View>
+                          <View style={styles.logMetricItem}>
+                            <Text style={styles.logMetricLabel}>Qty</Text>
+                            <Text style={styles.logMetricValue}>{item.quantity}</Text>
+                          </View>
+                          <View style={styles.logMetricItem}>
+                            <Text style={styles.logMetricLabel}>Total</Text>
+                            <Text style={styles.logMetricValue}>{formatCurrency(item.totalAmount)}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.logCardFooter}>
+                          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                            <View style={styles.logProductPill}>
+                              <Text style={styles.logProductPillText}>{(item.productType || "cnc").toUpperCase()}</Text>
+                            </View>
+                            {item.stopLoss ? (
+                              <View style={styles.logStopLossPill}>
+                                <Text style={styles.logStopLossText}>SL: ₹{item.stopLoss}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={styles.logDateText}>
+                            {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })
+              )}
+            </View>
+          ) : (
+            <View>
+              {/* 1. PORTFOLIO WALLET CARD */}
           <View style={styles.walletCard}>
             <View style={styles.walletHeader}>
-              <Text style={styles.walletLabel}>TOTAL BALANCE (MARGIN)</Text>
+              <Text style={styles.walletLabel}>AVAILABLE CASH BALANCE</Text>
               <View style={styles.statusPill}>
                 <View style={styles.statusDot} />
                 <Text style={styles.statusText}>Live SIM</Text>
               </View>
             </View>
-            <Text style={styles.walletAmount}>{formatCurrency(balance + totalInvestment)}</Text>
+            <Text style={styles.walletAmount}>{formatCurrency(balance)}</Text>
             
             <View style={styles.walletDivider} />
 
             <View style={styles.walletGrid}>
               <View>
-                <Text style={styles.gridLabel}>Available Cash</Text>
-                <Text style={styles.gridValue}>{formatCurrency(balance)}</Text>
+                <Text style={styles.gridLabel}>Total Portfolio Value (Cash + Stocks)</Text>
+                <Text style={styles.gridValue}>{formatCurrency(balance + totalInvestment)}</Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text style={styles.gridLabel}>Invested Margin</Text>
@@ -553,7 +710,7 @@ export default function TradingDashboard() {
           <View style={styles.searchWrap}>
             <Ionicons name="search" size={20} color={colors.textSecondary} style={{ marginRight: 10 }} />
             <TextInput
-              placeholder="Search stocks or IPOs (e.g. Ardee, Swiggy, INFY)"
+              placeholder="Search stocks or IPOs..."
               placeholderTextColor={colors.textSecondary}
               style={styles.searchInput}
               value={searchQuery}
@@ -618,9 +775,9 @@ export default function TradingDashboard() {
               style={[styles.mainSegmentBtn, mainTab === 'screener' && styles.mainSegmentBtnActive]}
               onPress={() => setMainTab('screener')}
             >
-              <Ionicons name="trending-up" size={16} color={mainTab === 'screener' ? '#fff' : colors.textSecondary} style={{ marginRight: 6 }} />
+              <Ionicons name="trending-up" size={16} color={mainTab === 'screener' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
               <Text style={[styles.mainSegmentText, mainTab === 'screener' && styles.mainSegmentTextActive]}>
-                Top Movers
+                Movers
               </Text>
             </TouchableOpacity>
 
@@ -628,9 +785,9 @@ export default function TradingDashboard() {
               style={[styles.mainSegmentBtn, mainTab === 'ipos' && styles.mainSegmentBtnActive]}
               onPress={() => setMainTab('ipos')}
             >
-              <Ionicons name="layers-outline" size={16} color={mainTab === 'ipos' ? '#fff' : colors.textSecondary} style={{ marginRight: 6 }} />
+              <Ionicons name="layers-outline" size={16} color={mainTab === 'ipos' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
               <Text style={[styles.mainSegmentText, mainTab === 'ipos' && styles.mainSegmentTextActive]}>
-                IPO Hub
+                IPOs
               </Text>
             </TouchableOpacity>
 
@@ -638,9 +795,19 @@ export default function TradingDashboard() {
               style={[styles.mainSegmentBtn, mainTab === 'portfolio' && styles.mainSegmentBtnActive]}
               onPress={() => setMainTab('portfolio')}
             >
-              <Ionicons name="briefcase-outline" size={16} color={mainTab === 'portfolio' ? '#fff' : colors.textSecondary} style={{ marginRight: 6 }} />
+              <Ionicons name="briefcase-outline" size={16} color={mainTab === 'portfolio' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
               <Text style={[styles.mainSegmentText, mainTab === 'portfolio' && styles.mainSegmentTextActive]}>
                 Portfolio ({holdings.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.mainSegmentBtn}
+              onPress={() => router.push('/(tabs)/trading/orders')}
+            >
+              <Ionicons name="receipt-outline" size={16} color={colors.textSecondary} style={{ marginRight: 4 }} />
+              <Text style={styles.mainSegmentText}>
+                Logs ({transactions.length})
               </Text>
             </TouchableOpacity>
           </View>
@@ -652,11 +819,11 @@ export default function TradingDashboard() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {[
-                    { id: 'volume_shockers', label: 'Volume Shockers' },
-                    { id: 'breakouts_52w', label: '52W Breakouts' },
-                    { id: 'golden_crossover', label: 'Golden Crossovers' },
-                    { id: 'value_picks', label: 'Value & ROCE' },
-                    { id: 'oversold_rsi', label: 'Oversold Bounces' },
+                    { id: 'volume_shockers', label: 'Top Volume' },
+                    { id: 'breakouts_52w', label: 'Breakouts' },
+                    { id: 'golden_crossover', label: 'Crossovers' },
+                    { id: 'value_picks', label: 'Value Picks' },
+                    { id: 'oversold_rsi', label: 'Oversold' },
                   ].map(cat => (
                     <TouchableOpacity
                       key={cat.id}
@@ -787,7 +954,7 @@ export default function TradingDashboard() {
                             styles.ipoStatusText,
                             isOpen ? styles.ipoStatusTextOpen : isUpcoming ? styles.ipoStatusTextUpcoming : styles.ipoStatusTextClosed
                           ]}>
-                            {isOpen ? '🟢 BID OPEN' : isUpcoming ? '🟡 UPCOMING' : '🟣 CLOSED'}
+                            {isOpen ? 'BID OPEN' : isUpcoming ? 'UPCOMING' : 'CLOSED'}
                           </Text>
                         </View>
                       </View>
@@ -945,8 +1112,10 @@ export default function TradingDashboard() {
               )}
             </View>
           )}
+        </View>
+      )}
 
-        </ScrollView>
+    </ScrollView>
 
         {/* 7. ADVANCED TRADING BUY MODAL */}
         <Modal visible={isBuyModalOpen} transparent={true} animationType="slide">
@@ -982,7 +1151,7 @@ export default function TradingDashboard() {
                   onPress={() => intradayUnlocked ? setProductType('mis') : null}
                 >
                   <Text style={[styles.segmentBtnText, productType === 'mis' && styles.segmentBtnTextActive]}>
-                    {intradayUnlocked ? "Intraday (MIS 5x)" : "🔒 MIS (Gold)"}
+                    {intradayUnlocked ? "Intraday (MIS 5x)" : "MIS (Gold)"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1007,7 +1176,7 @@ export default function TradingDashboard() {
                   onPress={() => limitUnlocked ? setOrderType('limit') : null}
                 >
                   <Text style={[styles.segmentBtnText, orderType === 'limit' && styles.segmentBtnTextActive]}>
-                    {limitUnlocked ? "Limit Order" : "🔒 Limit (Bronze)"}
+                    {limitUnlocked ? "Limit Order" : "Limit (Bronze)"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1227,39 +1396,179 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     color: colors.text,
     marginTop: 2,
   },
-  compareHeaderBtn: {
+  redStudioHeaderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    elevation: 2,
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
-  compareHeaderBtnText: {
+  redStudioHeaderBtnText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
   },
   simulateBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#dc2626',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    elevation: 2,
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
   simulateBtnText: {
+    color: '#ef4444',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  // ── TOP TAB BAR (MATCHING REFERENCE IMAGE) ──
+  topTabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    elevation: 3,
+  },
+  topTabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    position: 'relative',
+  },
+  topTabBtnActive: {
+    backgroundColor: isDark ? 'rgba(47, 129, 247, 0.12)' : '#eff6ff',
+  },
+  topTabText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textSecondary,
+    letterSpacing: 0.8,
+  },
+  topTabTextActive: {
+    color: colors.accent,
+    fontWeight: '900',
+  },
+  topTabIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    width: 24,
+    height: 3,
+    backgroundColor: colors.accent,
+    borderRadius: 2,
+  },
+  topTabBadge: {
+    backgroundColor: colors.accent,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+    marginLeft: 6,
+  },
+  topTabBadgeText: {
     color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+
+  // ── EMBEDDED TRADE LOGS STYLES ──
+  logStatsBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  logStatBox: { alignItems: 'center' },
+  logStatNumber: { fontSize: 16, fontWeight: '800', color: colors.text },
+  logStatLabel: { fontSize: 11, color: colors.textSecondary, marginTop: 2, fontWeight: '600' },
+  logStatDivider: { width: 1, height: 24, backgroundColor: colors.border },
+
+  logFilterRow: {
+    flexDirection: 'row',
+    marginBottom: 14,
+    gap: 8,
+  },
+  logFilterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  activeLogFilterChip: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  logFilterChipText: {
     fontSize: 12,
     fontWeight: '700',
+    color: colors.textSecondary,
   },
+  activeLogFilterChipText: {
+    color: '#FFFFFF',
+  },
+
+  emptyLogCard: {
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    padding: 24,
+    borderRadius: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  emptyLogTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+  emptyLogSub: { fontSize: 12, color: colors.textSecondary, textAlign: 'center', marginTop: 4 },
+
+  logOrderCard: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  logCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  logSymbolText: { fontSize: 15, fontWeight: '800', color: colors.text },
+  logCompanyName: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  logBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, gap: 3 },
+  logBadgeText: { fontSize: 10, fontWeight: '800' },
+
+  logMetricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  logMetricItem: { flex: 1 },
+  logMetricLabel: { fontSize: 9, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' },
+  logMetricValue: { fontSize: 12, fontWeight: '800', color: colors.text, marginTop: 2 },
+
+  logCardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  logProductPill: { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  logProductPillText: { fontSize: 10, fontWeight: '700', color: colors.text },
+  logStopLossPill: { backgroundColor: isDark ? 'rgba(59,130,246,0.15)' : '#dbeafe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  logStopLossText: { fontSize: 10, fontWeight: '700', color: '#2f81f7' },
+  logDateText: { fontSize: 11, color: colors.textSecondary, fontWeight: '500' },
 
   walletCard: {
     padding: 18,
-    borderRadius: 22,
-    backgroundColor: isDark ? '#1D2433' : colors.card,
+    borderRadius: 20,
+    backgroundColor: colors.card,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.border,

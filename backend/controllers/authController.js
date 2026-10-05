@@ -4,9 +4,25 @@ module.exports.signup = async (req, res) => {
     try {
         const { username, email, password } = req.body;
 
+        if (!username || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Username, email, and password are all required."
+            });
+        }
+
+        // Check for duplicate email explicitly
+        const existingEmail = await User.findOne({ email: email.toLowerCase().trim() });
+        if (existingEmail) {
+            return res.status(400).json({
+                success: false,
+                message: "A user with this email address already exists. Please login or use a different email."
+            });
+        }
+
         const user = new User({
-            username,
-            email
+            username: username.trim(),
+            email: email.toLowerCase().trim()
         });
 
         const registeredUser = await User.register(user, password);
@@ -23,9 +39,13 @@ module.exports.signup = async (req, res) => {
         });
 
     } catch (err) {
+        let errorMsg = err.message || "Registration failed.";
+        if (err.name === "UserExistsError" || err.code === 11000) {
+            errorMsg = "A user with this username is already registered. Please choose a different username.";
+        }
         res.status(400).json({
             success: false,
-            message: err.message
+            message: errorMsg
         });
     }
 };

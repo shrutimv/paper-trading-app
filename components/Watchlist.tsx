@@ -226,7 +226,7 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput
-            placeholder="Search stock (e.g. INFOSYS)"
+            placeholder="Search stocks or tickers..."
             placeholderTextColor={colors.textSecondary}
             style={styles.searchInput}
             value={searchQuery}

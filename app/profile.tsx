@@ -23,7 +23,7 @@ export default function ProfileScreen() {
   const [localUser, setLocalUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  const { balance } = useTrading();
+  const { balance, transactions } = useTrading();
   const { xp, currentRank, nextRank, progressPercent, proMode, setProMode } = useGamification();
   const [isRankModalOpen, setIsRankModalOpen] = useState(false);
 
@@ -111,6 +111,8 @@ export default function ProfileScreen() {
     );
   }
 
+  const recentTransactions = transactions.slice(0, 3);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'left', 'right']}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -120,7 +122,9 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.navBackBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.navTitle}>Profile</Text>
+        <TouchableOpacity onPress={() => router.push('/(tabs)')}>
+          <Text style={styles.navTitle}>Profile</Text>
+        </TouchableOpacity>
         <View style={{ width: 40 }} />
       </View>
 
@@ -163,6 +167,50 @@ export default function ProfileScreen() {
           <View style={[styles.fill, { width: `${Math.min(Math.max(progressPercent, 0), 100)}%`, backgroundColor: currentRank.color }]} />
         </View>
       </TouchableOpacity>
+
+      {/* ── RECENT TRADE ACTIVITY & LOGS ── */}
+      <View style={styles.recentActivitySection}>
+        <View style={styles.sectionHeaderRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="receipt-outline" size={18} color={colors.accent} style={{ marginRight: 6 }} />
+            <Text style={styles.sectionTitle}>Recent Trade Activity</Text>
+          </View>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/trading/orders')}>
+            <Text style={styles.viewAllText}>View All ({transactions.length})</Text>
+          </TouchableOpacity>
+        </View>
+
+        {recentTransactions.length === 0 ? (
+          <View style={styles.emptyActivityCard}>
+            <Text style={styles.emptyActivityText}>No recent orders recorded yet.</Text>
+          </View>
+        ) : (
+          recentTransactions.map((tx, idx) => {
+            const isBuy = tx.type === 'BUY';
+            const badgeColor = isBuy ? '#10B981' : '#EF4444';
+            return (
+              <View key={tx.id || tx._id || idx.toString()} style={styles.activityCard}>
+                <View style={styles.activityLeft}>
+                  <View style={[styles.txBadge, { backgroundColor: isBuy ? (isDark ? 'rgba(16,185,129,0.15)' : '#dcfce7') : (isDark ? 'rgba(239,68,68,0.15)' : '#fee2e2') }]}>
+                    <Text style={[styles.txBadgeText, { color: badgeColor }]}>{tx.type}</Text>
+                  </View>
+                  <View style={{ marginLeft: 10 }}>
+                    <Text style={styles.activitySymbol}>{tx.symbol}</Text>
+                    <Text style={styles.activityMeta}>{tx.quantity} Qty • {formatCurrency(tx.price)}</Text>
+                  </View>
+                </View>
+
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={styles.activityTotal}>{formatCurrency(tx.totalAmount)}</Text>
+                  <Text style={styles.activityDate}>
+                    {tx.createdAt ? new Date(tx.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : ''}
+                  </Text>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </View>
 
       <View style={styles.menu}>
         {user?.isGuest && (
@@ -220,47 +268,130 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Log Out & Reset Session</Text>
       </TouchableOpacity>
 
-      {/* THE RANK JOURNEY MODAL */}
+      {/* THE RANK JOURNEY MODAL (ROAD TO DIAMOND) */}
       <Modal visible={isRankModalOpen} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { paddingBottom: insets.bottom > 0 ? insets.bottom + 20 : 40 }]}>
+          <View style={[styles.modalContent, { maxHeight: '85%', paddingBottom: insets.bottom > 0 ? insets.bottom + 20 : 40 }]}>
             
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Rank Journey</Text>
+              <View>
+                <Text style={styles.modalTitle}>Road to Diamond</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '700', marginTop: 2 }}>
+                  Trader Level Map • {xp.toLocaleString()} Total XP
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setIsRankModalOpen(false)}>
                 <Ionicons name="close-circle" size={32} color="#9ca3af" />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <View style={styles.journeyLine} />
-              
-              {RANKS.map((rank) => {
-                const isCurrent = rank.name === currentRank.name;
-                const isPassed = xp >= rank.minXp;
-                
-                return (
-                  <View key={rank.name} style={[styles.journeyItem, isCurrent && styles.journeyItemCurrent]}>
-                    
-                    <View style={[styles.node, { backgroundColor: isPassed ? rank.color : colors.border, borderColor: isCurrent ? colors.card : 'transparent', borderWidth: isCurrent ? 3 : 0 }]} />
-                    
-                    <View style={styles.journeyTextContainer}>
-                      <Text style={[styles.journeyRankName, { color: isPassed ? rank.color : colors.textSecondary }]}>
-                        {rank.name}
-                      </Text>
-                      <Text style={styles.journeyXpText}>
-                        {isCurrent ? `${xp.toLocaleString()} / ` : ''}{rank.minXp.toLocaleString()} XP
-                      </Text>
-                    </View>
-
-                    {isCurrent && (
-                      <View style={[styles.currentBadge, { backgroundColor: rank.color + '20' }]}>
-                        <Text style={[styles.currentBadgeText, { color: rank.color }]}>YOU ARE HERE</Text>
-                      </View>
-                    )}
+              {/* TRADER ACHIEVEMENTS & QUEST BADGES */}
+              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>
+                Trader Quest Badges
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={[styles.questBadgeCard, { backgroundColor: colors.card, borderColor: '#3b82f6' }]}>
+                    <Ionicons name="flash" size={20} color="#3b82f6" />
+                    <Text style={[styles.questBadgeTitle, { color: colors.text }]}>Market Novice</Text>
+                    <Text style={{ fontSize: 10, color: '#3b82f6', fontWeight: '800' }}>Unlocked</Text>
                   </View>
-                );
-              })}
+
+                  <View style={[styles.questBadgeCard, { backgroundColor: colors.card, borderColor: xp >= 1500 ? '#10b981' : colors.border }]}>
+                    <Ionicons name="stats-chart" size={20} color={xp >= 1500 ? '#10b981' : colors.textSecondary} />
+                    <Text style={[styles.questBadgeTitle, { color: colors.text }]}>Chart Sniper</Text>
+                    <Text style={{ fontSize: 10, color: xp >= 1500 ? '#10b981' : colors.textSecondary, fontWeight: '800' }}>
+                      {xp >= 1500 ? 'Unlocked' : 'Req: 1,500 XP'}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.questBadgeCard, { backgroundColor: colors.card, borderColor: xp >= 3000 ? '#f59e0b' : colors.border }]}>
+                    <Ionicons name="trophy" size={20} color={xp >= 3000 ? '#f59e0b' : colors.textSecondary} />
+                    <Text style={[styles.questBadgeTitle, { color: colors.text }]}>Gold Trader</Text>
+                    <Text style={{ fontSize: 10, color: xp >= 3000 ? '#f59e0b' : colors.textSecondary, fontWeight: '800' }}>
+                      {xp >= 3000 ? 'Unlocked' : 'Req: 3,000 XP'}
+                    </Text>
+                  </View>
+
+                  <View style={[styles.questBadgeCard, { backgroundColor: colors.card, borderColor: xp >= 10000 ? '#06b6d4' : colors.border }]}>
+                    <Ionicons name="diamond" size={20} color={xp >= 10000 ? '#06b6d4' : colors.textSecondary} />
+                    <Text style={[styles.questBadgeTitle, { color: colors.text }]}>Diamond Legend</Text>
+                    <Text style={{ fontSize: 10, color: xp >= 10000 ? '#06b6d4' : colors.textSecondary, fontWeight: '800' }}>
+                      {xp >= 10000 ? 'Unlocked' : 'Req: 10,000 XP'}
+                    </Text>
+                  </View>
+                </View>
+              </ScrollView>
+
+              <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 }}>
+                Rank Level Progression Path
+              </Text>
+
+              <View style={{ position: 'relative', paddingLeft: 6 }}>
+                <View style={styles.journeyLine} />
+                
+                {RANKS.map((rank, index) => {
+                  const isCurrent = rank.name === currentRank.name;
+                  const isPassed = xp >= rank.minXp;
+
+                  const RANK_ICONS: Record<string, any> = {
+                    'Novice': 'shield-outline',
+                    'Bronze': 'ribbon-outline',
+                    'Silver': 'star-outline',
+                    'Gold': 'medal-outline',
+                    'Platinum': 'sparkles-outline',
+                    'Diamond': 'diamond-outline',
+                  };
+
+                  return (
+                    <View key={rank.name} style={[styles.journeyItem, isCurrent && styles.journeyItemCurrent]}>
+                      
+                      {/* Game Level Node Avatar */}
+                      <View style={[
+                        styles.gameLevelNode, 
+                        { 
+                          backgroundColor: isPassed ? rank.color : (isDark ? '#1e293b' : '#e2e8f0'), 
+                          borderColor: isCurrent ? '#fff' : 'transparent', 
+                          borderWidth: isCurrent ? 3 : 0 
+                        }
+                      ]}>
+                        <Ionicons 
+                          name={isPassed ? (RANK_ICONS[rank.name] || 'trophy') : 'lock-closed'} 
+                          size={18} 
+                          color={isPassed ? '#fff' : colors.textSecondary} 
+                        />
+                      </View>
+                      
+                      <View style={styles.journeyTextContainer}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.journeyRankName, { color: isPassed ? rank.color : colors.textSecondary }]}>
+                            {rank.name}
+                          </Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>
+                            LVL {index + 1}
+                          </Text>
+                        </View>
+                        <Text style={styles.journeyXpText}>
+                          {isCurrent ? `${xp.toLocaleString()} / ` : ''}{rank.minXp.toLocaleString()} XP
+                        </Text>
+                      </View>
+
+                      {isCurrent ? (
+                        <View style={[styles.currentBadge, { backgroundColor: rank.color + '25' }]}>
+                          <Text style={[styles.currentBadgeText, { color: rank.color }]}>ACTIVE RANK</Text>
+                        </View>
+                      ) : isPassed ? (
+                        <Ionicons name="checkmark-circle" size={22} color={rank.color} />
+                      ) : (
+                        <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
+                          +{rank.minXp - xp} XP needed
+                        </Text>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
             </ScrollView>
 
           </View>
@@ -367,6 +498,22 @@ const getStyles = (colors: any) => StyleSheet.create({
   track: { width: '100%', height: 10, backgroundColor: colors.border, borderRadius: 5, overflow: 'hidden' },
   fill: { height: '100%', borderRadius: 5 },
 
+  // --- RECENT ACTIVITY SECTION STYLES ---
+  recentActivitySection: { marginBottom: 20 },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: colors.text },
+  viewAllText: { fontSize: 12, fontWeight: '700', color: colors.accent },
+  emptyActivityCard: { backgroundColor: colors.card, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+  emptyActivityText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+  activityCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.card, padding: 12, borderRadius: 14, marginBottom: 8, borderWidth: 1, borderColor: colors.border },
+  activityLeft: { flexDirection: 'row', alignItems: 'center' },
+  txBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  txBadgeText: { fontSize: 10, fontWeight: '800' },
+  activitySymbol: { fontSize: 14, fontWeight: '800', color: colors.text },
+  activityMeta: { fontSize: 11, color: colors.textSecondary, fontWeight: '500', marginTop: 2 },
+  activityTotal: { fontSize: 14, fontWeight: '800', color: colors.text },
+  activityDate: { fontSize: 10, color: colors.textSecondary, fontWeight: '500', marginTop: 2 },
+
   menu: { backgroundColor: colors.card, borderRadius: 16, padding: 10, marginBottom: 20, elevation: 1, shadowColor: colors.shadowColor, shadowOpacity: 0.03, shadowRadius: 5, borderWidth: 1, borderColor: colors.border },
   menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, paddingHorizontal: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
   menuIconInfo: { flexDirection: 'row', alignItems: 'center', gap: 15 },
@@ -381,15 +528,18 @@ const getStyles = (colors: any) => StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
   modalTitle: { fontSize: 24, fontWeight: '900', color: colors.text },
   
-  journeyLine: { position: 'absolute', left: 15, top: 20, bottom: 20, width: 2, backgroundColor: colors.border, zIndex: 1 },
-  journeyItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 30, paddingLeft: 8, zIndex: 2 },
-  journeyItemCurrent: { backgroundColor: colors.background, padding: 15, borderRadius: 16, marginLeft: -7, borderWidth: 1, borderColor: colors.border },
+  journeyLine: { position: 'absolute', left: 24, top: 20, bottom: 20, width: 3, backgroundColor: colors.border, zIndex: 1 },
+  journeyItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingLeft: 8, zIndex: 2 },
+  journeyItemCurrent: { backgroundColor: colors.background, padding: 14, borderRadius: 18, marginLeft: -4, borderWidth: 1.5, borderColor: colors.accent },
   
-  node: { width: 16, height: 16, borderRadius: 8, marginRight: 20 },
+  gameLevelNode: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 14, elevation: 3 },
   journeyTextContainer: { flex: 1 },
-  journeyRankName: { fontSize: 18, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
-  journeyXpText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600', marginTop: 2 },
+  journeyRankName: { fontSize: 16, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.5 },
+  journeyXpText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600', marginTop: 2 },
   
   currentBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   currentBadgeText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+
+  questBadgeCard: { width: 110, padding: 10, borderRadius: 14, borderWidth: 1, alignItems: 'center', gap: 4 },
+  questBadgeTitle: { fontSize: 11, fontWeight: '800', textAlign: 'center' },
 });

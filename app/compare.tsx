@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
-  Platform,
+  Modal,
+  TextInput,
   Alert
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,6 +38,10 @@ const STOCK_PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ec4899'];
 
 const PRESET_PACKS = [
   {
+    name: 'Custom',
+    symbols: ['TATAMOTORS.NS', 'INFY.NS'],
+  },
+  {
     name: 'Auto Sector',
     symbols: ['TATAMOTORS.NS', 'MARUTI.NS', 'M&M.NS'],
   },
@@ -65,19 +70,25 @@ const STOCK_METADATA_FALLBACKS: Record<string, any> = {
   'ICICIBANK.NS': { shortname: 'ICICI Bank', pe: 18.2, mktCap: '₹6.9L Cr', rsi: 65, signal: 'BULLISH' },
   'SBIN.NS': { shortname: 'State Bank of India', pe: 10.6, mktCap: '₹5.4L Cr', rsi: 62, signal: 'BULLISH' },
   'ZOMATO.NS': { shortname: 'Zomato', pe: 72.0, mktCap: '₹2.2L Cr', rsi: 76, signal: 'STRONG BUY' },
-  'SWIGGY': { shortname: 'Swiggy (IPO)', pe: 54.0, mktCap: '₹88,000 Cr', rsi: 60, signal: 'BULLISH' },
+  'SWIGGY': { shortname: 'Swiggy', pe: 54.0, mktCap: '₹88,000 Cr', rsi: 60, signal: 'BULLISH' },
 };
 
 export default function CompareScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const params = useLocalSearchParams<{ symbols?: string }>();
+  const params = useLocalSearchParams<{ symbols?: string; s1?: string }>();
 
   const [selectedSymbols, setSelectedSymbols] = useState<string[]>(['TATAMOTORS.NS', 'MARUTI.NS', 'M&M.NS']);
   const [period, setPeriod] = useState<'1D' | '5D' | '1M' | '6M' | '1Y'>('1M');
   const [loading, setLoading] = useState(true);
   const [comparedData, setComparedData] = useState<ComparedStock[]>([]);
+
+  // Search Modal States
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     if (params.symbols) {
@@ -85,8 +96,10 @@ export default function CompareScreen() {
       if (symList.length > 0) {
         setSelectedSymbols(symList.slice(0, 4));
       }
+    } else if (params.s1) {
+      setSelectedSymbols([params.s1, 'INFY.NS']);
     }
-  }, [params.symbols]);
+  }, [params.symbols, params.s1]);
 
   useEffect(() => {
     fetchComparisonData();
@@ -100,7 +113,7 @@ export default function CompareScreen() {
       const sym = selectedSymbols[i];
       const color = STOCK_PALETTE[i % STOCK_PALETTE.length];
       const metaFallback = STOCK_METADATA_FALLBACKS[sym] || {
-        shortname: sym.replace('.NS', ''),
+        shortname: sym.replace('.NS', '').replace('.BO', ''),
         pe: 22.0,
         mktCap: '₹1.5L Cr',
         rsi: 55,
@@ -108,34 +121,46 @@ export default function CompareScreen() {
       };
 
       try {
+        // Map UI period selection to yfinance range and candle interval
+        const yfPeriodMap: Record<string, string> = {
+          '1D': '1d',
+          '5D': '5d',
+          '1M': '1mo',
+          '6M': '6mo',
+          '1Y': '1y',
+        };
+
         const intervalMap: Record<string, string> = {
           '1D': '5m',
           '5D': '15m',
           '1M': '1d',
-          '6M': '1wk',
-          '1Y': '1mo',
+          '6M': '1d',
+          '1Y': '1d',
         };
 
-        const res = await fetch(`${API_BASE_URL}/stock?symbol=${sym}&period=${period.toLowerCase()}&interval=${intervalMap[period] || '1d'}`);
+        const queryPeriod = yfPeriodMap[period] || '1mo';
+        const queryInterval = intervalMap[period] || '1d';
+
+        const res = await fetch(`${API_BASE_URL}/stock?symbol=${encodeURIComponent(sym)}&period=${queryPeriod}&interval=${queryInterval}`);
         const data = await res.json();
 
         if (data && data.history && data.history.length > 0) {
           const rawHistory = data.history;
           const baseClose = rawHistory[0].close || 1;
 
-          // Normalize each point to % return from starting price: ((close - base) / base) * 100
+          // Normalize each point to % return from starting available price
           const normalizedHistory = rawHistory.map((h: any) => ({
             value: Number((((h.close - baseClose) / baseClose) * 100).toFixed(2)),
-            date: h.date,
+            date: h.date || h.Datetime,
           }));
 
           const latestPrice = data.meta?.regularMarketPrice || rawHistory[rawHistory.length - 1].close;
           const firstPrice = rawHistory[0].close;
-          const totalReturn = ((latestPrice - firstPrice) / firstPrice) * 100;
+          const totalReturn = firstPrice > 0 ? ((latestPrice - firstPrice) / firstPrice) * 100 : 0;
 
           results.push({
             symbol: sym,
-            shortname: data.selected?.shortname || metaFallback.shortname,
+            shortname: data.meta?.resolved_name || data.meta?.symbol || metaFallback.shortname,
             color,
             price: latestPrice,
             changePercent: totalReturn,
@@ -146,7 +171,7 @@ export default function CompareScreen() {
             history: normalizedHistory,
           });
         } else {
-          // Fallback simulation curve if unlisted / no chart
+          // Fallback curve if no API response
           const fallbackHistory = Array.from({ length: 15 }, (_, idx) => ({
             value: Number((Math.sin(idx + i) * 3 + (i === 0 ? 8 : i === 1 ? 2 : -4) * (idx / 14)).toFixed(2)),
             date: `Day ${idx + 1}`,
@@ -175,8 +200,8 @@ export default function CompareScreen() {
   };
 
   const removeStock = (sym: string) => {
-    if (selectedSymbols.length <= 2) {
-      Alert.alert('Minimum 2 Stocks', 'Comparison requires at least 2 stocks.');
+    if (selectedSymbols.length <= 1) {
+      Alert.alert('Minimum 1 Stock', 'Comparison requires at least 1 stock.');
       return;
     }
     setSelectedSymbols(selectedSymbols.filter(s => s !== sym));
@@ -184,6 +209,45 @@ export default function CompareScreen() {
 
   const loadPreset = (symbols: string[]) => {
     setSelectedSymbols(symbols);
+  };
+
+  const handleSearch = async (text: string) => {
+    setSearchQuery(text);
+    if (text.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearching(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/search?q=${encodeURIComponent(text)}&exchange=NSE&limit=8`);
+      const data = await res.json();
+      setSearchResults(data.results || []);
+    } catch (err) {
+      console.error('Search error in Compare Studio:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const addStockToCompare = (symbol: string) => {
+    if (selectedSymbols.includes(symbol)) {
+      Alert.alert('Already Added', `${symbol.replace('.NS', '')} is already on the chart.`);
+      setIsSearchModalOpen(false);
+      setSearchQuery('');
+      setSearchResults([]);
+      return;
+    }
+
+    if (selectedSymbols.length >= 4) {
+      // Replace the last symbol if max 4 reached
+      setSelectedSymbols([...selectedSymbols.slice(0, 3), symbol]);
+    } else {
+      setSelectedSymbols([...selectedSymbols, symbol]);
+    }
+
+    setIsSearchModalOpen(false);
+    setSearchQuery('');
+    setSearchResults([]);
   };
 
   // Find min and max normalized values for chart scaling
@@ -201,16 +265,16 @@ export default function CompareScreen() {
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <View style={{ alignItems: 'center' }}>
-          <Text style={[styles.navTitle, { color: colors.text }]}>⚔️ Compare Studio</Text>
+          <Text style={[styles.navTitle, { color: colors.text }]}>Compare Studio</Text>
           <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
             Normalized Relative Performance
           </Text>
         </View>
         <TouchableOpacity 
           style={styles.navActionBtn}
-          onPress={() => Alert.alert('Add Stock to Compare', 'Tap any preset below or search from trading screen to add.')}
+          onPress={() => setIsSearchModalOpen(true)}
         >
-          <Ionicons name="add-circle" size={26} color={colors.accent} />
+          <Ionicons name="add-circle" size={28} color={colors.accent} />
         </TouchableOpacity>
       </View>
 
@@ -219,25 +283,34 @@ export default function CompareScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 40, paddingHorizontal: 16, paddingTop: 12 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* PRESET SECTOR PACKS */}
+        {/* PRESET SECTOR PACKS + CUSTOM BUTTON */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            {PRESET_PACKS.map(pack => (
-              <TouchableOpacity
-                key={pack.name}
-                style={[
-                  styles.presetPill,
-                  { backgroundColor: colors.card, borderColor: colors.border }
-                ]}
-                onPress={() => loadPreset(pack.symbols)}
-              >
-                <Text style={{ fontSize: 12, fontWeight: '800', color: colors.text }}>{pack.name}</Text>
-              </TouchableOpacity>
-            ))}
+            {PRESET_PACKS.map(pack => {
+              const isActive = pack.name === 'Custom' 
+                ? !PRESET_PACKS.slice(1).some(p => JSON.stringify(p.symbols) === JSON.stringify(selectedSymbols))
+                : JSON.stringify(pack.symbols) === JSON.stringify(selectedSymbols);
+
+              return (
+                <TouchableOpacity
+                  key={pack.name}
+                  style={[
+                    styles.presetPill,
+                    { backgroundColor: colors.card, borderColor: isActive ? colors.accent : colors.border },
+                    isActive && { backgroundColor: isDark ? 'rgba(47, 129, 247, 0.15)' : '#eff6ff' }
+                  ]}
+                  onPress={() => loadPreset(pack.symbols)}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: isActive ? colors.accent : colors.text }}>
+                    {pack.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </ScrollView>
 
-        {/* ACTIVE STOCKS PILLS */}
+        {/* ACTIVE STOCKS PILLS + FUNCTIONAL (+) BUTTON */}
         <View style={styles.activePillsContainer}>
           {comparedData.map(item => (
             <View 
@@ -257,6 +330,15 @@ export default function CompareScreen() {
               </TouchableOpacity>
             </View>
           ))}
+
+          {/* Add Stock Pill Button */}
+          <TouchableOpacity 
+            style={[styles.addStockPill, { borderColor: colors.accent }]}
+            onPress={() => setIsSearchModalOpen(true)}
+          >
+            <Ionicons name="add" size={16} color={colors.accent} />
+            <Text style={[styles.addStockPillText, { color: colors.accent }]}>Add Stock</Text>
+          </TouchableOpacity>
         </View>
 
         {/* PERIOD SELECTOR */}
@@ -279,14 +361,14 @@ export default function CompareScreen() {
           <View style={styles.chartHeader}>
             <Text style={[styles.chartTitle, { color: colors.text }]}>Performance Relative to 0%</Text>
             <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '700' }}>
-              Base = Starting Price
+              {period} Change %
             </Text>
           </View>
 
           {loading ? (
             <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
               <ActivityIndicator size="large" color={colors.accent} />
-              <Text style={{ marginTop: 8, fontSize: 12, color: colors.textSecondary }}>Overlaying price curves...</Text>
+              <Text style={{ marginTop: 8, fontSize: 12, color: colors.textSecondary }}>Overlaying stock curves...</Text>
             </View>
           ) : (
             <View style={{ paddingVertical: 10, overflow: 'hidden' }}>
@@ -319,7 +401,7 @@ export default function CompareScreen() {
                   yAxisColor="transparent"
                   xAxisColor={colors.border}
                   hideDataPoints
-                  spacing={Math.max(6, (CHART_WIDTH - 80) / Math.max(1, (comparedData[0]?.history.length || 10) - 1))}
+                  spacing={Math.max(4, (CHART_WIDTH - 80) / Math.max(1, (comparedData[0]?.history.length || 10) - 1))}
                 />
               )}
             </View>
@@ -396,6 +478,58 @@ export default function CompareScreen() {
         </View>
 
       </ScrollView>
+
+      {/* ── STOCK SEARCH MODAL FOR (+) BUTTON ── */}
+      <Modal visible={isSearchModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Add Stock to Compare</Text>
+              <TouchableOpacity onPress={() => setIsSearchModalOpen(false)}>
+                <Ionicons name="close-circle" size={28} color={colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.searchWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9' }]}>
+              <Ionicons name="search" size={20} color={colors.textSecondary} style={{ marginRight: 8 }} />
+              <TextInput
+                placeholder="Search stocks or tickers..."
+                placeholderTextColor={colors.textSecondary}
+                style={[styles.searchInput, { color: colors.text }]}
+                value={searchQuery}
+                onChangeText={handleSearch}
+                autoCapitalize="characters"
+                autoFocus
+              />
+              {isSearching && <ActivityIndicator color={colors.accent} />}
+            </View>
+
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              {searchResults.length === 0 && searchQuery.length > 1 ? (
+                <Text style={{ color: colors.textSecondary, textAlign: 'center', marginVertical: 20 }}>
+                  No matching stocks found.
+                </Text>
+              ) : (
+                searchResults.map((item) => (
+                  <TouchableOpacity
+                    key={item.symbol}
+                    style={[styles.searchItem, { borderBottomColor: colors.border }]}
+                    onPress={() => addStockToCompare(item.symbol)}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.searchSymbol, { color: colors.text }]}>{item.symbol.replace('.NS', '')}</Text>
+                      <Text style={[styles.searchName, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {item.shortname}
+                      </Text>
+                    </View>
+                    <Ionicons name="add-circle" size={24} color={colors.accent} />
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -440,6 +574,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1.5,
     gap: 6,
+  },
+  addStockPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    gap: 4,
+  },
+  addStockPillText: {
+    fontSize: 12,
+    fontWeight: '800',
   },
   colorDot: {
     width: 8,
@@ -548,5 +696,58 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: 40,
+    maxHeight: '80%',
+    borderWidth: 1,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 48,
+    marginBottom: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  searchItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  searchSymbol: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  searchName: {
+    fontSize: 12,
+    marginTop: 2,
   },
 });

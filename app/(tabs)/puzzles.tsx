@@ -143,21 +143,116 @@ export default function PuzzlesScreen() {
       </View>
 
       {activeTab === 'puzzles' ? (
-        <>
-          <View style={{ marginBottom: 10 }}>
-             <LevelsCarousel levels={LEVELS} active={activeLevel} onSelect={(lvl) => setActiveLevel(lvl)} />
+        <ScrollView contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
+          
+          {/* DAILY INDEX SENTIMENT PREDICTOR (NIFTY 50 & SENSEX) */}
+          <View style={[styles.predictionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="analytics" size={22} color={colors.accent} />
+                <Text style={[styles.predictionTitle, { color: colors.text }]}>Daily Index Predictor (3:30 PM IST)</Text>
+              </View>
+              <View style={styles.liveTag}>
+                <Text style={styles.liveTagText}>LIVE 3:30 PM</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 14, lineHeight: 18 }}>
+              Predict whether <Text style={{ fontWeight: '800', color: colors.text }}>NIFTY 50</Text> or <Text style={{ fontWeight: '800', color: colors.text }}>SENSEX</Text> will close GREEN or RED today. Predictions lock for 3:30 PM settlement to earn +100 XP!
+            </Text>
+
+            {/* PREDICTION BUTTONS */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <TouchableOpacity 
+                style={[
+                  styles.predBtn, 
+                  { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: '#10b981' }
+                ]}
+                onPress={async () => {
+                  await AsyncStorage.setItem('paper_daily_nifty_pred', 'BULLISH');
+                  alert("Prediction Locked! 🚀 You predicted NIFTY 50 to close BULLISH (GREEN) at 3:30 PM IST. Check back after market close for +100 XP!");
+                }}
+              >
+                <Ionicons name="trending-up" size={24} color="#10b981" />
+                <Text style={{ color: '#10b981', fontWeight: '900', fontSize: 13, marginTop: 4 }}>BULLISH (GREEN)</Text>
+                <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Up ↑</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[
+                  styles.predBtn, 
+                  { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#ef4444' }
+                ]}
+                onPress={async () => {
+                  await AsyncStorage.setItem('paper_daily_nifty_pred', 'BEARISH');
+                  alert("Prediction Locked! 📉 You predicted NIFTY 50 to close BEARISH (RED) at 3:30 PM IST. Check back after market close for +100 XP!");
+                }}
+              >
+                <Ionicons name="trending-down" size={24} color="#ef4444" />
+                <Text style={{ color: '#ef4444', fontWeight: '900', fontSize: 13, marginTop: 4 }}>BEARISH (RED)</Text>
+                <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Down ↓</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <FlatList
-            data={PUZZLE_DATA}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-               <View style={styles.puzzleItemWrapper}>
-                 <PuzzleItem {...item} onPress={() => router.push('/play-puzzle')} />
-               </View>
-            )}
-            contentContainerStyle={{paddingBottom: 120}}
-          />
-        </>
+
+          {/* TRADING ARCADE GAMES HEADER */}
+          <View style={[styles.arcadeHeaderCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <Ionicons name="game-controller-outline" size={24} color={colors.accent} />
+              <Text style={[styles.arcadeTitle, { color: colors.text }]}>Practical Trading Minigames</Text>
+            </View>
+            <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
+              Learn real market concepts (Order Execution, Intraday 5x Margin, and Risk-Reward Ratios) through interactive challenges.
+            </Text>
+          </View>
+
+          {/* GAME CARDS GRID */}
+          <View style={{ gap: 12, marginBottom: 20 }}>
+            {/* GAME 1 */}
+            <TouchableOpacity 
+              style={[styles.gameCard, { backgroundColor: colors.card, borderColor: '#3b82f6' }]}
+              onPress={() => router.push('/play-puzzle')}
+            >
+              <View style={[styles.gameIconBadge, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
+                <Ionicons name="swap-horizontal" size={24} color="#3b82f6" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.gameCardTitle, { color: colors.text }]}>Order Matcher Arena</Text>
+                  <View style={[styles.xpTag, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
+                    <Text style={[styles.xpTagText, { color: '#3b82f6' }]}>+150 XP</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                  Match trading scenarios with CNC (Delivery), MIS (5x Intraday), Market, & Stop-Loss.
+                </Text>
+              </View>
+              <Ionicons name="play-circle" size={32} color="#3b82f6" />
+            </TouchableOpacity>
+
+            {/* GAME 2 */}
+            <TouchableOpacity 
+              style={[styles.gameCard, { backgroundColor: colors.card, borderColor: '#f59e0b' }]}
+              onPress={() => router.push('/play-puzzle')}
+            >
+              <View style={[styles.gameIconBadge, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+                <Ionicons name="calculator" size={24} color="#f59e0b" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.gameCardTitle, { color: colors.text }]}>Risk-Reward Sizer</Text>
+                  <View style={[styles.xpTag, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+                    <Text style={[styles.xpTagText, { color: '#f59e0b' }]}>+100 XP</Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                  Calculate entry, stop-loss, and target ratios to achieve 1:2 risk management.
+                </Text>
+              </View>
+              <Ionicons name="play-circle" size={32} color="#f59e0b" />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : (
         <View style={{flex: 1}}>
           
@@ -343,5 +438,83 @@ const getStyles = (colors: any) => StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-  }
+  },
+
+  /* --- PREDICTOR CARD STYLES --- */
+  predictionCard: {
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1.5,
+    marginBottom: 16,
+    elevation: 3,
+  },
+  predictionTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  liveTag: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  liveTagText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  predBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* --- TRADING GAMES ARCADE STYLES --- */
+  arcadeHeaderCard: {
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    marginBottom: 16,
+    elevation: 2,
+  },
+  arcadeTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  gameCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    gap: 12,
+    elevation: 2,
+  },
+  gameIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gameCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  xpTag: {
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  xpTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#10b981',
+  },
 });

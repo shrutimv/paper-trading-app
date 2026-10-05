@@ -33,13 +33,13 @@ const lightColors = {
 };
 
 const darkColors = {
-  background: '#0A0F1D',
-  card: '#161F30',
-  border: '#1E293B',
-  text: '#FFFFFF',
-  textSecondary: '#94A3B8',
-  accent: '#3B82F6',
-  tabBg: '#0F172A',
+  background: '#0d1117',
+  card: '#161b22',
+  border: '#30363d',
+  text: '#f0f6fc',
+  textSecondary: '#8b949e',
+  accent: '#2f81f7',
+  tabBg: '#010409',
   statusBar: 'light' as const,
   shadowColor: '#000000',
 };
