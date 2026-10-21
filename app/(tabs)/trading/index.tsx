@@ -347,13 +347,21 @@ export default function TradingDashboard() {
 
   // Manual Position Square-Off
   const handleSquareOff = async (stock: Holding) => {
-    const success = await sellStock(stock.symbol, stock.averagePrice, stock.quantity, stock.productType || 'cnc');
+    const effPrice = (stock.averagePrice && stock.averagePrice > 0) ? stock.averagePrice : 100;
+    const success = await sellStock(stock.symbol, effPrice, stock.quantity, stock.productType || 'cnc');
     if (success) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setToast({
         visible: true,
         message: `Squared off ${stock.quantity} shares of ${stock.symbol.replace('.NS', '')}`,
         type: 'success'
+      });
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setToast({
+        visible: true,
+        message: `Unable to square off ${stock.symbol.replace('.NS', '')}`,
+        type: 'error'
       });
     }
   };

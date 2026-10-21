@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const app = express();
+app.set("trust proxy", 1);
 const cors = require("cors");
 const connectDB = require("./config/db");
 const User = require("./models/User");
@@ -66,10 +67,12 @@ const sessionConfig = {
     store,
     secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
     cookie: {
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 30, 
+        sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+        secure: process.env.NODE_ENV === "production",
     },
 };
 

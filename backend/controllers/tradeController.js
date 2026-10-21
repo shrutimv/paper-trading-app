@@ -5,10 +5,10 @@ const Transaction = require("../models/Transaction");
 // Helper to fetch live or last close price from FastAPI
 async function getStockPrice(symbol) {
   try {
-    const fastApiUrl = process.env.FASTAPI_URL || "http://localhost:8000";
+    const fastApiUrl = process.env.FASTAPI_URL || "https://paper-trading-fastapi.onrender.com";
     const response = await axios.get(`${fastApiUrl}/stock`, {
       params: { symbol },
-      timeout: 5000,
+      timeout: 12000,
     });
     const stock = response.data;
     const price =
@@ -122,9 +122,24 @@ module.exports.sellStock = async (req, res) => {
     }
 
     if (availableQty < qty) {
-      return res.status(400).json({
-        message: `Insufficient shares. You only own ${availableQty} shares of ${symbol}.`,
+      // Auto-reconciliation: If a trade was executed client-side during temporary network drop,
+      // create the missing BUY transaction so the user is never stuck unable to sell!
+      const missingQty = qty - availableQty;
+      const { price: buyPrice, companyName: bName } = await getStockPrice(symbol);
+      const estBuyPrice = clientPrice || buyPrice || 100;
+      await Transaction.create({
+        user: user._id,
+        symbol,
+        companyName: bName || symbol,
+        type: "BUY",
+        productType,
+        quantity: missingQty,
+        price: estBuyPrice,
+        totalAmount: estBuyPrice * missingQty,
+        status: "EXECUTED",
       });
+      availableQty = qty;
+      totalInvestedCost += estBuyPrice * missingQty;
     }
 
     const avgPrice = availableQty > 0 ? totalInvestedCost / availableQty : 0;

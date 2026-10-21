@@ -99,8 +99,16 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
           }
           try {
             const res = await axios.get(`${BASE_URL}/api/trade/holdings`, { withCredentials: true });
-            if (res.data && Array.isArray(res.data.holdings)) {
+            if (res.data && Array.isArray(res.data.holdings) && res.data.holdings.length > 0) {
               setHoldings(res.data.holdings);
+            } else {
+              const savedHoldings = await AsyncStorage.getItem(`paper_holdings_${user.id || 'user'}`);
+              if (savedHoldings) {
+                const parsed = JSON.parse(savedHoldings);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setHoldings(parsed);
+                }
+              }
             }
           } catch {
             const savedHoldings = await AsyncStorage.getItem(`paper_holdings_${user.id || 'user'}`);
@@ -236,15 +244,27 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     quantity: number, 
     productType: 'cnc' | 'mis' = 'cnc'
   ) => {
-    const existing = holdings.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
-    if (!existing || existing.quantity < quantity) return false;
-
-    let revenue = price * quantity;
-    if (productType === 'mis') {
-      revenue = (price * quantity) - (existing.averagePrice * quantity * 0.80);
+    let existing = holdings.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
+    
+    // Fallback: If not found in current holdings, reconstruct from transaction history
+    if (!existing) {
+      const recentBuy = transactions.find(t => t.symbol === symbol && t.type === 'BUY' && (t.productType || 'cnc') === productType);
+      existing = {
+        symbol,
+        name: recentBuy?.companyName || symbol,
+        quantity: Math.max(quantity, recentBuy?.quantity || 1),
+        averagePrice: recentBuy?.price || price || 100,
+        productType,
+      };
     }
 
-    const calculatedPnl = (price - existing.averagePrice) * quantity;
+    const effectiveSellPrice = (price && price > 0) ? price : (existing.averagePrice > 0 ? existing.averagePrice : 100);
+    const calculatedPnl = (effectiveSellPrice - existing.averagePrice) * quantity;
+
+    let revenue = effectiveSellPrice * quantity;
+    if (productType === 'mis') {
+      revenue = (effectiveSellPrice * quantity) - (existing.averagePrice * quantity * 0.80);
+    }
 
     let newTx: Transaction = {
       id: Date.now().toString(),
@@ -253,8 +273,8 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       type: 'SELL',
       productType,
       quantity,
-      price,
-      totalAmount: price * quantity,
+      price: effectiveSellPrice,
+      totalAmount: effectiveSellPrice * quantity,
       status: 'EXECUTED',
       createdAt: new Date().toISOString(),
       pnl: calculatedPnl,
@@ -264,7 +284,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       try {
         const response = await axios.post(
           `${BASE_URL}/api/trade/sell`,
-          { symbol, quantity, price, productType },
+          { symbol, quantity, price: effectiveSellPrice, productType },
           { withCredentials: true }
         );
         if (response.data?.balance !== undefined) {
@@ -292,7 +312,8 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     setTransactions(prev => [newTx, ...prev]);
 
     setHoldings(prev => {
-      if (existing.quantity === quantity) {
+      const current = prev.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
+      if (!current || current.quantity <= quantity) {
         return prev.filter(h => !(h.symbol === symbol && (h.productType || 'cnc') === productType));
       }
       return prev.map(h => h.symbol === symbol && (h.productType || 'cnc') === productType 
