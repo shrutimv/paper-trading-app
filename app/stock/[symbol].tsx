@@ -5,6 +5,7 @@ import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -16,6 +17,7 @@ import {
 import { LineChart } from 'react-native-gifted-charts';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
+import { useTrading } from '../../context/TradingContext';
 import { API_BASE_URL } from '../../src/config';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +97,9 @@ export default function StockDetailScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { holdings, sellStock } = useTrading();
+  const currentSymbol = typeof symbol === 'string' ? symbol : '';
+  const owned = holdings.find(h => h.symbol === currentSymbol || h.symbol.replace('.NS', '') === currentSymbol.replace('.NS', ''));
 
   const [activeRange, setActiveRange] = useState(TIMEFRAMES[0]); // default to 1D
   const [chartData, setChartData] = useState<any[]>([]);
@@ -607,31 +612,118 @@ export default function StockDetailScreen() {
             );
           })()}
 
-          {/* TRADE ACTION BUTTON */}
-          <TouchableOpacity
-            activeOpacity={0.85}
-            style={{
-              backgroundColor: C.green,
-              borderRadius: 14,
-              paddingVertical: 16,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginTop: 14,
-              flexDirection: 'row',
-              gap: 8,
-              shadowColor: C.green,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 4,
-            }}
-            onPress={() => router.push('/(tabs)/trading')}
-          >
-            <Ionicons name="flash" size={18} color="#ffffff" />
-            <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800' }}>
-              Trade {sym} on Virtual Exchange
-            </Text>
-          </TouchableOpacity>
+          {/* TRADE ACTION BUTTONS */}
+          {owned ? (
+            <View style={{ marginTop: 14, gap: 10 }}>
+              <View style={{ backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ecfdf5', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: C.textSec, textTransform: 'uppercase' }}>YOUR HOLDING</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#10b981', marginTop: 2 }}>
+                    {owned.quantity} Shares ({ (owned.productType || 'cnc').toUpperCase() })
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: C.textSec, textTransform: 'uppercase' }}>AVG PRICE</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: C.textPri, marginTop: 2 }}>{fmt(owned.averagePrice)}</Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={{
+                    flex: 1,
+                    backgroundColor: C.green,
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                  }}
+                  onPress={() => router.push('/(tabs)/trading')}
+                >
+                  <Ionicons name="add-circle" size={18} color="#ffffff" />
+                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800' }}>Buy More</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#ef4444',
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexDirection: 'row',
+                    gap: 6,
+                  }}
+                  onPress={() => {
+                    const effPrice = stockMeta?.regularMarketPrice || owned.averagePrice || 100;
+                    if (owned.quantity === 1) {
+                      sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(() => {
+                        Alert.alert("Success", `Sold 1 share of ${sym.replace('.NS', '')}`);
+                      });
+                    } else {
+                      Alert.alert(
+                        `Sell ${sym.replace('.NS', '')}`,
+                        `You own ${owned.quantity} shares.\nAverage price: ${fmt(owned.averagePrice)}`,
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: `Sell All (${owned.quantity})`,
+                            style: "destructive",
+                            onPress: () => {
+                              sellStock(owned.symbol, effPrice, owned.quantity, owned.productType || 'cnc').then(() => {
+                                Alert.alert("Success", `Sold all ${owned.quantity} shares of ${sym.replace('.NS', '')}`);
+                              });
+                            }
+                          },
+                          {
+                            text: "Sell 1 Share",
+                            onPress: () => {
+                              sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(() => {
+                                Alert.alert("Success", `Sold 1 share of ${sym.replace('.NS', '')}`);
+                              });
+                            }
+                          }
+                        ]
+                      );
+                    }
+                  }}
+                >
+                  <Ionicons name="arrow-down-circle" size={18} color="#ffffff" />
+                  <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800' }}>Sell Position</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: C.green,
+                borderRadius: 14,
+                paddingVertical: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 14,
+                flexDirection: 'row',
+                gap: 8,
+                shadowColor: C.green,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 8,
+                elevation: 4,
+              }}
+              onPress={() => router.push('/(tabs)/trading')}
+            >
+              <Ionicons name="flash" size={18} color="#ffffff" />
+              <Text style={{ color: '#ffffff', fontSize: 16, fontWeight: '800' }}>
+                Buy {sym} on Trading Desk
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
     </>

@@ -1,32 +1,46 @@
 // components/ui/Toast.tsx
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '../../context/ThemeContext';
 
 interface ToastProps {
   visible: boolean;
   message: string;
   type: 'loading' | 'success' | 'error';
+  title?: string;
   onClose: () => void;
 }
 
-export default function Toast({ visible, message, type, onClose }: ToastProps) {
+export default function Toast({ visible, message, type, title, onClose }: ToastProps) {
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+
   const opacity = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(-30)).current;
+  const translateY = useRef(new Animated.Value(-40)).current;
+  const scale = useRef(new Animated.Value(0.92)).current;
 
   useEffect(() => {
     if (visible) {
-      // Slide down and Fade In at the top
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-        Animated.spring(translateY, { toValue: 0, friction: 7, tension: 50, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+        Animated.spring(translateY, { toValue: 0, friction: 8, tension: 65, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, friction: 7, tension: 70, useNativeDriver: true }),
       ]).start();
 
-      // Only auto-hide for success or error
       if (type !== 'loading') {
         const timer = setTimeout(() => {
           hide();
-        }, 3000);
+        }, 3400);
         return () => clearTimeout(timer);
       }
     }
@@ -34,8 +48,9 @@ export default function Toast({ visible, message, type, onClose }: ToastProps) {
 
   const hide = () => {
     Animated.parallel([
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-      Animated.timing(translateY, { toValue: -30, duration: 200, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 180, useNativeDriver: true }),
+      Animated.timing(translateY, { toValue: -30, duration: 180, useNativeDriver: true }),
+      Animated.timing(scale, { toValue: 0.95, duration: 180, useNativeDriver: true }),
     ]).start(() => {
       onClose();
     });
@@ -43,23 +58,80 @@ export default function Toast({ visible, message, type, onClose }: ToastProps) {
 
   if (!visible) return null;
 
+  const config = {
+    success: {
+      accent: '#10b981',
+      bg: isDark ? '#0f1f17' : '#ffffff',
+      border: isDark ? 'rgba(16, 185, 129, 0.35)' : 'rgba(16, 185, 129, 0.45)',
+      iconBg: isDark ? 'rgba(16, 185, 129, 0.18)' : '#ecfdf5',
+      iconName: 'checkmark-circle' as const,
+      defaultTitle: 'ORDER CONFIRMED',
+    },
+    error: {
+      accent: '#ef4444',
+      bg: isDark ? '#231114' : '#ffffff',
+      border: isDark ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.45)',
+      iconBg: isDark ? 'rgba(239, 68, 68, 0.18)' : '#fef2f2',
+      iconName: 'alert-circle' as const,
+      defaultTitle: 'ORDER ALERT',
+    },
+    loading: {
+      accent: '#3b82f6',
+      bg: isDark ? '#0e1726' : '#ffffff',
+      border: isDark ? 'rgba(59, 130, 246, 0.35)' : 'rgba(59, 130, 246, 0.45)',
+      iconBg: isDark ? 'rgba(59, 130, 246, 0.18)' : '#eff6ff',
+      iconName: 'sync-circle' as const,
+      defaultTitle: 'PROCESSING DESK',
+    },
+  }[type];
+
+  const topOffset = Math.max(insets.top + 8, Platform.OS === 'android' ? 24 : 44);
+
   return (
-    <View style={styles.overlay} pointerEvents="none">
-      <Animated.View style={[
-        styles.toast, 
-        { opacity, transform: [{ translateY }] },
-        type === 'success' ? styles.successBorder : type === 'error' ? styles.errorBorder : styles.loadingBorder
-      ]}>
-        {type === 'loading' ? (
-          <ActivityIndicator size="small" color="#0f62fe" />
-        ) : (
-          <Ionicons 
-            name={type === 'success' ? "checkmark-circle" : "alert-circle"} 
-            size={24} 
-            color={type === 'success' ? "#10b981" : "#ef4444"} 
-          />
-        )}
-        <Text style={styles.text}>{message}</Text>
+    <View style={[styles.overlay, { top: topOffset }]} pointerEvents="box-none">
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            backgroundColor: config.bg,
+            borderColor: config.border,
+            opacity,
+            transform: [{ translateY }, { scale }],
+          },
+        ]}
+      >
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={hide}
+          style={styles.innerRow}
+        >
+          {/* Status Icon Badge */}
+          <View style={[styles.iconBadge, { backgroundColor: config.iconBg }]}>
+            {type === 'loading' ? (
+              <ActivityIndicator size="small" color={config.accent} />
+            ) : (
+              <Ionicons name={config.iconName} size={20} color={config.accent} />
+            )}
+          </View>
+
+          {/* Text Content */}
+          <View style={styles.textWrap}>
+            <View style={styles.headerLine}>
+              <Text style={[styles.title, { color: config.accent }]}>
+                {title || config.defaultTitle}
+              </Text>
+              <Text style={[styles.timeMicro, { color: colors.textSecondary }]}>Just now</Text>
+            </View>
+            <Text style={[styles.message, { color: colors.text }]} numberOfLines={2}>
+              {message}
+            </Text>
+          </View>
+
+          {/* Subtle Close Pill */}
+          <TouchableOpacity onPress={hide} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.dismissBtn}>
+            <Ionicons name="close" size={16} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -68,35 +140,65 @@ export default function Toast({ visible, message, type, onClose }: ToastProps) {
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    top: 50,
     left: 0,
     right: 0,
     alignItems: 'center',
     zIndex: 99999,
   },
-  toast: {
-    backgroundColor: '#ffffff',
+  container: {
+    width: '92%',
+    maxWidth: 440,
+    borderRadius: 18,
+    borderWidth: 1.2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 14,
+    overflow: 'hidden',
+  },
+  innerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderRadius: 16,
-    maxWidth: '90%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 12,
-    borderWidth: 1.5,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
-  successBorder: { borderColor: '#10b981', backgroundColor: '#f0fdf4' },
-  errorBorder: { borderColor: '#ef4444', backgroundColor: '#fef2f2' },
-  loadingBorder: { borderColor: '#0f62fe', backgroundColor: '#eff6ff' },
-  text: {
-    marginLeft: 10,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-    flexShrink: 1,
+  iconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  textWrap: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  title: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  timeMicro: {
+    fontSize: 9,
+    fontWeight: '600',
+    marginRight: 6,
+  },
+  message: {
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  dismissBtn: {
+    padding: 4,
+    marginLeft: 6,
   },
 });

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    Alert,
     Animated,
     Dimensions,
     Modal,
@@ -34,7 +35,7 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
   const { colors } = useTheme();
   const styles = getStyles(colors);
   
-  const { watchlist, addToWatchlist, removeFromWatchlist, balance, buyStock } = useTrading();
+  const { watchlist, addToWatchlist, removeFromWatchlist, balance, buyStock, sellStock, holdings } = useTrading();
   const { xp, proMode } = useGamification();
 
   // Gamification Unlocking Thresholds
@@ -59,6 +60,60 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'loading' | 'success' | 'error' }>({ visible: false, message: '', type: 'success' });
+
+  const handleQuickSell = (stockSymbol: string) => {
+    const owned = holdings.find(h => h.symbol === stockSymbol);
+    if (!owned) {
+      setToast({ visible: true, message: "You don't own shares of this stock.", type: 'error' });
+      return;
+    }
+
+    if (owned.quantity === 1) {
+      const effPrice = (owned.averagePrice && owned.averagePrice > 0) ? owned.averagePrice : 100;
+      sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(res => {
+        if (res) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setToast({ visible: true, message: `Sold 1 share of ${owned.symbol.replace('.NS', '')}`, type: 'success' });
+          if (onBuyComplete) onBuyComplete();
+        }
+      });
+    } else {
+      Alert.alert(
+        `Sell ${owned.symbol.replace('.NS', '')}`,
+        `You own ${owned.quantity} shares.\nAverage purchase: ${formatCurrency(owned.averagePrice)}`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: `Sell All (${owned.quantity})`,
+            style: "destructive",
+            onPress: () => {
+              const effPrice = (owned.averagePrice && owned.averagePrice > 0) ? owned.averagePrice : 100;
+              sellStock(owned.symbol, effPrice, owned.quantity, owned.productType || 'cnc').then(res => {
+                if (res) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setToast({ visible: true, message: `Sold all ${owned.quantity} shares of ${owned.symbol.replace('.NS', '')}`, type: 'success' });
+                  if (onBuyComplete) onBuyComplete();
+                }
+              });
+            }
+          },
+          {
+            text: "Sell 1 Share",
+            onPress: () => {
+              const effPrice = (owned.averagePrice && owned.averagePrice > 0) ? owned.averagePrice : 100;
+              sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(res => {
+                if (res) {
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  setToast({ visible: true, message: `Sold 1 share of ${owned.symbol.replace('.NS', '')}`, type: 'success' });
+                  if (onBuyComplete) onBuyComplete();
+                }
+              });
+            }
+          }
+        ]
+      );
+    }
+  };
 
   const pan = useRef(new Animated.Value(0)).current;
   const lastHapticValue = useRef(0);
@@ -268,7 +323,17 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
               </TouchableOpacity>
               <View style={styles.stockInfo}>
-                <Text style={styles.stockSymbol}>{stock.symbol.replace('.NS', '')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.stockSymbol}>{stock.symbol.replace('.NS', '')}</Text>
+                  {(() => {
+                    const owned = holdings.find(h => h.symbol === stock.symbol);
+                    return owned ? (
+                      <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#10b981' }}>{owned.quantity}</Text>
+                      </View>
+                    ) : null;
+                  })()}
+                </View>
                 <Text style={styles.stockName} numberOfLines={1}>{stock.shortname}</Text>
               </View>
               <View style={styles.priceContainer}>
@@ -281,9 +346,26 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
                   </>
                 ) : <ActivityIndicator size="small" color="#d1d5db" />}
               </View>
-              <TouchableOpacity style={styles.buyBtn} onPress={() => openBuyModal(stock)}>
-                <Text style={styles.buyText}>BUY</Text>
-              </TouchableOpacity>
+              {(() => {
+                const owned = holdings.find(h => h.symbol === stock.symbol);
+                if (owned) {
+                  return (
+                    <View style={{ flexDirection: 'row', gap: 5 }}>
+                      <TouchableOpacity style={[styles.buyBtn, { paddingHorizontal: 10 }]} onPress={() => openBuyModal(stock)}>
+                        <Text style={styles.buyText}>BUY</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.buyBtn, { backgroundColor: '#ef4444', paddingHorizontal: 10 }]} onPress={() => handleQuickSell(stock.symbol)}>
+                        <Text style={styles.buyText}>SELL</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+                return (
+                  <TouchableOpacity style={styles.buyBtn} onPress={() => openBuyModal(stock)}>
+                    <Text style={styles.buyText}>BUY</Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </TouchableOpacity>
           );
         })}
