@@ -10,18 +10,44 @@ const MongoStore = require("connect-mongo").default;
 const passport = require("passport");
 const LocalStrategy = require("passport-local");
 
+const rateLimit = require("express-rate-limit");
+
 const authRoutes = require("./routes/authRoutes");
 const tradeRoutes = require("./routes/tradeRoutes");
+const userRoutes = require("./routes/userRoutes");
+const forumRoutes = require("./routes/forumRoutes");
 
 connectDB();
+
+// DoS Protection: Rate Limiters
+const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 200, // Limit each IP to 200 requests per 15 minutes
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: "Too many requests from this IP. Please slow down." }
+});
+
+const authLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 10, // Max 10 attempts per minute (prevents brute-force)
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, message: "Too many authentication attempts. Please wait 1 minute." }
+});
 
 // Middleware
 app.use(cors({
     origin: true,
     credentials: true,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "25kb" })); // DoS Protection: Restrict payload size
+app.use(express.urlencoded({ extended: true, limit: "25kb" }));
+
+// Apply Rate Limiters
+app.use("/api/", globalLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/signup", authLimiter);
 
 
 
@@ -64,6 +90,12 @@ app.use("/api/auth", authRoutes);
 
 //buy
 app.use("/api/trade", tradeRoutes);
+
+//user profile & preferences
+app.use("/api/user", userRoutes);
+
+//community forum
+app.use("/api/forum", forumRoutes);
 
 
 app.get("/",(req,res)=>{

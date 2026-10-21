@@ -19,6 +19,7 @@ from API.logic import (
 )
 from API.news_cache import news_cache
 from API.news_service import fetch_news
+from API.ml_recommender import recommend_stocks, score_news_sentiment
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
@@ -145,3 +146,91 @@ def stock(
     if "error" in result:
         raise HTTPException(status_code=404, detail=result)
     return result
+
+
+# --- Machine Learning Recommendation & Sentiment Endpoints ---
+
+@app.get("/ml/recommend")
+def get_ml_recommendations(
+    risk: str = Query("MODERATE", description="Risk profile: CONSERVATIVE | MODERATE | AGGRESSIVE"),
+    sectors: Optional[str] = Query(None, description="Comma-separated preferred sectors: IT,Banking,Energy,Automobile,FMCG,Pharma"),
+    holdings: Optional[str] = Query(None, description="Comma-separated symbols user holds"),
+    viewed: Optional[str] = Query(None, description="Comma-separated symbols user viewed"),
+    trades: Optional[str] = Query(None, description="Comma-separated symbols user traded/bought/sold"),
+    limit: int = Query(6, ge=1, le=15, description="Number of recommendations"),
+):
+    """
+    GET /ml/recommend?risk=MODERATE&sectors=IT,Banking&trades=RELIANCE,TCS&limit=6
+    Personalized AI stock recommender using multi-factor scoring.
+    """
+    pref_sectors = [s.strip() for s in sectors.split(",")] if sectors else []
+    user_holdings = [h.strip() for h in holdings.split(",")] if holdings else []
+    viewed_stocks = [v.strip() for v in viewed.split(",")] if viewed else []
+    trade_history = [t.strip() for t in trades.split(",")] if trades else []
+
+    recommendations = recommend_stocks(
+        risk_profile=risk,
+        preferred_sectors=pref_sectors,
+        user_holdings=user_holdings,
+        viewed_stocks=viewed_stocks,
+        trade_history=trade_history,
+        limit=limit,
+    )
+
+    return {
+        "status": "success",
+        "risk_profile": risk.upper(),
+        "sectors_analyzed": pref_sectors,
+        "recommendations": recommendations,
+    }
+
+
+@app.get("/ml/personalized-news")
+def get_personalized_news(
+    symbols: Optional[str] = Query(None, description="Comma-separated stock symbols"),
+    sector: Optional[str] = Query(None, description="Optional sector filter"),
+    keyword: Optional[str] = Query(None, description="Optional search keyword"),
+):
+    """
+    GET /ml/personalized-news?symbols=RELIANCE,TCS&sector=IT
+    Fetches news and scores sentiment with Financial NLP heuristics.
+    """
+    target_keyword = keyword
+    if not target_keyword and symbols:
+        first_sym = symbols.split(",")[0].replace(".NS", "").replace(".BO", "").strip()
+        target_keyword = first_sym
+
+    cached = news_cache.get(sector, None, target_keyword)
+    if cached:
+        articles = cached.get("articles", [])
+    else:
+        try:
+            news_res = fetch_news(sector=sector, keyword=target_keyword)
+            articles = news_res.get("articles", [])
+            news_cache.set(sector, None, target_keyword, value=news_res)
+        except Exception:
+            # Fallback to general news cache
+            cached_gen = news_cache.get(None, None, None)
+            articles = cached_gen.get("articles", []) if cached_gen else []
+
+    # Enrich each article with ML NLP sentiment scoring
+    enriched_articles = []
+    for art in articles:
+        sentiment_analysis = score_news_sentiment(art.get("title", ""), art.get("description", ""))
+        enriched_articles.append({
+            **art,
+            "sentiment": sentiment_analysis["sentiment"],
+            "sentiment_score": sentiment_analysis["score"],
+            "sentiment_confidence": sentiment_analysis["confidence"],
+            "impact_keywords": sentiment_analysis["keywords"],
+        })
+
+    # Sort so high-impact articles (Bullish or Bearish) appear first
+    enriched_articles.sort(key=lambda a: abs(a.get("sentiment_score", 0)), reverse=True)
+
+    return {
+        "status": "success",
+        "total": len(enriched_articles),
+        "articles": enriched_articles,
+    }
+

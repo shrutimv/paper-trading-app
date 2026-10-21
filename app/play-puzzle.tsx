@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -70,6 +71,10 @@ export default function PlayPuzzleScreen() {
     if (guess === currentPuzzle.correctAnswer) {
       addXp(50); 
       setScore(prev => prev + 1);
+      AsyncStorage.getItem('paper_puzzles_completed').then(v => {
+        const count = v ? parseInt(v) : 0;
+        AsyncStorage.setItem('paper_puzzles_completed', (count + 1).toString());
+      }).catch(() => {});
     } else {
       setHearts(prev => Math.max(0, prev - 1));
     }

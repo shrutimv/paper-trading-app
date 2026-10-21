@@ -15,8 +15,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { fetchNews, type NewsArticle } from "../src/api/newsApi";
 import { useTheme } from "../context/ThemeContext";
+import { useTrading } from "../context/TradingContext";
 
 const CATEGORIES = [
+  { label: "Recommendations", value: "Recommendations", sector: undefined, keyword: undefined },
   { label: "General", value: "General", sector: undefined, keyword: undefined },
   { label: "Tech", value: "Tech", sector: "Technology", keyword: undefined },
   { label: "Finance", value: "Finance", sector: "Finance", keyword: undefined },
@@ -79,7 +81,7 @@ function formatDate(dateValue: string) {
 
 function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
   const { colors, isDark } = useTheme();
-  const styles = getStyles(colors);
+  const styles = getStyles(colors, isDark);
   const pulseAnim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -128,14 +130,25 @@ function NewsSkeleton({ cardWidth }: { cardWidth: number }) {
   );
 }
 
+function getSentiment(title: string, desc: string) {
+  const text = `${title} ${desc}`.toLowerCase();
+  const bullish = /profit|surge|record|jump|growth|rally|gain|bull|upgrade|dividend|breakout|soar|beat/i.test(text);
+  const bearish = /loss|fall|drop|plunge|slump|bear|downgrade|probe|fraud|penalty|crash|decline/i.test(text);
+  if (bullish && !bearish) return { label: "BULLISH", color: "#16a34a", bg: "rgba(34, 197, 94, 0.14)" };
+  if (bearish && !bullish) return { label: "BEARISH", color: "#dc2626", bg: "rgba(239, 68, 68, 0.14)" };
+  return { label: "NEUTRAL", color: "#64748b", bg: "rgba(100, 116, 139, 0.12)" };
+}
+
 export default function NewsCarousel() {
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
 
+  const { holdings, transactions } = useTrading();
+
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState("General");
+  const [selectedCategory, setSelectedCategory] = useState("Recommendations");
   const [searchQuery, setSearchQuery] = useState("");
   const [inputQuery, setInputQuery] = useState("");
 
@@ -153,6 +166,14 @@ export default function NewsCarousel() {
 
       if (searchVal.trim().length > 0) {
         keyword = searchVal.trim();
+      } else if (catVal === "Recommendations") {
+        // High-precision personalized news based on user's actual holdings and trade history
+        const userPortfolioSymbols = [
+          ...holdings.map((h) => h.symbol.replace(".NS", "").replace(".BO", "")),
+          ...(transactions || []).map((t) => t.symbol.replace(".NS", "").replace(".BO", "")),
+        ].filter(Boolean);
+
+        keyword = userPortfolioSymbols.length > 0 ? userPortfolioSymbols[0] : "Sensex";
       } else {
         const cat = CATEGORIES.find((c) => c.value === catVal);
         if (cat) {
@@ -376,7 +397,17 @@ export default function NewsCarousel() {
                 style={styles.cardDescription}
                 highlightStyle={{ backgroundColor: "rgba(37, 99, 235, 0.12)" }}
               />
-              <Text style={styles.cardDate}>{formatDate(article.published_at)}</Text>
+              {(() => {
+                const sentiment = getSentiment(article.title, article.description);
+                return (
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+                    <View style={{ backgroundColor: sentiment.bg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ color: sentiment.color, fontSize: 10, fontWeight: "800" }}>{sentiment.label}</Text>
+                    </View>
+                    <Text style={styles.cardDate}>{formatDate(article.published_at)}</Text>
+                  </View>
+                );
+              })()}
             </View>
           </TouchableOpacity>
         ))}
@@ -385,7 +416,7 @@ export default function NewsCarousel() {
   );
 }
 
-const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+const getStyles = (colors: any, isDark: boolean = false) => StyleSheet.create({
   container: {
     paddingTop: 4,
     paddingBottom: 24,

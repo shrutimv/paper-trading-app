@@ -38,6 +38,47 @@ const userSchema = new mongoose.Schema(
         exchange: String,
       },
     ],
+    // ML Recommendation Engine Profile
+    riskProfile: {
+      type: String,
+      enum: ["CONSERVATIVE", "MODERATE", "AGGRESSIVE"],
+      default: "MODERATE",
+    },
+    preferredSectors: [
+      {
+        type: String,
+      },
+    ],
+    viewedStocks: [
+      {
+        symbol: String,
+        viewedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    // Profile & Community Metadata
+    bio: {
+      type: String,
+      default: "Trading enthusiast & market learner",
+      trim: true,
+    },
+    avatarUrl: {
+      type: String,
+      default: "",
+    },
+    badges: [
+      {
+        id: String,
+        title: String,
+        icon: String,
+        unlockedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     role: {
       type: String,
       default: "user",

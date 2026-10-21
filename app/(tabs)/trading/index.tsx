@@ -476,6 +476,69 @@ export default function TradingDashboard() {
     );
   };
 
+  const handleRunAllotmentLottery = (app: IpoApplication) => {
+    Alert.alert(
+      "Simulate IPO Allotment Draw",
+      `Run simulated SEBI allotment lottery for ${app.name} (${app.lots} Lot / ${app.shares} shares)?\n\nRetail Category: ~8.5x Oversubscribed.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Run Lottery 🎲",
+          onPress: async () => {
+            const isAllotted = Math.random() < 0.5;
+
+            if (isAllotted) {
+              const sym = app.symbol.includes('.') ? app.symbol : `${app.symbol}.NS`;
+              const newHolding = {
+                symbol: sym,
+                name: app.name,
+                quantity: app.shares,
+                averagePrice: app.bidPrice,
+                productType: 'cnc' as const,
+              };
+
+              setHoldings(prev => {
+                const existing = prev.find(h => h.symbol === sym && h.productType === 'cnc');
+                if (existing) {
+                  return prev.map(h => h.symbol === sym && h.productType === 'cnc'
+                    ? { ...h, quantity: h.quantity + app.shares }
+                    : h
+                  );
+                }
+                return [...prev, newHolding];
+              });
+
+              const updated = myApplications.map(a => a.id === app.id ? { ...a, status: 'ALLOTTED' as const } : a);
+              setMyApplications(updated);
+              await saveIpoApplications(updated);
+
+              if (addXp) addXp(150);
+
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert(
+                "🎉 ALLOTMENT SUCCESSFUL!",
+                `Congratulations! You won the retail lottery for ${app.name}!\n\n${app.shares} shares at ₹${app.bidPrice} have been credited directly into your Demat CNC Holdings! (+150 XP)`,
+                [{ text: "View Portfolio", onPress: () => setMainTab('portfolio') }]
+              );
+            } else {
+              setBalance(prev => prev + app.amountBlocked);
+
+              const updated = myApplications.map(a => a.id === app.id ? { ...a, status: 'NOT_ALLOTTED' as const } : a);
+              setMyApplications(updated);
+              await saveIpoApplications(updated);
+
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              Alert.alert(
+                "Not Allotted (Refunded)",
+                `Due to heavy retail oversubscription (8.5x), your application #${app.id} was not drawn in the lottery.\n\n${formatCurrency(app.amountBlocked)} has been unblocked and refunded back to your cash balance.`
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // Margin calculation for Buy Modal
   const modalLivePrice = selectedStock?.price || 100;
   const tradePrice = orderType === 'limit' ? parseFloat(limitPrice) || modalLivePrice : modalLivePrice;
@@ -1006,7 +1069,7 @@ export default function TradingDashboard() {
                 myApplications.length === 0 ? (
                   <View style={styles.emptyCard}>
                     <Ionicons name="document-text-outline" size={40} color={colors.textSecondary} style={{ marginBottom: 8 }} />
-                    <Text style={styles.emptyText}>You haven't placed any IPO bids yet.</Text>
+                    <Text style={styles.emptyText}>{"You haven't placed any IPO bids yet."}</Text>
                     <TouchableOpacity 
                       style={[styles.ipoNavBtnActive, { paddingHorizontal: 16, paddingVertical: 8, marginTop: 12, borderRadius: 10 }]}
                       onPress={() => setIpoTab('live')}
@@ -1022,8 +1085,23 @@ export default function TradingDashboard() {
                           <Text style={styles.ipoTitle}>{app.name}</Text>
                           <Text style={styles.ipoAppId}>Application #{app.id} • {app.appliedDate}</Text>
                         </View>
-                        <View style={[styles.ipoStatusBadge, styles.ipoStatusOpen]}>
-                          <Text style={[styles.ipoStatusText, styles.ipoStatusTextOpen]}>BID PLACED</Text>
+                        <View style={[
+                          styles.ipoStatusBadge,
+                          app.status === 'ALLOTTED' 
+                            ? { backgroundColor: 'rgba(34, 197, 94, 0.15)' } 
+                            : app.status === 'NOT_ALLOTTED' 
+                            ? { backgroundColor: 'rgba(239, 68, 68, 0.15)' } 
+                            : { backgroundColor: 'rgba(37, 99, 235, 0.15)' }
+                        ]}>
+                          <Text style={[
+                            styles.ipoStatusText,
+                            { 
+                              color: app.status === 'ALLOTTED' ? '#16a34a' : app.status === 'NOT_ALLOTTED' ? '#dc2626' : '#2563eb',
+                              fontWeight: '900',
+                            }
+                          ]}>
+                            {app.status === 'ALLOTTED' ? 'ALLOTTED 🎉' : app.status === 'NOT_ALLOTTED' ? 'REFUNDED 💸' : 'BID PLACED ⏳'}
+                          </Text>
                         </View>
                       </View>
 
@@ -1042,14 +1120,48 @@ export default function TradingDashboard() {
                         </View>
                       </View>
 
-                      <View style={styles.ipoAppActionRow}>
-                        <Text style={styles.ipoAllotmentText}>⏳ {app.allotmentDate}</Text>
-                        <TouchableOpacity 
-                          style={styles.cancelBidBtn}
-                          onPress={() => handleCancelIpoBid(app)}
-                        >
-                          <Text style={styles.cancelBidText}>Cancel Bid & Refund</Text>
-                        </TouchableOpacity>
+                      <View style={[styles.ipoAppActionRow, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}>
+                        {app.status === 'BID_PLACED' ? (
+                          <>
+                            <TouchableOpacity 
+                              style={{
+                                backgroundColor: '#16a34a',
+                                paddingHorizontal: 12,
+                                paddingVertical: 7,
+                                borderRadius: 8,
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                              }}
+                              onPress={() => handleRunAllotmentLottery(app)}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>Run Lottery 🎲</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                              style={styles.cancelBidBtn}
+                              onPress={() => handleCancelIpoBid(app)}
+                            >
+                              <Text style={styles.cancelBidText}>Cancel Bid</Text>
+                            </TouchableOpacity>
+                          </>
+                        ) : app.status === 'ALLOTTED' ? (
+                          <>
+                            <Text style={{ fontSize: 11, color: '#16a34a', fontWeight: '700' }}>
+                              ✅ {app.shares} shares credited in Demat
+                            </Text>
+                            <TouchableOpacity 
+                              style={{ backgroundColor: 'rgba(37, 99, 235, 0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                              onPress={() => setMainTab('portfolio')}
+                            >
+                              <Text style={{ color: '#2563eb', fontSize: 11, fontWeight: '800' }}>View Portfolio →</Text>
+                            </TouchableOpacity>
+                          </>
+                        ) : (
+                          <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '700' }}>
+                            💸 Refunded {formatCurrency(app.amountBlocked)} to wallet
+                          </Text>
+                        )}
                       </View>
                     </View>
                   ))
