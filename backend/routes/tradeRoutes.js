@@ -8,5 +8,6 @@ router.post("/buy", isLoggedIn, tradeController.buyStock);
 router.post("/sell", isLoggedIn, tradeController.sellStock);
 router.get("/holdings", isLoggedIn, tradeController.getHoldings);
 router.get("/history", isLoggedIn, tradeController.getTransactionHistory);
+router.post("/reset", isLoggedIn, tradeController.resetAccount);
 
 module.exports = router;

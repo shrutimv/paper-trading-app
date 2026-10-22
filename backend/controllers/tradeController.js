@@ -251,3 +251,23 @@ module.exports.getTransactionHistory = async (req, res) => {
   }
 };
 
+module.exports.resetAccount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await Transaction.deleteMany({ user: userId });
+    const user = await User.findById(userId);
+    if (user) {
+      user.balance = 100000;
+      await user.save();
+    }
+    res.status(200).json({
+      success: true,
+      message: "Trading account reset successfully. Balance restored to ₹1,00,000.",
+      balance: 100000,
+    });
+  } catch (err) {
+    console.error("resetAccount error:", err);
+    res.status(500).json({ success: false, message: "Failed to reset trading account." });
+  }
+};
+

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { Platform, TouchableOpacity } from 'react-native';
+import { Platform, TouchableOpacity, View, Text } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
 
 export default function TabLayout() {
@@ -29,12 +29,32 @@ export default function TabLayout() {
         },
         headerTintColor: colors.text,
         headerRight: () => (
-          <TouchableOpacity 
-            onPress={() => router.push('/profile')} 
-            style={{ marginRight: 15 }}
-          >
-            <Ionicons name="person-circle-outline" size={28} color={colors.text} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 10 }}>
+            <TouchableOpacity 
+              onPress={() => router.push('/forum' as any)} 
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.accent + '18',
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.accent + '35',
+                gap: 5
+              }}
+            >
+              <Ionicons name="chatbubbles" size={15} color={colors.accent} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.accent }}>Forum</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => router.push('/profile')} 
+            >
+              <Ionicons name="person-circle-outline" size={28} color={colors.text} />
+            </TouchableOpacity>
+          </View>
         ),
         // --- STRICTLY ANCHORED STYLING ---
         tabBarStyle: {

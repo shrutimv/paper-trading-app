@@ -436,6 +436,96 @@ export default function Home() {
           <AIRecommendations />
         </Animated.View>
 
+        {/* --- COMMUNITY FORUM SECTION --- */}
+        <Animated.View entering={FadeInDown.duration(600).delay(595)}>
+          <View style={[styles.sectionHeader, { marginTop: 30 }]}>
+            <Text style={styles.sectionTitle}>Traders Lounge</Text>
+            <TouchableOpacity onPress={() => router.push("/forum" as any)}>
+              <Text style={styles.link}>Open Forum →</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => router.push("/forum" as any)}
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 20,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(37,99,235,0.3)' : '#bfdbfe',
+              shadowColor: colors.shadowColor,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.08,
+              shadowRadius: 8,
+              elevation: 3,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View
+                  style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 12,
+                    backgroundColor: isDark ? 'rgba(37,99,235,0.2)' : '#dbeafe',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="chatbubbles" size={20} color="#2563eb" />
+                </View>
+                <View>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
+                    Community Discussions
+                  </Text>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                    Analysis • Strategies • Q&A
+                  </Text>
+                </View>
+              </View>
+
+              <View
+                style={{
+                  backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 12,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#16a34a' }} />
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>LIVE</Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 12 }}>
+              Connect with fellow Indian retail traders. Share insights on Tata Motors, Zomato, Nifty50, and ask queries.
+            </Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border, paddingTop: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>#TATAMOTORS</Text>
+                </View>
+                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>#ZOMATO</Text>
+                </View>
+                <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>#NIFTY50</Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: colors.accent }}>Join</Text>
+                <Ionicons name="arrow-forward" size={14} color={colors.accent} />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </Animated.View>
+
         {/* --- MARKET NEWS SECTION (API DRIVEN) --- */}
         <Animated.View entering={FadeInDown.duration(600).delay(600)}>
           <View style={[styles.sectionHeader, { marginTop: 30, marginBottom: 5 }]}>
