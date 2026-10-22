@@ -228,6 +228,59 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
 
+        {/* ── SOCIAL & COMPETITIVE LEAGUES ── */}
+        <View style={{ marginBottom: 20 }}>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            {/* LEADERBOARD CARD */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: colors.card,
+                padding: 16,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: '#eab30860',
+              }}
+              onPress={() => router.push('/leaderboard' as any)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(234, 179, 8, 0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="trophy" size={20} color="#eab308" />
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>Leaderboard</Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>Top 50 & Rivals</Text>
+            </TouchableOpacity>
+
+            {/* FRIENDS NETWORK CARD */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: colors.card,
+                padding: 16,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: colors.accent + '50',
+              }}
+              onPress={() => router.push('/friends' as any)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.accent + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="people" size={20} color={colors.accent} />
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>Friends (UID)</Text>
+              <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '800', marginTop: 2 }}>
+                {user?.friendCode || 'Find Friends'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* ── RECENT TRADE ACTIVITY & LOGS ── */}
         <View style={styles.recentActivitySection}>
           <View style={styles.sectionHeaderRow}>

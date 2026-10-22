@@ -100,6 +100,10 @@ app.use("/api/user", userRoutes);
 //community forum
 app.use("/api/forum", forumRoutes);
 
+//social & leaderboard
+const socialRoutes = require("./routes/socialRoutes");
+app.use("/api/social", socialRoutes);
+
 
 app.get("/",(req,res)=>{
     res.send("backend running")

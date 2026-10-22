@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -30,9 +31,58 @@ export default function AuthScreen() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
 
+  // --- STEP 1: SEND EMAIL VERIFICATION CODE (ANTI-BOT) ---
+  const handleSendOtp = async () => {
+    if (!email.trim() || !email.includes("@")) {
+      Alert.alert("Invalid Email", "Please enter a valid email address first.");
+      return;
+    }
+
+    setSendingOtp(true);
+    setDevOtpHint(null);
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        Alert.alert("Verification Error", data.message || "Failed to send verification code.");
+        return;
+      }
+
+      setOtpSent(true);
+      if (data.devOtp) {
+        setDevOtpHint(data.devOtp);
+      }
+
+      Alert.alert(
+        "Code Sent! 📬",
+        `A 6-digit code has been dispatched to ${email.trim()}. Please enter it below to verify your account.`
+      );
+    } catch (err) {
+      console.error("sendOtp error:", err);
+      Alert.alert(
+        "Connection Error",
+        "Could not connect to backend server. Make sure port 5000 is running."
+      );
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  // --- STEP 2: AUTHENTICATE / REGISTER ---
   const handleAuth = async () => {
     if (isLogin) {
       if (!username.trim() || !password) {
@@ -44,6 +94,10 @@ export default function AuthScreen() {
         Alert.alert("Error", "Please fill in all fields (username, email, password).");
         return;
       }
+      if (!otp.trim()) {
+        Alert.alert("Verification Required", "Please enter the 6-digit verification code sent to your email.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -52,9 +106,7 @@ export default function AuthScreen() {
         // LOGIN
         const response = await fetch(`${BASE_URL}/api/auth/login`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
             username: username.trim(),
@@ -80,17 +132,16 @@ export default function AuthScreen() {
 
         router.replace("/(tabs)");
       } else {
-        // SIGNUP
+        // SIGNUP WITH OTP
         const response = await fetch(`${BASE_URL}/api/auth/signup`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
             username: username.trim(),
             email: email.trim().toLowerCase(),
             password,
+            otp: otp.trim(),
           }),
         });
 
@@ -107,7 +158,7 @@ export default function AuthScreen() {
           isGuest: false,
         };
 
-        Alert.alert("Success", "Account created successfully!");
+        Alert.alert("Welcome aboard! 🎉", `Account created! Your unique Friend Code is: ${data.user.friendCode}`);
         await AsyncStorage.setItem("userSession", JSON.stringify(userData));
         if (login) await login(userData);
 
@@ -117,7 +168,7 @@ export default function AuthScreen() {
       console.log("Auth error:", err);
       Alert.alert(
         "Connection Error",
-        "Unable to connect to the backend server (Port 5000). Please ensure 'node app.js' is running in your backend terminal."
+        "Unable to connect to the backend server. Please verify backend terminal status."
       );
     } finally {
       setLoading(false);
@@ -125,7 +176,7 @@ export default function AuthScreen() {
   };
 
   const handleGuest = async () => {
-    const guestUser = { username: "Guest User", balance: 100000, isGuest: true };
+    const guestUser = { username: "Guest User", balance: 100000, isGuest: true, friendCode: "GUEST-TRADER" };
     await AsyncStorage.setItem("userSession", JSON.stringify(guestUser));
     if (continueAsGuest) await continueAsGuest();
     router.replace("/(tabs)");
@@ -143,12 +194,13 @@ export default function AuthScreen() {
       >
         <Text style={styles.logoText}>PaperTrade</Text>
         <Text style={styles.subtitle}>
-          {isLogin ? "Welcome Back" : "Create Account"}
+          {isLogin ? "Welcome Back, Trader" : "Create Verified Account"}
         </Text>
 
+        {/* USERNAME */}
         <TextInput
-          style={styles.input}
-          placeholder="Username"
+          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+          placeholder="Unique Username (e.g. trader_raj)"
           placeholderTextColor={colors.textSecondary}
           value={username}
           onChangeText={setUsername}
@@ -156,22 +208,79 @@ export default function AuthScreen() {
           autoCorrect={false}
         />
 
+        {/* EMAIL + SEND OTP ROW (SIGNUP ONLY) */}
         {!isLogin && (
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            placeholderTextColor={colors.textSecondary}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoCorrect={false}
-          />
+          <View style={{ marginBottom: 15 }}>
+            <View style={styles.emailRow}>
+              <TextInput
+                style={[
+                  styles.emailInput,
+                  { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+                ]}
+                placeholder="Email Address"
+                placeholderTextColor={colors.textSecondary}
+                value={email}
+                onChangeText={(val) => {
+                  setEmail(val);
+                  setOtpSent(false);
+                }}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.otpSendBtn,
+                  { backgroundColor: otpSent ? '#10b981' : colors.accent },
+                  sendingOtp && { opacity: 0.7 },
+                ]}
+                onPress={handleSendOtp}
+                disabled={sendingOtp}
+                activeOpacity={0.8}
+              >
+                {sendingOtp ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.otpSendBtnText}>{otpSent ? "Resend" : "Send OTP"}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* OTP INPUT BOX */}
+            {otpSent && (
+              <View style={styles.otpContainer}>
+                <View style={[styles.otpBox, { backgroundColor: colors.card, borderColor: '#10b981' }]}>
+                  <Ionicons name="shield-checkmark" size={20} color="#10b981" />
+                  <TextInput
+                    style={[styles.otpTextInput, { color: colors.text }]}
+                    placeholder="Enter 6-digit OTP"
+                    placeholderTextColor={colors.textSecondary}
+                    value={otp}
+                    onChangeText={setOtp}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                  />
+                </View>
+                {devOtpHint && (
+                  <Text style={{ fontSize: 11, color: '#10b981', fontWeight: '800', marginTop: 4 }}>
+                    ⚡ Dev Mode OTP: {devOtpHint}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
         )}
 
-        <View style={styles.passwordContainer}>
+        {/* PASSWORD */}
+        <View
+          style={[
+            styles.passwordContainer,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
+        >
           <TextInput
-            style={styles.passwordInput}
+            style={[styles.passwordInput, { color: colors.text }]}
             placeholder="Password"
             placeholderTextColor={colors.textSecondary}
             value={password}
@@ -187,58 +296,69 @@ export default function AuthScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* SUBMIT BUTTON */}
         <TouchableOpacity
-          style={[styles.mainBtn, loading && { opacity: 0.7 }]}
+          style={[styles.mainBtn, { backgroundColor: colors.accent }, loading && { opacity: 0.7 }]}
           onPress={handleAuth}
           disabled={loading}
+          activeOpacity={0.85}
         >
           <Text style={styles.btnText}>
-            {loading ? "Please wait..." : isLogin ? "Login" : "Sign Up"}
+            {loading ? "Processing..." : isLogin ? "Login to Terminal" : "Verify & Register"}
           </Text>
         </TouchableOpacity>
 
+        {/* TOGGLE LOGIN / SIGNUP */}
         <TouchableOpacity
           onPress={() => {
             setIsLogin(!isLogin);
             setUsername("");
             setEmail("");
             setPassword("");
+            setOtp("");
+            setOtpSent(false);
+            setDevOtpHint(null);
           }}
+          activeOpacity={0.7}
         >
-          <Text style={styles.toggleText}>
-            {isLogin
-              ? "Don't have an account? Sign Up"
-              : "Already have an account? Login"}
+          <Text style={[styles.toggleText, { color: colors.accent }]}>
+            {isLogin ? "Don't have an account? Sign Up with OTP" : "Already have an account? Login"}
           </Text>
         </TouchableOpacity>
 
-        <View style={styles.divider} />
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-        <TouchableOpacity style={styles.guestBtn} onPress={handleGuest}>
-          <Text style={styles.guestBtnText}>Continue as Guest</Text>
+        {/* GUEST ACCESS */}
+        <TouchableOpacity
+          style={[styles.guestBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={handleGuest}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="flash-outline" size={18} color={colors.text} style={{ marginRight: 6 }} />
+          <Text style={[styles.guestBtnText, { color: colors.text }]}>Continue as Guest Trader</Text>
         </TouchableOpacity>
 
-        {/* QUICK PRE-CONFIGURE SETTINGS SEGMENT */}
-        <View style={styles.settingsForm}>
-          <Text style={styles.settingsTitle}>Pre-Configure App Settings</Text>
+        {/* QUICK SETTINGS */}
+        <View style={[styles.settingsForm, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.settingsTitle, { color: colors.text }]}>Quick Preferences</Text>
 
           <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Dark Theme</Text>
+            <Text style={[styles.settingLabel, { color: colors.textSecondary }]}>Dark Theme</Text>
             <Switch
               value={isDark}
               onValueChange={toggleTheme}
               trackColor={{ false: "#767577", true: colors.accent }}
-              thumbColor={isDark ? "#f4f3f4" : "#f4f3f4"}
+              thumbColor={isDark ? "#fff" : "#f4f3f4"}
             />
           </View>
 
           <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Pro Mode (Skip Locks)</Text>
+            <Text style={[styles.settingLabel, { color: colors.textSecondary }]}>Pro Mode (Skip Locks)</Text>
             <Switch
               value={proMode}
               onValueChange={setProMode}
               trackColor={{ false: "#767577", true: colors.accent }}
-              thumbColor={proMode ? "#f4f3f4" : "#f4f3f4"}
+              thumbColor={proMode ? "#fff" : "#f4f3f4"}
             />
           </View>
         </View>
@@ -251,8 +371,7 @@ const getStyles = (colors: any) =>
   StyleSheet.create({
     scrollContent: {
       flexGrow: 1,
-      backgroundColor: colors.background,
-      paddingHorizontal: 30,
+      paddingHorizontal: 26,
       paddingVertical: 50,
       justifyContent: "center",
     },
@@ -261,88 +380,133 @@ const getStyles = (colors: any) =>
       fontWeight: "900",
       color: colors.accent,
       textAlign: "center",
-      marginBottom: 10,
+      marginBottom: 6,
     },
     subtitle: {
-      fontSize: 18,
+      fontSize: 16,
       color: colors.textSecondary,
       textAlign: "center",
-      marginBottom: 30,
+      marginBottom: 26,
+      fontWeight: "600",
     },
     input: {
-      backgroundColor: colors.card,
-      padding: 15,
-      borderRadius: 12,
-      marginBottom: 15,
-      fontSize: 16,
-      color: colors.text,
+      padding: 14,
+      borderRadius: 14,
+      marginBottom: 14,
+      fontSize: 15,
       borderWidth: 1,
-      borderColor: colors.border,
+    },
+    emailRow: {
+      flexDirection: "row",
+      gap: 10,
+      alignItems: "center",
+    },
+    emailInput: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 14,
+      fontSize: 15,
+      borderWidth: 1,
+    },
+    otpSendBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    otpSendBtnText: {
+      color: "#fff",
+      fontSize: 13,
+      fontWeight: "800",
+    },
+    otpContainer: {
+      marginTop: 10,
+    },
+    otpBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      gap: 10,
+    },
+    otpTextInput: {
+      flex: 1,
+      paddingVertical: 12,
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: 2,
     },
     passwordContainer: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: colors.card,
-      borderRadius: 12,
-      paddingHorizontal: 15,
-      marginBottom: 15,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      marginBottom: 16,
       borderWidth: 1,
-      borderColor: colors.border,
     },
     passwordInput: {
       flex: 1,
-      paddingVertical: 15,
-      fontSize: 16,
-      color: colors.text,
+      paddingVertical: 14,
+      fontSize: 15,
     },
     mainBtn: {
-      backgroundColor: colors.accent,
-      padding: 18,
-      borderRadius: 12,
-      alignItems: "center",
-      marginTop: 10,
-    },
-    btnText: { color: "#fff", fontWeight: "bold", fontSize: 16 },
-    toggleText: {
-      color: colors.accent,
-      textAlign: "center",
-      marginTop: 20,
-      fontWeight: "600",
-    },
-    divider: { height: 1, backgroundColor: colors.border, marginVertical: 25 },
-    guestBtn: {
-      borderWidth: 1,
-      borderColor: colors.accent,
-      padding: 15,
-      borderRadius: 12,
-      alignItems: "center",
-    },
-    guestBtnText: { color: colors.accent, fontWeight: "bold" },
-    settingsForm: {
-      marginTop: 30,
-      backgroundColor: colors.card,
-      borderRadius: 16,
       padding: 16,
+      borderRadius: 14,
+      alignItems: "center",
+      marginBottom: 16,
+      elevation: 2,
+    },
+    btnText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    toggleText: {
+      textAlign: "center",
+      fontSize: 14,
+      fontWeight: "700",
+      marginBottom: 20,
+    },
+    divider: {
+      height: 1,
+      marginVertical: 16,
+    },
+    guestBtn: {
+      flexDirection: "row",
+      padding: 14,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 24,
       borderWidth: 1,
-      borderColor: colors.border,
+    },
+    guestBtnText: {
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    settingsForm: {
+      padding: 16,
+      borderRadius: 16,
+      borderWidth: 1,
     },
     settingsTitle: {
       fontSize: 13,
       fontWeight: "800",
-      color: colors.text,
-      marginBottom: 12,
       textTransform: "uppercase",
-      letterSpacing: 0.5,
+      letterSpacing: 1,
+      marginBottom: 12,
     },
     settingRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingVertical: 8,
+      marginBottom: 10,
     },
     settingLabel: {
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: "600",
-      color: colors.textSecondary,
     },
   });

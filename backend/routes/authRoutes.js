@@ -6,6 +6,7 @@ const isLoggedIn = require("../middleware/isLoggedIn");
 
 const authController = require("../controllers/authController");
 
+router.post("/send-otp", authController.sendOtp);
 router.post("/signup", authController.signup);
 router.post("/login", (req, res, next) => {
     passport.authenticate("local", (err, user, info) => {
