@@ -1,13 +1,12 @@
 const express = require("express");
 const router = express.Router();
-
-const isLoggedIn = require("../middleware/isLoggedIn");
 const tradeController = require("../controllers/tradeController");
 
-router.post("/buy", isLoggedIn, tradeController.buyStock);
-router.post("/sell", isLoggedIn, tradeController.sellStock);
-router.get("/holdings", isLoggedIn, tradeController.getHoldings);
-router.get("/history", isLoggedIn, tradeController.getTransactionHistory);
-router.post("/reset", isLoggedIn, tradeController.resetAccount);
+// Trade execution & history - accessible to both authenticated users and guest sessions
+router.post("/buy", tradeController.buyStock);
+router.post("/sell", tradeController.sellStock);
+router.get("/holdings", tradeController.getHoldings);
+router.get("/history", tradeController.getTransactionHistory);
+router.post("/reset", tradeController.resetAccount);
 
 module.exports = router;

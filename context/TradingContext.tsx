@@ -194,31 +194,28 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       createdAt: new Date().toISOString(),
     };
 
-    if (user && !isGuest) {
-      try {
-        const response = await axios.post(
-          `${BASE_URL}/api/trade/buy`,
-          { symbol, quantity, price, name, productType, stopLoss },
-          { withCredentials: true }
-        );
-        if (response.data?.balance !== undefined) {
-          setBalance(response.data.balance);
-        } else {
-          setBalance(prev => prev - cost);
-        }
-        if (response.data?.transaction) {
-          newTx = {
-            ...response.data.transaction,
-            id: response.data.transaction._id || Date.now().toString(),
-            createdAt: response.data.transaction.createdAt || new Date().toISOString()
-          };
-        }
-        if (refreshUser) await refreshUser();
-      } catch (err) {
-        console.log("Backend trade buy failed, recording locally", err);
+    try {
+      const guestId = (await AsyncStorage.getItem('@forum_guest_id')) || 'guest_default';
+      const response = await axios.post(
+        `${BASE_URL}/api/trade/buy`,
+        { symbol, quantity, price, name, productType, stopLoss, guestId, currentBalance: balance },
+        { withCredentials: true, timeout: 10000 }
+      );
+      if (response.data?.balance !== undefined) {
+        setBalance(response.data.balance);
+      } else {
         setBalance(prev => prev - cost);
       }
-    } else {
+      if (response.data?.transaction) {
+        newTx = {
+          ...response.data.transaction,
+          id: response.data.transaction._id || Date.now().toString(),
+          createdAt: response.data.transaction.createdAt || new Date().toISOString()
+        };
+      }
+      if (user && !isGuest && refreshUser) await refreshUser();
+    } catch (err) {
+      console.log("Backend trade buy sync failed, recording locally", err);
       setBalance(prev => prev - cost);
     }
 
@@ -283,33 +280,30 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       pnl: calculatedPnl,
     };
 
-    if (user && !isGuest) {
-      try {
-        const response = await axios.post(
-          `${BASE_URL}/api/trade/sell`,
-          { symbol, quantity, price: effectiveSellPrice, productType },
-          { withCredentials: true }
-        );
-        if (response.data?.balance !== undefined) {
-          setBalance(response.data.balance);
-        } else {
-          setBalance(prev => prev + revenue);
-        }
-        if (response.data?.transaction) {
-          newTx = {
-            ...response.data.transaction,
-            id: response.data.transaction._id || Date.now().toString(),
-            createdAt: response.data.transaction.createdAt || new Date().toISOString(),
-            status: reason || response.data.transaction.status || 'EXECUTED',
-            pnl: calculatedPnl,
-          };
-        }
-        if (refreshUser) await refreshUser();
-      } catch (err) {
-        console.log("Backend trade sell failed, recording locally", err);
+    try {
+      const guestId = (await AsyncStorage.getItem('@forum_guest_id')) || 'guest_default';
+      const response = await axios.post(
+        `${BASE_URL}/api/trade/sell`,
+        { symbol, quantity, price: effectiveSellPrice, productType, guestId, currentBalance: balance },
+        { withCredentials: true, timeout: 10000 }
+      );
+      if (response.data?.balance !== undefined) {
+        setBalance(response.data.balance);
+      } else {
         setBalance(prev => prev + revenue);
       }
-    } else {
+      if (response.data?.transaction) {
+        newTx = {
+          ...response.data.transaction,
+          id: response.data.transaction._id || Date.now().toString(),
+          createdAt: response.data.transaction.createdAt || new Date().toISOString(),
+          status: reason || response.data.transaction.status || 'EXECUTED',
+          pnl: calculatedPnl,
+        };
+      }
+      if (user && !isGuest && refreshUser) await refreshUser();
+    } catch (err) {
+      console.log("Backend trade sell sync failed, recording locally", err);
       setBalance(prev => prev + revenue);
     }
 

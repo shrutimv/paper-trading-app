@@ -10,12 +10,12 @@ import {
   ActivityIndicator,
   Modal,
   RefreshControl,
-  SafeAreaView,
   Platform,
   Dimensions,
   Alert,
   KeyboardAvoidingView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -334,7 +334,7 @@ export default function ForumScreen() {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Hide any native Stack header */}
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -627,6 +627,7 @@ const getStyles = (colors: any, isDark: boolean) =>
       paddingVertical: 12,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
+      backgroundColor: colors.background,
     },
     backButton: {
       padding: 6,

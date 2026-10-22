@@ -8,9 +8,9 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -95,7 +95,7 @@ export default function MyActivityScreen() {
   const totalUpvotes = posts.reduce((acc, p) => acc + (p.likesCount || 0), 0);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
       {/* Suppress any default stack header */}
       <Stack.Screen options={{ headerShown: false }} />
 
@@ -358,6 +358,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: 'transparent',
   },
   backButton: {
     padding: 6,

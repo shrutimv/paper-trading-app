@@ -28,7 +28,7 @@ async function getStockPrice(symbol) {
 
 module.exports.buyStock = async (req, res) => {
   try {
-    const { symbol, quantity, productType = "cnc", stopLoss } = req.body;
+    const { symbol, quantity, productType = "cnc", stopLoss, guestId, currentBalance } = req.body;
     let clientPrice = req.body.price ? Number(req.body.price) : null;
     const qty = Number(quantity);
 
@@ -48,18 +48,32 @@ module.exports.buyStock = async (req, res) => {
     // MIS (Intraday) uses 20% margin (5x leverage)
     const requiredMargin = productType === "mis" ? totalValue * 0.2 : totalValue;
 
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found." });
+    let userId = req.user?._id || null;
+    let finalBalance = 100000;
+
+    if (userId) {
+      const user = await User.findById(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found." });
+      }
+      if (user.balance < requiredMargin) {
+        return res.status(400).json({ message: "Insufficient balance for this order." });
+      }
+      user.balance -= requiredMargin;
+      await user.save();
+      finalBalance = user.balance;
+    } else {
+      // Guest balance
+      const baseBal = currentBalance !== undefined ? Number(currentBalance) : 100000;
+      finalBalance = Math.max(0, baseBal - requiredMargin);
     }
 
-    if (user.balance < requiredMargin) {
-      return res.status(400).json({ message: "Insufficient balance for this order." });
-    }
+    const finalGuestId = userId ? "" : (guestId || "guest_default");
 
-    // Create Buy Transaction
+    // Create Buy Transaction in MongoDB
     const transaction = await Transaction.create({
-      user: user._id,
+      user: userId,
+      guestId: finalGuestId,
       symbol,
       companyName: companyName || symbol,
       type: "BUY",
@@ -71,25 +85,21 @@ module.exports.buyStock = async (req, res) => {
       status: "EXECUTED",
     });
 
-    // Deduct margin from user balance
-    user.balance -= requiredMargin;
-    await user.save();
-
     res.status(200).json({
       success: true,
       message: `Successfully bought ${qty} shares of ${symbol} (${productType.toUpperCase()})`,
-      balance: user.balance,
+      balance: finalBalance,
       transaction,
     });
   } catch (err) {
     console.error("buyStock error:", err);
-    res.status(500).json({ message: "Server error executing buy order." });
+    res.status(500).json({ message: "Server error executing buy order: " + err.message });
   }
 };
 
 module.exports.sellStock = async (req, res) => {
   try {
-    const { symbol, quantity, productType = "cnc" } = req.body;
+    const { symbol, quantity, productType = "cnc", guestId, currentBalance } = req.body;
     let clientPrice = req.body.price ? Number(req.body.price) : null;
     const qty = Number(quantity);
 
@@ -97,70 +107,36 @@ module.exports.sellStock = async (req, res) => {
       return res.status(400).json({ message: "Invalid stock symbol or quantity." });
     }
 
-    const user = await User.findById(req.user._id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found." });
-    }
+    let userId = req.user?._id || null;
+    const finalGuestId = userId ? "" : (guestId || "guest_default");
 
-    // Calculate current user holdings for this stock & productType
-    const transactions = await Transaction.find({
-      user: user._id,
-      symbol,
-      productType,
-    }).sort({ createdAt: 1 });
-
-    let availableQty = 0;
-    let totalInvestedCost = 0;
-
-    for (const tx of transactions) {
-      if (tx.type === "BUY") {
-        availableQty += tx.quantity;
-        totalInvestedCost += tx.totalAmount;
-      } else if (tx.type === "SELL") {
-        availableQty -= tx.quantity;
-      }
-    }
-
-    if (availableQty < qty) {
-      // Auto-reconciliation: If a trade was executed client-side during temporary network drop,
-      // create the missing BUY transaction so the user is never stuck unable to sell!
-      const missingQty = qty - availableQty;
-      const { price: buyPrice, companyName: bName } = await getStockPrice(symbol);
-      const estBuyPrice = clientPrice || buyPrice || 100;
-      await Transaction.create({
-        user: user._id,
-        symbol,
-        companyName: bName || symbol,
-        type: "BUY",
-        productType,
-        quantity: missingQty,
-        price: estBuyPrice,
-        totalAmount: estBuyPrice * missingQty,
-        status: "EXECUTED",
-      });
-      availableQty = qty;
-      totalInvestedCost += estBuyPrice * missingQty;
-    }
-
-    const avgPrice = availableQty > 0 ? totalInvestedCost / availableQty : 0;
-
-    // Resolve price: live FastAPI -> client fallback -> holding average price
+    // Resolve price
     const { price: fetchedPrice, companyName } = await getStockPrice(symbol);
-    const executionPrice = fetchedPrice || clientPrice || avgPrice;
-
-    if (!executionPrice || executionPrice <= 0) {
-      return res.status(400).json({ message: "Unable to determine selling price." });
-    }
+    const executionPrice = fetchedPrice || clientPrice || 100;
 
     let revenue = executionPrice * qty;
     if (productType === "mis") {
-      // MIS returns margin + / - full P&L
-      revenue = (executionPrice * qty) - (avgPrice * qty * 0.8);
+      revenue = executionPrice * qty * 0.2; // Return margin + PnL approximate
     }
 
-    // Create Sell Transaction
+    let finalBalance = 100000;
+
+    if (userId) {
+      const user = await User.findById(userId);
+      if (user) {
+        user.balance += revenue;
+        await user.save();
+        finalBalance = user.balance;
+      }
+    } else {
+      const baseBal = currentBalance !== undefined ? Number(currentBalance) : 100000;
+      finalBalance = baseBal + revenue;
+    }
+
+    // Create Sell Transaction in MongoDB
     const transaction = await Transaction.create({
-      user: user._id,
+      user: userId,
+      guestId: finalGuestId,
       symbol,
       companyName: companyName || symbol,
       type: "SELL",
@@ -171,28 +147,33 @@ module.exports.sellStock = async (req, res) => {
       status: "EXECUTED",
     });
 
-    // Credit revenue to user balance
-    user.balance += revenue;
-    await user.save();
-
     res.status(200).json({
       success: true,
       message: `Successfully sold ${qty} shares of ${symbol}`,
-      balance: user.balance,
+      balance: finalBalance,
       revenue,
       transaction,
     });
   } catch (err) {
     console.error("sellStock error:", err);
-    res.status(500).json({ message: "Server error executing sell order." });
+    res.status(500).json({ message: "Server error executing sell order: " + err.message });
   }
 };
 
 module.exports.getHoldings = async (req, res) => {
   try {
-    const transactions = await Transaction.find({
-      user: req.user._id,
-    }).sort({ createdAt: 1 });
+    const { guestId } = req.query;
+    const userId = req.user?._id;
+
+    const queryFilters = [];
+    if (userId) queryFilters.push({ user: userId });
+    if (guestId) queryFilters.push({ guestId: guestId });
+
+    if (queryFilters.length === 0) {
+      return res.status(200).json({ success: true, holdings: [] });
+    }
+
+    const transactions = await Transaction.find({ $or: queryFilters }).sort({ createdAt: 1 });
 
     const holdingsMap = {};
 
@@ -240,9 +221,15 @@ module.exports.getHoldings = async (req, res) => {
 
 module.exports.getTransactionHistory = async (req, res) => {
   try {
-    const transactions = await Transaction.find({
-      user: req.user._id,
-    }).sort({ createdAt: -1 });
+    const { guestId } = req.query;
+    const userId = req.user?._id;
+
+    const queryFilters = [];
+    if (userId) queryFilters.push({ user: userId });
+    if (guestId) queryFilters.push({ guestId: guestId });
+
+    const filter = queryFilters.length > 0 ? { $or: queryFilters } : {};
+    const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).limit(100);
 
     res.status(200).json({ success: true, transactions });
   } catch (err) {
@@ -253,13 +240,21 @@ module.exports.getTransactionHistory = async (req, res) => {
 
 module.exports.resetAccount = async (req, res) => {
   try {
-    const userId = req.user._id;
-    await Transaction.deleteMany({ user: userId });
-    const user = await User.findById(userId);
-    if (user) {
-      user.balance = 100000;
-      await user.save();
+    const { guestId } = req.body;
+    const userId = req.user?._id;
+
+    if (userId) {
+      await Transaction.deleteMany({ user: userId });
+      const user = await User.findById(userId);
+      if (user) {
+        user.balance = 100000;
+        await user.save();
+      }
     }
+    if (guestId) {
+      await Transaction.deleteMany({ guestId: guestId });
+    }
+
     res.status(200).json({
       success: true,
       message: "Trading account reset successfully. Balance restored to ₹1,00,000.",
@@ -270,4 +265,3 @@ module.exports.resetAccount = async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to reset trading account." });
   }
 };
-
