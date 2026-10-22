@@ -273,9 +273,9 @@ export default function ProfileScreen() {
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
               </View>
-              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>Friends (UID)</Text>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>Friends</Text>
               <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '800', marginTop: 2 }}>
-                {user?.friendCode || 'Find Friends'}
+                Search @username
               </Text>
             </TouchableOpacity>
           </View>

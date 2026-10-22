@@ -80,13 +80,6 @@ const userSchema = new mongoose.Schema(
       },
     ],
     // Social, Leaderboard & Friends
-    friendCode: {
-      type: String,
-      unique: true,
-      sparse: true,
-      uppercase: true,
-      trim: true,
-    },
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,

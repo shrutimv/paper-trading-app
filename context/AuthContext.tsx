@@ -13,7 +13,6 @@ export type User = {
     email?: string;
     balance: number;
     isGuest: boolean;
-    friendCode?: string;
     xp?: number;
     streak?: number;
     puzzlesCompleted?: number;

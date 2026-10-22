@@ -23,7 +23,6 @@ interface LeaderboardUser {
   rank: number;
   id: string;
   username: string;
-  friendCode: string;
   xp: number;
   balance: number;
   portfolioReturn: number;
@@ -239,7 +238,7 @@ export default function LeaderboardScreen() {
                 <Ionicons name="people-circle-outline" size={48} color={colors.textSecondary} />
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>No Friends Added Yet</Text>
                 <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                  Add your friends using their @username or Friend Code (UID) to compete on the leaderboard!
+                  Add your friends by their @username to compete on your personal friends leaderboard!
                 </Text>
                 <TouchableOpacity
                   style={[styles.addFriendsBtn, { backgroundColor: colors.accent }]}
@@ -293,7 +292,7 @@ export default function LeaderboardScreen() {
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                           <Text style={[styles.traderUsername, { color: colors.text }]} numberOfLines={1}>
-                            {trader.username}
+                            @{trader.username}
                           </Text>
                           {isMe && (
                             <View style={[styles.youBadge, { backgroundColor: colors.accent }]}>
@@ -302,7 +301,7 @@ export default function LeaderboardScreen() {
                           )}
                         </View>
                         <Text style={[styles.traderCode, { color: colors.textSecondary }]}>
-                          UID: {trader.friendCode}
+                          Verified Trader
                         </Text>
                       </View>
 
@@ -337,9 +336,9 @@ export default function LeaderboardScreen() {
                 <Text style={styles.pinnedRankText}>#{currentUserRank}</Text>
               </View>
               <View>
-                <Text style={[styles.pinnedName, { color: colors.text }]}>Your Global Rank</Text>
+                <Text style={[styles.pinnedName, { color: colors.text }]}>Your Global Standing</Text>
                 <Text style={[styles.pinnedSub, { color: colors.textSecondary }]}>
-                  UID: {user.friendCode || "TRD-USER"}
+                  @{user.username}
                 </Text>
               </View>
             </View>
@@ -349,8 +348,8 @@ export default function LeaderboardScreen() {
               onPress={() => router.push("/friends" as any)}
               activeOpacity={0.8}
             >
-              <Ionicons name="share-social-outline" size={16} color={colors.accent} />
-              <Text style={[styles.pinnedShareText, { color: colors.accent }]}>Invite</Text>
+              <Ionicons name="person-add" size={16} color={colors.accent} />
+              <Text style={[styles.pinnedShareText, { color: colors.accent }]}>Find Friends</Text>
             </TouchableOpacity>
           </View>
         )}

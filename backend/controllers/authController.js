@@ -2,14 +2,6 @@ const User = require("../models/User");
 const OTP = require("../models/OTP");
 const { sendVerificationEmail } = require("../services/emailService");
 
-function generateFriendCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "TRD-";
-  for (let i = 0; i < 4; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}
 
 /**
  * Step 1: Send OTP to verify real email & defeat bot registrations
@@ -103,18 +95,9 @@ module.exports.signup = async (req, res) => {
       });
     }
 
-    // Generate unique friendCode
-    let friendCode = generateFriendCode();
-    let codeExists = await User.findOne({ friendCode });
-    while (codeExists) {
-      friendCode = generateFriendCode();
-      codeExists = await User.findOne({ friendCode });
-    }
-
     const user = new User({
       username: cleanUsername,
       email: cleanEmail,
-      friendCode,
     });
 
     const registeredUser = await User.register(user, password);
@@ -130,7 +113,6 @@ module.exports.signup = async (req, res) => {
         username: registeredUser.username,
         email: registeredUser.email,
         balance: registeredUser.balance,
-        friendCode: registeredUser.friendCode,
       },
     });
   } catch (err) {
@@ -154,7 +136,6 @@ module.exports.login = (req, res) => {
       username: req.user.username,
       email: req.user.email,
       balance: req.user.balance,
-      friendCode: req.user.friendCode,
       xp: req.user.xp || 0,
     },
   });
@@ -191,7 +172,6 @@ module.exports.getCurrentUser = async (req, res) => {
       username: user.username,
       email: user.email,
       balance: user.balance,
-      friendCode: user.friendCode,
       xp: user.xp || 0,
       friendsCount: user.friends ? user.friends.length : 0,
     },

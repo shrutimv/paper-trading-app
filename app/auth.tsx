@@ -158,7 +158,7 @@ export default function AuthScreen() {
           isGuest: false,
         };
 
-        Alert.alert("Welcome aboard! 🎉", `Account created! Your unique Friend Code is: ${data.user.friendCode}`);
+        Alert.alert("Welcome aboard! 🎉", `Account created! Welcome, @${data.user.username}. Start paper trading now!`);
         await AsyncStorage.setItem("userSession", JSON.stringify(userData));
         if (login) await login(userData);
 
@@ -176,7 +176,7 @@ export default function AuthScreen() {
   };
 
   const handleGuest = async () => {
-    const guestUser = { username: "Guest User", balance: 100000, isGuest: true, friendCode: "GUEST-TRADER" };
+    const guestUser = { username: "Guest User", balance: 100000, isGuest: true };
     await AsyncStorage.setItem("userSession", JSON.stringify(guestUser));
     if (continueAsGuest) await continueAsGuest();
     router.replace("/(tabs)");

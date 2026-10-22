@@ -8,7 +8,7 @@ module.exports.getLeaderboard = async (req, res) => {
   try {
     // 1. Fetch Top 50 Global users by XP and Balance
     const globalUsers = await User.find({})
-      .select("username friendCode xp balance avatarUrl badges portfolioReturn")
+      .select("username xp balance avatarUrl badges portfolioReturn")
       .sort({ xp: -1, balance: -1 })
       .limit(50)
       .lean();
@@ -17,7 +17,6 @@ module.exports.getLeaderboard = async (req, res) => {
       rank: idx + 1,
       id: u._id,
       username: u.username,
-      friendCode: u.friendCode || `TRD-${String(u._id).slice(-4).toUpperCase()}`,
       xp: u.xp || 0,
       balance: u.balance || 100000,
       portfolioReturn: u.portfolioReturn || 0,
@@ -40,7 +39,7 @@ module.exports.getLeaderboard = async (req, res) => {
 
       // Populate friends leaderboard (User + Friends)
       const currentUserDoc = await User.findById(req.user._id)
-        .populate("friends", "username friendCode xp balance avatarUrl badges portfolioReturn")
+        .populate("friends", "username xp balance avatarUrl badges portfolioReturn")
         .lean();
 
       if (currentUserDoc) {
@@ -48,7 +47,6 @@ module.exports.getLeaderboard = async (req, res) => {
           {
             id: currentUserDoc._id,
             username: currentUserDoc.username,
-            friendCode: currentUserDoc.friendCode,
             xp: currentUserDoc.xp || 0,
             balance: currentUserDoc.balance || 100000,
             portfolioReturn: currentUserDoc.portfolioReturn || 0,
@@ -58,7 +56,6 @@ module.exports.getLeaderboard = async (req, res) => {
           ...(currentUserDoc.friends || []).map((f) => ({
             id: f._id,
             username: f.username,
-            friendCode: f.friendCode || `TRD-${String(f._id).slice(-4).toUpperCase()}`,
             xp: f.xp || 0,
             balance: f.balance || 100000,
             portfolioReturn: f.portfolioReturn || 0,
@@ -105,8 +102,8 @@ module.exports.getFriends = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id)
-      .populate("friends", "username friendCode xp balance avatarUrl bio badges")
-      .populate("friendRequests.from", "username friendCode xp avatarUrl bio")
+      .populate("friends", "username xp balance avatarUrl bio badges")
+      .populate("friendRequests.from", "username xp avatarUrl bio")
       .lean();
 
     if (!user) {
@@ -115,11 +112,10 @@ module.exports.getFriends = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      myFriendCode: user.friendCode,
+      myUsername: user.username,
       friends: (user.friends || []).map((f) => ({
         id: f._id,
         username: f.username,
-        friendCode: f.friendCode || `TRD-${String(f._id).slice(-4).toUpperCase()}`,
         xp: f.xp || 0,
         balance: f.balance || 100000,
         avatarUrl: f.avatarUrl || "",
@@ -132,7 +128,6 @@ module.exports.getFriends = async (req, res) => {
           fromUser: {
             id: r.from._id,
             username: r.from.username,
-            friendCode: r.from.friendCode,
             xp: r.from.xp || 0,
             avatarUrl: r.from.avatarUrl || "",
           },
@@ -146,8 +141,66 @@ module.exports.getFriends = async (req, res) => {
 };
 
 /**
+ * GET /api/social/users/search?q=...
+ * Live autocomplete/search matching usernames with friendship status
+ */
+module.exports.searchUsers = async (req, res) => {
+  try {
+    const rawQuery = req.query.q ? req.query.q.trim().replace(/^@/, "") : "";
+    if (!rawQuery || rawQuery.length < 1) {
+      return res.status(200).json({ success: true, users: [] });
+    }
+
+    const queryFilter = {
+      username: { $regex: rawQuery, $options: "i" },
+    };
+
+    if (req.user) {
+      queryFilter._id = { $ne: req.user._id };
+    }
+
+    const matchedUsers = await User.find(queryFilter)
+      .select("username xp avatarUrl friendRequests")
+      .limit(10)
+      .lean();
+
+    let currentUserFriends = [];
+    if (req.user) {
+      const curUser = await User.findById(req.user._id).select("friends").lean();
+      currentUserFriends = (curUser?.friends || []).map(String);
+    }
+
+    const formattedUsers = matchedUsers.map((u) => {
+      const isFriend = currentUserFriends.includes(String(u._id));
+      const hasSentRequest =
+        req.user &&
+        (u.friendRequests || []).some(
+          (r) => String(r.from) === String(req.user._id)
+        );
+
+      return {
+        id: u._id,
+        username: u.username,
+        xp: u.xp || 0,
+        avatarUrl: u.avatarUrl || "",
+        isFriend,
+        isRequested: hasSentRequest,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      users: formattedUsers,
+    });
+  } catch (err) {
+    console.error("searchUsers error:", err);
+    res.status(500).json({ success: false, message: "Failed to search users." });
+  }
+};
+
+/**
  * POST /api/social/friends/request
- * Send friend request using @username OR friendCode
+ * Send friend request using @username
  */
 module.exports.sendFriendRequest = async (req, res) => {
   try {
@@ -155,25 +208,21 @@ module.exports.sendFriendRequest = async (req, res) => {
       return res.status(401).json({ success: false, message: "Please log in to add friends." });
     }
 
-    const { query } = req.body;
-    if (!query || !query.trim()) {
-      return res.status(400).json({ success: false, message: "Enter a username or Friend Code (UID)." });
+    const { username } = req.body;
+    if (!username || !username.trim()) {
+      return res.status(400).json({ success: false, message: "Username is required." });
     }
 
-    const cleanQuery = query.trim().replace(/^@/, "");
+    const cleanUsername = username.trim().replace(/^@/, "");
 
-    // Search by username or friendCode
     const targetUser = await User.findOne({
-      $or: [
-        { username: { $regex: new RegExp(`^${cleanQuery}$`, "i") } },
-        { friendCode: cleanQuery.toUpperCase() },
-      ],
+      username: { $regex: new RegExp(`^${cleanUsername}$`, "i") },
     });
 
     if (!targetUser) {
       return res.status(404).json({
         success: false,
-        message: `No trader found matching "${cleanQuery}". Check the username or Friend Code.`,
+        message: `No trader found matching "@${cleanUsername}".`,
       });
     }
 
@@ -255,7 +304,7 @@ module.exports.respondFriendRequest = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: action === "ACCEPT" ? `You are now friends with @${requester.username}!` : "Friend request declined.",
+      message: action === "ACCEPT" ? `You and @${requester.username} are now friends!` : "Friend request declined.",
     });
   } catch (err) {
     console.error("respondFriendRequest error:", err);
@@ -288,42 +337,5 @@ module.exports.removeFriend = async (req, res) => {
   } catch (err) {
     console.error("removeFriend error:", err);
     res.status(500).json({ success: false, message: "Failed to remove friend." });
-  }
-};
-
-/**
- * GET /api/social/users/search?q=...
- * Search users by username or friendCode
- */
-module.exports.searchUsers = async (req, res) => {
-  try {
-    const query = req.query.q ? req.query.q.trim().replace(/^@/, "") : "";
-    if (!query || query.length < 2) {
-      return res.status(200).json({ success: true, users: [] });
-    }
-
-    const users = await User.find({
-      $or: [
-        { username: { $regex: query, $options: "i" } },
-        { friendCode: { $regex: query, $options: "i" } },
-      ],
-    })
-      .select("username friendCode xp avatarUrl")
-      .limit(8)
-      .lean();
-
-    res.status(200).json({
-      success: true,
-      users: users.map((u) => ({
-        id: u._id,
-        username: u.username,
-        friendCode: u.friendCode || `TRD-${String(u._id).slice(-4).toUpperCase()}`,
-        xp: u.xp || 0,
-        avatarUrl: u.avatarUrl || "",
-      })),
-    });
-  } catch (err) {
-    console.error("searchUsers error:", err);
-    res.status(500).json({ success: false, message: "Failed to search users." });
   }
 };
