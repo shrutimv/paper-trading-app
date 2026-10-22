@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -19,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useTrading } from '../../context/TradingContext';
 import { API_BASE_URL } from '../../src/config';
+import SellStockModal from '../../components/SellStockModal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -37,8 +39,8 @@ const fmtCompact = (val: number): string => {
   return '₹' + (val || 0).toFixed(2);
 };
 
-const makeYLabel = (yOff: number) => (raw: string): string => {
-  const n = parseFloat(raw) + yOff;
+const makeYLabel = (raw: string): string => {
+  const n = parseFloat(raw);
   if (isNaN(n) || n <= 0) return '';
   if (n >= 100_000) return (n / 100_000).toFixed(1) + 'L';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
@@ -106,11 +108,29 @@ export default function StockDetailScreen() {
   const [stockMeta, setStockMeta] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sliderIndex, setSliderIndex] = useState(0);
+  const [sellModalVisible, setSellModalVisible] = useState(false);
+
+  const handleConfirmSellModal = async (qty: number, effPrice: number): Promise<boolean> => {
+    if (!owned) return false;
+    const success = await sellStock(owned.symbol, effPrice, qty, owned.productType || 'cnc');
+    if (success) {
+      Alert.alert("Order Executed", `Successfully sold ${qty} shares of ${sym.replace('.NS', '')}`);
+      return true;
+    } else {
+      Alert.alert("Error", `Could not complete sell order.`);
+      return false;
+    }
+  };
 
   const isLandscape = width > height;
 
   useEffect(() => {
     fetchStockData();
+    // Auto-refresh chart and live tick every 15 seconds
+    const interval = setInterval(() => {
+      fetchStockData(true);
+    }, 15000);
+    return () => clearInterval(interval);
   }, [symbol, activeRange]);
 
   useEffect(
@@ -120,8 +140,8 @@ export default function StockDetailScreen() {
     []
   );
 
-  const fetchStockData = async () => {
-    setIsLoading(true);
+  const fetchStockData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await fetch(
         `${API_BASE_URL}/stock?symbol=${symbol}&period=${activeRange.period}&interval=${activeRange.interval}`
@@ -143,7 +163,7 @@ export default function StockDetailScreen() {
     } catch (e) {
       console.error('Stock fetch error:', e);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -191,7 +211,7 @@ export default function StockDetailScreen() {
   const chartH = isLandscape ? 220 : 250;
 
   const spacing = chartData.length > 1 ? chartW / (chartData.length - 1) : 2;
-  const fmtY = useCallback(makeYLabel(yOff), [yOff]);
+  const fmtY = useCallback((raw: string) => makeYLabel(raw), []);
 
   const yLabelStyle = useMemo(
     () => ({ color: C.textSec, fontSize: 9, fontWeight: '600' as const }),
@@ -271,9 +291,14 @@ export default function StockDetailScreen() {
                 <Text style={[S.badgeTxt, { color: accent }]}>NSE</Text>
               </View>
             </View>
-            <TouchableOpacity onPress={toggleLandscape} style={S.iconBtn}>
-              <Ionicons name="expand-outline" size={22} color={C.textPri} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity onPress={() => fetchStockData()} style={S.iconBtn} activeOpacity={0.7}>
+                <Ionicons name="refresh-outline" size={20} color={C.textPri} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={toggleLandscape} style={S.iconBtn} activeOpacity={0.7}>
+                <Ionicons name="expand-outline" size={22} color={C.textPri} />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -292,6 +317,13 @@ export default function StockDetailScreen() {
             { width: containerWidth, alignSelf: 'center' },
           ]}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoading}
+              onRefresh={() => fetchStockData()}
+              tintColor={accent}
+            />
+          }
         >
           {/* PRICE BLOCK */}
           <View style={[S.priceBlock, isLandscape && { marginTop: 10 }]}>
@@ -320,6 +352,33 @@ export default function StockDetailScreen() {
               </Text>
               <Text style={S.changeRange}>· {activeRange.label}</Text>
             </View>
+
+            {/* OWNED HOLDING POSITION STRIP */}
+            {owned && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: isDark ? 'rgba(34, 197, 94, 0.12)' : '#dcfce7',
+                  borderWidth: 1,
+                  borderColor: isDark ? 'rgba(34, 197, 94, 0.3)' : '#86efac',
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 10,
+                  marginTop: 10,
+                  alignSelf: 'flex-start',
+                }}
+              >
+                <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#16a34a' }}>
+                  YOU HOLD: {owned.quantity} SHARES
+                </Text>
+                <Text style={{ fontSize: 12, color: C.textSec, fontWeight: '600' }}>
+                  • Avg Buy: {fmt(owned.averagePrice)}
+                </Text>
+              </View>
+            )}
 
             {/* MARKET TIMING STATUS BADGE */}
             <View
@@ -659,39 +718,7 @@ export default function StockDetailScreen() {
                     flexDirection: 'row',
                     gap: 6,
                   }}
-                  onPress={() => {
-                    const effPrice = stockMeta?.regularMarketPrice || owned.averagePrice || 100;
-                    if (owned.quantity === 1) {
-                      sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(() => {
-                        Alert.alert("Success", `Sold 1 share of ${sym.replace('.NS', '')}`);
-                      });
-                    } else {
-                      Alert.alert(
-                        `Sell ${sym.replace('.NS', '')}`,
-                        `You own ${owned.quantity} shares.\nAverage price: ${fmt(owned.averagePrice)}`,
-                        [
-                          { text: "Cancel", style: "cancel" },
-                          {
-                            text: `Sell All (${owned.quantity})`,
-                            style: "destructive",
-                            onPress: () => {
-                              sellStock(owned.symbol, effPrice, owned.quantity, owned.productType || 'cnc').then(() => {
-                                Alert.alert("Success", `Sold all ${owned.quantity} shares of ${sym.replace('.NS', '')}`);
-                              });
-                            }
-                          },
-                          {
-                            text: "Sell 1 Share",
-                            onPress: () => {
-                              sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(() => {
-                                Alert.alert("Success", `Sold 1 share of ${sym.replace('.NS', '')}`);
-                              });
-                            }
-                          }
-                        ]
-                      );
-                    }
-                  }}
+                  onPress={() => setSellModalVisible(true)}
                 >
                   <Ionicons name="arrow-down-circle" size={18} color="#ffffff" />
                   <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '800' }}>Sell Position</Text>
@@ -725,6 +752,15 @@ export default function StockDetailScreen() {
             </TouchableOpacity>
           )}
         </ScrollView>
+
+        {/* Sell Stock Order Preview Modal */}
+        <SellStockModal
+          visible={sellModalVisible}
+          onClose={() => setSellModalVisible(false)}
+          holding={owned || null}
+          currentPrice={stockMeta?.regularMarketPrice || (owned?.averagePrice || 100)}
+          onConfirmSell={handleConfirmSellModal}
+        />
       </View>
     </>
   );

@@ -24,6 +24,7 @@ import PuzzleCard from "../../components/PuzzleCard";
 import SmallCard from "../../components/SmallCard";
 import SmallCourseCard from "../../components/SmallCourseCard";
 import AIRecommendations from "../../components/AIRecommendations";
+import DailyRecapModal from "../../components/DailyRecapModal";
 import { useAuth } from "../../context/AuthContext";
 
 // --- THE ANIMATED CARD WRAPPER ---
@@ -76,6 +77,7 @@ export default function Home() {
   const [puzzlesSolved, setPuzzlesSolved] = useState<number>(0);
   const [coursesCompletedCount, setCoursesCompletedCount] = useState<number>(0);
   const [factIndex, setFactIndex] = useState<number>(0);
+  const [isRecapModalOpen, setIsRecapModalOpen] = useState<boolean>(false);
 
   const MARKET_FACTS = [
     {
@@ -189,10 +191,27 @@ export default function Home() {
         
         {/* --- PREMIUM DYNAMIC HEADER --- */}
         <Animated.View entering={FadeInUp.duration(600).delay(50)} style={styles.header}>
-          <Text style={styles.greeting}>{getGreeting()}</Text>
-          <Text style={styles.username}>
-            {username}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>{getGreeting()}</Text>
+            <Text style={styles.username}>{username}</Text>
+          </View>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : '#eff6ff',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: isDark ? 'rgba(37,99,235,0.3)' : '#bfdbfe',
+            }}
+            onPress={() => setIsRecapModalOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="bar-chart-outline" size={15} color="#2563eb" style={{ marginRight: 5 }} />
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#2563eb' }}>Daily Recap</Text>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* --- PREMIUM STATS TILES (100% REAL DATA) --- */}
@@ -428,6 +447,13 @@ export default function Home() {
         </Animated.View>
 
       </View>
+
+      {/* --- DAILY RECAP POPUP MODAL --- */}
+      <DailyRecapModal
+        visible={isRecapModalOpen}
+        onClose={() => setIsRecapModalOpen(false)}
+        onViewOrders={() => router.push('/(tabs)/trading')}
+      />
     </ScrollView>
   );
 }
@@ -448,6 +474,9 @@ const getStyles = (colors: any) => StyleSheet.create({
   
   /* --- HEADERS --- */
   header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingTop: 10,
     marginBottom: 25,

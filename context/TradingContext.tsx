@@ -50,7 +50,8 @@ type TradingContextType = {
     symbol: string, 
     price: number, 
     quantity: number, 
-    productType?: 'cnc' | 'mis'
+    productType?: 'cnc' | 'mis',
+    reason?: string
   ) => Promise<boolean>;
   addToWatchlist: (stock: WatchlistStock) => void;
   removeFromWatchlist: (symbol: string) => void;
@@ -58,6 +59,7 @@ type TradingContextType = {
   setHoldings: React.Dispatch<React.SetStateAction<Holding[]>>;
   setBalance: React.Dispatch<React.SetStateAction<number>>;
   fetchTransactions: () => Promise<void>;
+  checkStopLossTriggers: (priceMap: Record<string, number>) => Promise<{ triggered: boolean; message?: string }>;
 };
 
 const TradingContext = createContext<TradingContextType | undefined>(undefined);
@@ -242,7 +244,8 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     symbol: string, 
     price: number, 
     quantity: number, 
-    productType: 'cnc' | 'mis' = 'cnc'
+    productType: 'cnc' | 'mis' = 'cnc',
+    reason?: string
   ) => {
     let existing = holdings.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
     
@@ -275,7 +278,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       quantity,
       price: effectiveSellPrice,
       totalAmount: effectiveSellPrice * quantity,
-      status: 'EXECUTED',
+      status: reason || 'EXECUTED',
       createdAt: new Date().toISOString(),
       pnl: calculatedPnl,
     };
@@ -297,6 +300,7 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
             ...response.data.transaction,
             id: response.data.transaction._id || Date.now().toString(),
             createdAt: response.data.transaction.createdAt || new Date().toISOString(),
+            status: reason || response.data.transaction.status || 'EXECUTED',
             pnl: calculatedPnl,
           };
         }
@@ -324,6 +328,32 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     return true;
   };
 
+  // --- AUTOMATED STOP-LOSS EXECUTION ENGINE ---
+  const checkStopLossTriggers = async (priceMap: Record<string, number>): Promise<{ triggered: boolean; message?: string }> => {
+    let triggeredCount = 0;
+    let lastSummary = '';
+
+    for (const h of holdings) {
+      if (!h.stopLoss || h.stopLoss <= 0) continue;
+      const rawSym = h.symbol.replace('.NS', '').replace('.BO', '');
+      const curPrice = priceMap[h.symbol] || priceMap[rawSym] || priceMap[`${rawSym}.NS`];
+
+      // If market price fell to or below user's predefined protective stop loss
+      if (curPrice && curPrice <= h.stopLoss) {
+        const success = await sellStock(h.symbol, h.stopLoss, h.quantity, h.productType || 'cnc', 'STOP_LOSS_EXECUTED');
+        if (success) {
+          triggeredCount++;
+          lastSummary = `Stop-Loss Executed: Sold ${h.quantity} shares of ${rawSym} at ₹${h.stopLoss.toFixed(2)} to protect your capital.`;
+        }
+      }
+    }
+
+    return {
+      triggered: triggeredCount > 0,
+      message: lastSummary,
+    };
+  };
+
   const totalInvestment = holdings.reduce((sum, h) => {
     const val = h.averagePrice * h.quantity;
     return sum + ((h.productType || 'cnc') === 'mis' ? val * 0.20 : val);
@@ -343,7 +373,8 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
       totalInvestment,
       setHoldings,
       setBalance,
-      fetchTransactions
+      fetchTransactions,
+      checkStopLossTriggers
     }}>
       {children}
     </TradingContext.Provider>

@@ -15,11 +15,12 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { useTrading } from '../context/TradingContext';
+import { useTrading, Holding } from '../context/TradingContext';
 import { useTheme } from '../context/ThemeContext';
 import { useGamification } from '../context/GamificationContext';
 import { API_BASE_URL } from '../src/config';
 import Toast from './ui/Toast';
+import SellStockModal from './SellStockModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SLIDER_WIDTH = SCREEN_WIDTH - 48; 
@@ -35,7 +36,7 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
   const { colors } = useTheme();
   const styles = getStyles(colors);
   
-  const { watchlist, addToWatchlist, removeFromWatchlist, balance, buyStock, sellStock, holdings } = useTrading();
+  const { watchlist, addToWatchlist, removeFromWatchlist, balance, buyStock, sellStock, holdings, checkStopLossTriggers } = useTrading();
   const { xp, proMode } = useGamification();
 
   // Gamification Unlocking Thresholds
@@ -61,57 +62,62 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'loading' | 'success' | 'error' }>({ visible: false, message: '', type: 'success' });
 
+  // Sell Stock Modal State (with Cost & Real-Time P&L Preview)
+  const [sellModalVisible, setSellModalVisible] = useState(false);
+  const [selectedHoldingToSell, setSelectedHoldingToSell] = useState<Holding | null>(null);
+  const [sellMarketPrice, setSellMarketPrice] = useState<number>(0);
+
   const handleQuickSell = (stockSymbol: string) => {
-    const owned = holdings.find(h => h.symbol === stockSymbol);
+    const owned = holdings.find(
+      h => h.symbol === stockSymbol || h.symbol.replace('.NS', '') === stockSymbol.replace('.NS', '')
+    );
     if (!owned) {
       setToast({ visible: true, message: "You don't own shares of this stock.", type: 'error' });
       return;
     }
 
-    if (owned.quantity === 1) {
-      const effPrice = (owned.averagePrice && owned.averagePrice > 0) ? owned.averagePrice : 100;
-      sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(res => {
-        if (res) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setToast({ visible: true, message: `Sold 1 share of ${owned.symbol.replace('.NS', '')}`, type: 'success' });
-          if (onBuyComplete) onBuyComplete();
+    const currentPrice = liveData[stockSymbol]?.price || liveData[owned.symbol]?.price || owned.averagePrice || 100;
+    setSelectedHoldingToSell(owned);
+    setSellMarketPrice(currentPrice);
+    setSellModalVisible(true);
+
+    // Fetch freshest live market price from NSE so P&L is 100% accurate
+    fetch(`${API_BASE_URL}/stock?symbol=${owned.symbol}`)
+      .then(res => res.json())
+      .then(data => {
+        const live = data?.meta?.regularMarketPrice;
+        if (live && live > 0) {
+          setSellMarketPrice(live);
         }
+      })
+      .catch(() => {});
+  };
+
+  const handleConfirmSellModal = async (qty: number, effPrice: number): Promise<boolean> => {
+    if (!selectedHoldingToSell) return false;
+    const symbol = selectedHoldingToSell.symbol;
+    const pType = selectedHoldingToSell.productType || 'cnc';
+    const success = await sellStock(symbol, effPrice, qty, pType);
+    if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const costBasis = selectedHoldingToSell.averagePrice * qty;
+      const saleVal = effPrice * qty;
+      const diff = saleVal - costBasis;
+      setToast({
+        visible: true,
+        message: `Sold ${qty} shares of ${symbol.replace('.NS', '')} (P&L: ${diff >= 0 ? '+' : ''}${formatCurrency(diff)})`,
+        type: 'success',
       });
+      if (onBuyComplete) onBuyComplete();
+      return true;
     } else {
-      Alert.alert(
-        `Sell ${owned.symbol.replace('.NS', '')}`,
-        `You own ${owned.quantity} shares.\nAverage purchase: ${formatCurrency(owned.averagePrice)}`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: `Sell All (${owned.quantity})`,
-            style: "destructive",
-            onPress: () => {
-              const effPrice = (owned.averagePrice && owned.averagePrice > 0) ? owned.averagePrice : 100;
-              sellStock(owned.symbol, effPrice, owned.quantity, owned.productType || 'cnc').then(res => {
-                if (res) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setToast({ visible: true, message: `Sold all ${owned.quantity} shares of ${owned.symbol.replace('.NS', '')}`, type: 'success' });
-                  if (onBuyComplete) onBuyComplete();
-                }
-              });
-            }
-          },
-          {
-            text: "Sell 1 Share",
-            onPress: () => {
-              const effPrice = (owned.averagePrice && owned.averagePrice > 0) ? owned.averagePrice : 100;
-              sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(res => {
-                if (res) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setToast({ visible: true, message: `Sold 1 share of ${owned.symbol.replace('.NS', '')}`, type: 'success' });
-                  if (onBuyComplete) onBuyComplete();
-                }
-              });
-            }
-          }
-        ]
-      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setToast({
+        visible: true,
+        message: `Unable to complete sell order.`,
+        type: 'error',
+      });
+      return false;
     }
   };
 
@@ -244,6 +250,20 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
         })
       );
       setLiveData(newData);
+
+      // Automated Stop-Loss Trigger Check
+      if (checkStopLossTriggers) {
+        const simplePrices: Record<string, number> = {};
+        Object.entries(newData).forEach(([sym, d]) => {
+          simplePrices[sym] = d.price;
+        });
+        checkStopLossTriggers(simplePrices).then(res => {
+          if (res.triggered && res.message) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setToast({ visible: true, message: res.message, type: 'error' });
+          }
+        });
+      }
     } catch (error) { console.error("Failed to fetch prices", error); }
   };
 
@@ -566,6 +586,15 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
           </View>
         </View>
       </Modal>
+
+      {/* Sell Stock Order Preview Modal */}
+      <SellStockModal
+        visible={sellModalVisible}
+        onClose={() => setSellModalVisible(false)}
+        holding={selectedHoldingToSell}
+        currentPrice={sellMarketPrice}
+        onConfirmSell={handleConfirmSellModal}
+      />
     </View>
   );
 }

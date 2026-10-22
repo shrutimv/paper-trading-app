@@ -59,6 +59,11 @@ export default function TabLayout() {
           tabBarLabel: 'Home',
           tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('index');
+          },
+        })}
       />
 
       <Tabs.Screen
@@ -68,6 +73,11 @@ export default function TabLayout() {
           tabBarLabel: 'Puzzles',
           tabBarIcon: ({ color }) => <Ionicons name="extension-puzzle" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('puzzles');
+          },
+        })}
       />
 
       <Tabs.Screen
@@ -77,6 +87,11 @@ export default function TabLayout() {
           tabBarLabel: 'Trading',
           tabBarIcon: ({ color }) => <Ionicons name="trending-up" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('trading', { screen: 'index' });
+          },
+        })}
       />
 
       <Tabs.Screen
@@ -86,6 +101,11 @@ export default function TabLayout() {
           tabBarLabel: 'Courses',
           tabBarIcon: ({ color }) => <Ionicons name="school" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('courses', { screen: 'index' });
+          },
+        })}
       />
     </Tabs>
   );

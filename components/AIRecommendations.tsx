@@ -72,7 +72,7 @@ export default function AIRecommendations() {
 
       const res = await axios.get(`${API_BASE_URL}/ml/recommend`, {
         params,
-        timeout: 8000,
+        timeout: 35000,
       });
 
       if (res.data && Array.isArray(res.data.recommendations)) {

@@ -168,8 +168,8 @@ STOCK_UNIVERSE = [
         "volatility": "High",
         "rsi": 63.5,
         "momentum_1m": 8.4,
-        "price_approx": 960.0,
-        "trend": "EV & Commercial Breakout",
+        "price_approx": 410.30,
+        "trend": "Commercial & EV Breakout",
     },
     {
         "symbol": "M&M.NS",
@@ -240,7 +240,7 @@ STOCK_UNIVERSE = [
         "volatility": "High",
         "rsi": 68.0,
         "momentum_1m": 14.5,
-        "price_approx": 275.0,
+        "price_approx": 249.0,
         "trend": "High Growth Tech Consumer",
     },
 

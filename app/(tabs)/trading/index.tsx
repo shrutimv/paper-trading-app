@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from 'expo-haptics';
-import { useRouter } from "expo-router";
+import { useRouter, useNavigation } from "expo-router";
 import React, { useRef, useState, useEffect } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -22,6 +22,8 @@ import {
 } from "react-native";
 import PageTransition from "@/components/PageTransition";
 import Toast from "../../../components/ui/Toast";
+import DailyRecapModal from "../../../components/DailyRecapModal";
+import SellStockModal from "../../../components/SellStockModal";
 import { useTrading, Holding } from "../../../context/TradingContext";
 import { useTheme } from "../../../context/ThemeContext";
 import { useGamification } from "../../../context/GamificationContext";
@@ -87,11 +89,32 @@ const STORAGE_KEY_IPOS = '@papertrade:ipoApplications';
 
 export default function TradingDashboard() {
   const router = useRouter();
+  const navigation = useNavigation();
+  const scrollViewRef = useRef<ScrollView>(null);
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors, isDark);
 
-  const { balance, holdings, transactions, buyStock, sellStock, totalInvestment, setHoldings, setBalance } = useTrading();
+  const { balance, holdings, transactions, buyStock, sellStock, totalInvestment, setHoldings, setBalance, checkStopLossTriggers } = useTrading();
   const { xp, proMode, addXp } = useGamification();
+
+  // Reset to initial stage whenever Trading bottom tab is pressed
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('tabPress' as any, () => {
+      setMainTab('screener');
+      setSearchQuery('');
+      setSearchResults([]);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // Daily Recap Modal State
+  const [isRecapModalOpen, setIsRecapModalOpen] = useState(false);
+
+  // Sell Stock Modal State (with P&L preview)
+  const [sellModalVisible, setSellModalVisible] = useState(false);
+  const [selectedHoldingToSell, setSelectedHoldingToSell] = useState<Holding | null>(null);
+  const [sellMarketPrice, setSellMarketPrice] = useState<number>(0);
 
   // Gamification states
   const limitUnlocked = proMode || xp >= 500;
@@ -185,6 +208,24 @@ export default function TradingDashboard() {
       const data = await res.json();
       if (data && data.screener) {
         setScreenerData(data.screener);
+
+        // Automated Stop-Loss Trigger Check
+        if (checkStopLossTriggers) {
+          const priceMap: Record<string, number> = {};
+          Object.values(data.screener).forEach((stocks: any) => {
+            if (Array.isArray(stocks)) {
+              stocks.forEach((s: any) => {
+                if (s.symbol && s.price) priceMap[s.symbol] = s.price;
+              });
+            }
+          });
+          checkStopLossTriggers(priceMap).then(res => {
+            if (res.triggered && res.message) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+              setToast({ visible: true, message: res.message, type: 'error' });
+            }
+          });
+        }
       }
     } catch (e) {
       console.warn("Failed fetching screener data", e);
@@ -247,7 +288,7 @@ export default function TradingDashboard() {
     setSelectedStock({
       symbol: stock.symbol,
       shortname: stock.shortname,
-      price: stock.price,
+      price: stock.price || 100,
     });
     setQuantity('1');
     setProductType('cnc');
@@ -257,6 +298,17 @@ export default function TradingDashboard() {
     setStopLossTrigger('');
     pan.setValue(0);
     setIsBuyModalOpen(true);
+
+    // Fetch the freshest live tick from the market
+    fetch(`${API_BASE_URL}/stock?symbol=${stock.symbol}`)
+      .then(res => res.json())
+      .then(data => {
+        const live = data?.meta?.regularMarketPrice;
+        if (live && live > 0) {
+          setSelectedStock((prev: any) => prev ? { ...prev, price: live } : prev);
+        }
+      })
+      .catch(() => {});
   };
 
   const handleConfirmBuy = () => {
@@ -344,105 +396,101 @@ export default function TradingDashboard() {
     })
   ).current;
 
-  // Manual Position Square-Off
+  // Manual Position Square-Off (Opens Sell Preview with cost & P&L)
   const handleSquareOff = async (stock: Holding) => {
-    const effPrice = (stock.averagePrice && stock.averagePrice > 0) ? stock.averagePrice : 100;
-    const success = await sellStock(stock.symbol, effPrice, stock.quantity, stock.productType || 'cnc');
-    if (success) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setToast({
-        visible: true,
-        message: `Squared off ${stock.quantity} shares of ${stock.symbol.replace('.NS', '')}`,
-        type: 'success'
-      });
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setToast({
-        visible: true,
-        message: `Unable to square off ${stock.symbol.replace('.NS', '')}`,
-        type: 'error'
-      });
-    }
+    handleQuickSell(stock.symbol);
   };
 
-  // Quick Sell Helper for Stock Cards anywhere in the app
-  const handleQuickSell = (stockSymbol: string) => {
-    const owned = holdings.find(h => h.symbol === stockSymbol);
+  // Quick Sell Helper - Opens SellStockModal with exact cost & real-time P&L preview!
+  const handleQuickSell = (stockSymbol: string, price?: number) => {
+    const owned = holdings.find(
+      h => h.symbol === stockSymbol || h.symbol.replace('.NS', '') === stockSymbol.replace('.NS', '')
+    );
     if (!owned) {
       setToast({
         visible: true,
         message: `You don't own any shares of ${stockSymbol.replace('.NS', '')}.`,
-        type: 'error'
+        type: 'error',
       });
       return;
     }
 
-    if (owned.quantity === 1) {
-      handleSquareOff(owned);
+    const effPrice = price && price > 0 ? price : (owned.averagePrice > 0 ? owned.averagePrice : 100);
+    setSelectedHoldingToSell(owned);
+    setSellMarketPrice(effPrice);
+    setSellModalVisible(true);
+
+    // Fetch latest live market price from NSE so P&L is 100% accurate to the second
+    fetch(`${API_BASE_URL}/stock?symbol=${owned.symbol}`)
+      .then(res => res.json())
+      .then(data => {
+        const live = data?.meta?.regularMarketPrice;
+        if (live && live > 0) {
+          setSellMarketPrice(live);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const handleConfirmSellModal = async (qty: number, effPrice: number): Promise<boolean> => {
+    if (!selectedHoldingToSell) return false;
+    const symbol = selectedHoldingToSell.symbol;
+    const pType = selectedHoldingToSell.productType || 'cnc';
+    const success = await sellStock(symbol, effPrice, qty, pType);
+    if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const costBasis = selectedHoldingToSell.averagePrice * qty;
+      const saleVal = effPrice * qty;
+      const diff = saleVal - costBasis;
+      setToast({
+        visible: true,
+        message: `Sold ${qty} shares of ${symbol.replace('.NS', '')} (P&L: ${diff >= 0 ? '+' : ''}${formatCurrency(diff)})`,
+        type: 'success',
+      });
+      return true;
     } else {
-      Alert.alert(
-        `Sell ${owned.symbol.replace('.NS', '')}`,
-        `You own ${owned.quantity} shares.\nAverage purchase price: ${formatCurrency(owned.averagePrice)}`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: `Sell All (${owned.quantity} shares)`,
-            style: "destructive",
-            onPress: () => handleSquareOff(owned)
-          },
-          {
-            text: "Sell 1 Share",
-            onPress: () => {
-              const effPrice = (owned.averagePrice && owned.averagePrice > 0) ? owned.averagePrice : 100;
-              sellStock(owned.symbol, effPrice, 1, owned.productType || 'cnc').then(res => {
-                if (res) {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  setToast({
-                    visible: true,
-                    message: `Sold 1 share of ${owned.symbol.replace('.NS', '')}`,
-                    type: 'success'
-                  });
-                }
-              });
-            }
-          }
-        ]
-      );
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setToast({
+        visible: true,
+        message: `Unable to complete sell order.`,
+        type: 'error',
+      });
+      return false;
     }
   };
 
-  // Simulate Market Close (3:30 PM Square-Off for MIS)
+  // Simulate Market Close (3:30 PM Square-Off for MIS & Daily Recap)
   const handleMarketCloseSimulation = async () => {
     const misHoldings = holdings.filter(h => h.productType === 'mis');
     if (misHoldings.length === 0) {
-      setToast({
-        visible: true,
-        message: "No open intraday MIS positions to square off.",
-        type: 'success'
-      });
+      // Directly open Daily Trading Recap if no open MIS positions
+      setIsRecapModalOpen(true);
       return;
     }
 
     Alert.alert(
-      "Simulate 3:30 PM Auto Square-Off",
-      `Are you sure you want to trigger 3:30 PM market close? All ${misHoldings.length} MIS intraday positions will be automatically squared off at current market prices.`,
+      "End Trading Day (3:30 PM Close)",
+      `All ${misHoldings.length} open MIS intraday positions will be automatically squared off at market prices, and today's recap will be generated.`,
       [
         { text: "Cancel", style: "cancel" },
         { 
-          text: "Auto Square-Off", 
+          text: "Square-Off & View Recap 📊", 
           style: "destructive",
           onPress: async () => {
             let totalRealized = 0;
             for (const pos of misHoldings) {
-              await sellStock(pos.symbol, pos.averagePrice, pos.quantity, 'mis');
+              await sellStock(pos.symbol, pos.averagePrice, pos.quantity, 'mis', 'MIS_AUTO_SQUAREOFF');
               totalRealized += pos.quantity;
             }
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setToast({
               visible: true,
               message: `3:30 PM Square-Off Complete: ${totalRealized} MIS shares closed.`,
               type: 'success'
             });
+            setTimeout(() => {
+              setIsRecapModalOpen(true);
+            }, 600);
           }
         }
       ]
@@ -612,6 +660,7 @@ export default function TradingDashboard() {
         />
 
         <ScrollView 
+          ref={scrollViewRef}
           contentContainerStyle={{ paddingBottom: 120 }} 
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -621,25 +670,31 @@ export default function TradingDashboard() {
           
           {/* HEADER SECTION */}
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => router.push('/(tabs)')}>
+            <View>
               <Text style={styles.greeting}>MARKET INTELLIGENCE</Text>
               <Text style={styles.username}>Trading Desk</Text>
-            </TouchableOpacity>
-            
-            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-              <TouchableOpacity 
-                style={styles.redStudioHeaderBtn}
-                onPress={() => router.push('/compare')}
-              >
-                <Ionicons name="git-compare-outline" size={14} color="#fff" style={{ marginRight: 4 }} />
-                <Text style={styles.redStudioHeaderBtnText}>Studio</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.simulateBtn} onPress={handleMarketCloseSimulation}>
-                <Ionicons name="time-outline" size={14} color="#ef4444" style={{ marginRight: 4 }} />
-                <Text style={styles.simulateBtnText}>End Day</Text>
-              </TouchableOpacity>
             </View>
+          </View>
+
+          {/* QUICK ACTIONS TOOLBAR (FOCUSED 2-BUTTON BAR) */}
+          <View style={styles.quickActionsToolbar}>
+            <TouchableOpacity 
+              style={styles.quickActionBtnStudio}
+              onPress={() => router.push('/compare')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="git-compare-outline" size={15} color="#fff" style={{ marginRight: 6 }} />
+              <Text style={styles.quickActionBtnStudioText}>Compare Studio</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.quickActionBtnRecap} 
+              onPress={() => setIsRecapModalOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="bar-chart-outline" size={15} color="#2563eb" style={{ marginRight: 6 }} />
+              <Text style={styles.quickActionBtnRecapText}>Today's Recap</Text>
+            </TouchableOpacity>
           </View>
 
           {/* 1. PORTFOLIO WALLET CARD */}
@@ -777,8 +832,14 @@ export default function TradingDashboard() {
             <TouchableOpacity 
               style={[styles.mainSegmentBtn, mainTab === 'screener' && styles.mainSegmentBtnActive]}
               onPress={() => setMainTab('screener')}
+              activeOpacity={0.75}
             >
-              <Ionicons name="trending-up" size={15} color={mainTab === 'screener' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
+              <Ionicons 
+                name="trending-up" 
+                size={14} 
+                color={mainTab === 'screener' ? '#fff' : colors.textSecondary} 
+                style={{ marginRight: 3 }} 
+              />
               <Text style={[styles.mainSegmentText, mainTab === 'screener' && styles.mainSegmentTextActive]}>
                 Movers
               </Text>
@@ -787,31 +848,70 @@ export default function TradingDashboard() {
             <TouchableOpacity 
               style={[styles.mainSegmentBtn, mainTab === 'portfolio' && styles.mainSegmentBtnActive]}
               onPress={() => setMainTab('portfolio')}
+              activeOpacity={0.75}
             >
-              <Ionicons name="briefcase-outline" size={15} color={mainTab === 'portfolio' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
+              <Ionicons 
+                name="briefcase-outline" 
+                size={14} 
+                color={mainTab === 'portfolio' ? '#fff' : colors.textSecondary} 
+                style={{ marginRight: 3 }} 
+              />
               <Text style={[styles.mainSegmentText, mainTab === 'portfolio' && styles.mainSegmentTextActive]}>
-                Portfolio ({holdings.length})
+                Portfolio
               </Text>
+              {holdings.length > 0 && (
+                <View style={[styles.tabBadge, mainTab === 'portfolio' && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, mainTab === 'portfolio' && styles.tabBadgeTextActive]}>
+                    {holdings.length}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={[styles.mainSegmentBtn, mainTab === 'ipos' && styles.mainSegmentBtnActive]}
               onPress={() => setMainTab('ipos')}
+              activeOpacity={0.75}
             >
-              <Ionicons name="rocket-outline" size={15} color={mainTab === 'ipos' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
+              <Ionicons 
+                name="rocket-outline" 
+                size={14} 
+                color={mainTab === 'ipos' ? '#fff' : colors.textSecondary} 
+                style={{ marginRight: 3 }} 
+              />
               <Text style={[styles.mainSegmentText, mainTab === 'ipos' && styles.mainSegmentTextActive]}>
-                IPOs ({ipos.length})
+                IPOs
               </Text>
+              {ipos.length > 0 && (
+                <View style={[styles.tabBadge, mainTab === 'ipos' && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, mainTab === 'ipos' && styles.tabBadgeTextActive]}>
+                    {ipos.length}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={[styles.mainSegmentBtn, mainTab === 'logs' && styles.mainSegmentBtnActive]}
               onPress={() => setMainTab('logs')}
+              activeOpacity={0.75}
             >
-              <Ionicons name="receipt-outline" size={15} color={mainTab === 'logs' ? '#fff' : colors.textSecondary} style={{ marginRight: 4 }} />
+              <Ionicons 
+                name="receipt-outline" 
+                size={14} 
+                color={mainTab === 'logs' ? '#fff' : colors.textSecondary} 
+                style={{ marginRight: 3 }} 
+              />
               <Text style={[styles.mainSegmentText, mainTab === 'logs' && styles.mainSegmentTextActive]}>
-                Orders ({transactions.length})
+                Orders
               </Text>
+              {transactions.length > 0 && (
+                <View style={[styles.tabBadge, mainTab === 'logs' && styles.tabBadgeActive]}>
+                  <Text style={[styles.tabBadgeText, mainTab === 'logs' && styles.tabBadgeTextActive]}>
+                    {transactions.length}
+                  </Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -862,8 +962,8 @@ export default function TradingDashboard() {
                           onPress={() => router.push(`/stock/${stock.symbol}`)}
                           activeOpacity={0.8}
                         >
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ flex: 1, marginRight: 10 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
                               <Text style={styles.stockSymbolText}>{stock.symbol.replace('.NS', '')}</Text>
                               <View style={styles.volBadge}>
                                 <Text style={styles.volBadgeText}>{stock.volumeMultiplier}</Text>
@@ -877,7 +977,7 @@ export default function TradingDashboard() {
                             <Text style={styles.stockNameText} numberOfLines={1}>{stock.shortname}</Text>
                           </View>
 
-                          <View style={{ alignItems: 'flex-end' }}>
+                          <View style={{ alignItems: 'flex-end', minWidth: 85 }}>
                             <Text style={styles.stockPriceText}>{formatCurrency(stock.price)}</Text>
                             <Text style={[styles.stockChangeText, { color: isUp ? '#16a34a' : '#dc2626' }]}>
                               {isUp ? '+' : ''}{stock.changePercent.toFixed(2)}%
@@ -1140,7 +1240,19 @@ export default function TradingDashboard() {
           {mainTab === 'portfolio' && (
             <View style={styles.portfolioContainer}>
               {/* Open Positions (Intraday MIS) */}
-              <Text style={styles.portfolioSectionHeader}>Active Positions (MIS Intraday 5x)</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={styles.portfolioSectionHeader}>Active Positions (MIS Intraday 5x)</Text>
+                {holdings.some(h => h.productType === 'mis') && (
+                  <TouchableOpacity 
+                    style={styles.squareOffAllHeaderBtn} 
+                    onPress={handleMarketCloseSimulation}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="flash-outline" size={12} color="#ef4444" style={{ marginRight: 4 }} />
+                    <Text style={styles.squareOffAllHeaderText}>Square-Off All</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               {holdings.filter(h => h.productType === 'mis').length === 0 ? (
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyText}>No active intraday positions open.</Text>
@@ -1564,6 +1676,22 @@ export default function TradingDashboard() {
           </View>
         </Modal>
 
+        {/* 8. DAILY TRADING RECAP MODAL */}
+        <DailyRecapModal
+          visible={isRecapModalOpen}
+          onClose={() => setIsRecapModalOpen(false)}
+          onViewOrders={() => setMainTab('logs')}
+        />
+
+        {/* 9. SELL STOCK ORDER PREVIEW MODAL (WITH REAL-TIME P&L) */}
+        <SellStockModal
+          visible={sellModalVisible}
+          onClose={() => setSellModalVisible(false)}
+          holding={selectedHoldingToSell}
+          currentPrice={sellMarketPrice}
+          onConfirmSell={handleConfirmSellModal}
+        />
+
       </SafeAreaView>
     </PageTransition>
   );
@@ -1577,11 +1705,8 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   
   headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: Platform.OS === 'ios' ? 10 : 25,
-    marginBottom: 16,
+    marginTop: Platform.OS === 'ios' ? 10 : 20,
+    marginBottom: 12,
   },
   greeting: {
     fontSize: 11,
@@ -1591,35 +1716,61 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     letterSpacing: 1,
   },
   username: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "900",
     color: colors.text,
     marginTop: 2,
   },
-  redStudioHeaderBtn: {
+  quickActionsToolbar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    width: '100%',
+  },
+  quickActionBtnStudio: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#dc2626',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
+    paddingVertical: 9,
+    borderRadius: 12,
   },
-  redStudioHeaderBtnText: {
-    color: '#fff',
-    fontSize: 11,
+  quickActionBtnStudioText: {
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '800',
   },
-  simulateBtn: {
+  quickActionBtnRecap: {
+    flex: 1.2,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
+    justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : '#eff6ff',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(37,99,235,0.3)' : '#bfdbfe',
+    paddingVertical: 9,
+    borderRadius: 12,
   },
-  simulateBtnText: {
+  quickActionBtnRecapText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  quickActionBtnEndDay: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca',
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  quickActionBtnEndDayText: {
     color: '#ef4444',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
   },
 
@@ -1878,25 +2029,26 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   // Unified Top Segment Switcher
   mainSegmentNav: {
     flexDirection: 'row',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
     borderRadius: 14,
-    padding: 4,
+    padding: 3,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
   },
   mainSegmentBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 2,
     borderRadius: 10,
   },
   mainSegmentBtnActive: {
     backgroundColor: colors.accent,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 2,
   },
@@ -1908,6 +2060,42 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   mainSegmentTextActive: {
     color: '#fff',
     fontWeight: '800',
+  },
+  tabBadge: {
+    marginLeft: 3,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 8,
+    backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : '#e2e8f0',
+    minWidth: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  tabBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.textSecondary,
+  },
+  tabBadgeTextActive: {
+    color: '#ffffff',
+  },
+  squareOffAllHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+    borderWidth: 1,
+    borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca',
+  },
+  squareOffAllHeaderText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ef4444',
   },
 
   // Category Pills
