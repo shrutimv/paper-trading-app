@@ -151,9 +151,19 @@ module.exports.searchUsers = async (req, res) => {
       return res.status(200).json({ success: true, users: [] });
     }
 
+    const excludeUser = (req.query.excludeUser || (req.user && req.user.username) || "").trim().replace(/^@/, "");
+
     const queryFilter = {
       username: { $regex: rawQuery, $options: "i" },
     };
+
+    if (excludeUser) {
+      queryFilter.username = {
+        $regex: rawQuery,
+        $options: "i",
+        $nin: [new RegExp(`^${excludeUser}$`, "i")],
+      };
+    }
 
     if (req.user) {
       queryFilter._id = { $ne: req.user._id };

@@ -62,6 +62,8 @@ export default function FriendsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sendingUsernames, setSendingUsernames] = useState<string[]>([]);
 
+  const [isSearchingSelf, setIsSearchingSelf] = useState(false);
+
   const searchDebounceRef = useRef<any>(null);
 
   const fetchFriendsData = useCallback(async () => {
@@ -107,7 +109,20 @@ export default function FriendsScreen() {
       clearTimeout(searchDebounceRef.current);
     }
 
-    if (!text.trim() || text.trim().length < 1) {
+    const cleanQuery = text.trim().replace(/^@/, "").toLowerCase();
+    const myUsername = (user?.username || "").trim().toLowerCase();
+
+    // Prevent searching own username
+    if (cleanQuery && myUsername && cleanQuery === myUsername) {
+      setIsSearchingSelf(true);
+      setSuggestions([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearchingSelf(false);
+
+    if (!cleanQuery || cleanQuery.length < 1) {
       setSuggestions([]);
       setIsSearching(false);
       return;
@@ -116,8 +131,8 @@ export default function FriendsScreen() {
     setIsSearching(true);
     searchDebounceRef.current = setTimeout(async () => {
       try {
-        const cleanQuery = text.trim().replace(/^@/, "");
-        const res = await fetch(`${BASE_URL}/api/social/users/search?q=${encodeURIComponent(cleanQuery)}`, {
+        const excludeParam = user?.username ? `&excludeUser=${encodeURIComponent(user.username)}` : "";
+        const res = await fetch(`${BASE_URL}/api/social/users/search?q=${encodeURIComponent(cleanQuery)}${excludeParam}`, {
           credentials: "include",
         });
 
@@ -129,7 +144,13 @@ export default function FriendsScreen() {
         const data = await res.json();
 
         if (data.success) {
-          setSuggestions(data.users || []);
+          // Strictly filter out self in frontend as an additional layer of security
+          const cleanUsers = (data.users || []).filter(
+            (u: UserSuggestion) =>
+              u.username.toLowerCase() !== myUsername &&
+              (!user?.id || u.id !== user.id)
+          );
+          setSuggestions(cleanUsers);
         }
       } catch (err) {
         console.error("search error:", err);
@@ -280,8 +301,18 @@ export default function FriendsScreen() {
             ) : null}
           </View>
 
+          {/* SELF SEARCH NOTICE */}
+          {isSearchingSelf && (
+            <View style={[styles.selfSearchNotice, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Ionicons name="information-circle-outline" size={18} color={colors.accent} />
+              <Text style={[styles.selfSearchNoticeText, { color: colors.textSecondary }]}>
+                You cannot search or send a friend request to your own account (@{user?.username}).
+              </Text>
+            </View>
+          )}
+
           {/* LIVE USER SUGGESTIONS LIST (APPEARS AS USER TYPES) */}
-          {searchQuery.trim().length > 0 && (
+          {searchQuery.trim().length > 0 && !isSearchingSelf && (
             <View style={[styles.suggestionsContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.suggestionsHeader}>
                 <Text style={[styles.suggestionsHeaderText, { color: colors.textSecondary }]}>
@@ -358,22 +389,56 @@ export default function FriendsScreen() {
             </View>
           )}
 
-          {/* INCOMING FRIEND REQUESTS (RECEIVING USER SECTION) */}
-          {requests.length > 0 && (
-            <View style={[styles.requestsSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.requestsHeader}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <View style={styles.requestsNotificationDot} />
-                  <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                    Incoming Friend Requests ({requests.length})
+          {/* INCOMING FRIEND REQUESTS (RECEIVING USER SECTION - ALWAYS VISIBLE) */}
+          <View style={[styles.requestsSection, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.requestsHeader}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons
+                  name={requests.length > 0 ? "mail-unread" : "mail-outline"}
+                  size={18}
+                  color={requests.length > 0 ? "#f59e0b" : colors.textSecondary}
+                />
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Friend Requests
+                </Text>
+                <View
+                  style={[
+                    styles.badgePill,
+                    { backgroundColor: requests.length > 0 ? "rgba(245, 158, 11, 0.15)" : colors.border },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.badgePillText,
+                      { color: requests.length > 0 ? "#f59e0b" : colors.textSecondary },
+                    ]}
+                  >
+                    {requests.length}
                   </Text>
                 </View>
-                <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: "600" }}>
-                  Action Needed
+              </View>
+              <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: "600" }}>
+                {requests.length > 0 ? "Action Needed" : "All Caught Up"}
+              </Text>
+            </View>
+
+            {requests.length === 0 ? (
+              <View style={styles.emptyRequestsBox}>
+                <Ionicons
+                  name="mail-open-outline"
+                  size={26}
+                  color={colors.textSecondary}
+                  style={{ opacity: 0.6, marginBottom: 4 }}
+                />
+                <Text style={[styles.emptyRequestsTitle, { color: colors.text }]}>
+                  No Pending Requests
+                </Text>
+                <Text style={[styles.emptyRequestsSubtitle, { color: colors.textSecondary }]}>
+                  When other traders send you a friend request using your @username, they will appear right here for you to accept or decline.
                 </Text>
               </View>
-
-              {requests.map((req) => (
+            ) : (
+              requests.map((req) => (
                 <View
                   key={req.requestId}
                   style={[styles.requestCard, { backgroundColor: colors.background, borderColor: colors.border }]}
@@ -410,9 +475,9 @@ export default function FriendsScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
-              ))}
-            </View>
-          )}
+              ))
+            )}
+          </View>
 
           {/* MY FRIENDS LIST */}
           <View style={styles.section}>
@@ -533,6 +598,23 @@ const getStyles = (colors: any) =>
       fontWeight: "600",
     },
 
+    selfSearchNotice: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      marginBottom: 16,
+    },
+    selfSearchNoticeText: {
+      flex: 1,
+      fontSize: 12.5,
+      fontWeight: "700",
+      lineHeight: 18,
+    },
+
     /* LIVE SUGGESTIONS DROPDOWN */
     suggestionsContainer: {
       borderRadius: 18,
@@ -606,6 +688,32 @@ const getStyles = (colors: any) =>
       justifyContent: "space-between",
       alignItems: "center",
       marginBottom: 12,
+    },
+    badgePill: {
+      paddingHorizontal: 8,
+      paddingVertical: 2.5,
+      borderRadius: 10,
+    },
+    badgePillText: {
+      fontSize: 11,
+      fontWeight: "900",
+    },
+    emptyRequestsBox: {
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 14,
+      paddingHorizontal: 16,
+    },
+    emptyRequestsTitle: {
+      fontSize: 13.5,
+      fontWeight: "800",
+      marginTop: 2,
+    },
+    emptyRequestsSubtitle: {
+      fontSize: 12,
+      textAlign: "center",
+      lineHeight: 17,
+      marginTop: 3,
     },
     requestsNotificationDot: {
       width: 8,

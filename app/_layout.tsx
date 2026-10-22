@@ -3,13 +3,38 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@rea
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { LogBox, StyleSheet, Text } from 'react-native';
+import { LogBox, StyleSheet, Text, Platform } from 'react-native';
 import Animated, { FadeIn, ZoomIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
+
+// Catch & suppress fontfaceobserver timeout error on Web (PC browser)
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  const isFontTimeout = (err: any) =>
+    Boolean(
+      err &&
+      ((typeof err?.message === 'string' && (err.message.includes('6000ms') || err.message.includes('fontfaceobserver'))) ||
+       (typeof err === 'string' && (err.includes('6000ms') || err.includes('fontfaceobserver'))))
+    );
+
+  window.addEventListener('unhandledrejection', (event) => {
+    if (isFontTimeout(event.reason)) {
+      event.preventDefault();
+      event.stopImmediatePropagation?.();
+    }
+  });
+
+  window.addEventListener('error', (event) => {
+    if (isFontTimeout(event.error) || isFontTimeout(event.message)) {
+      event.preventDefault();
+      event.stopImmediatePropagation?.();
+    }
+  });
+}
 
 LogBox.ignoreLogs([
   'SafeAreaView has been deprecated',
   '[expo-av]: Expo AV has been deprecated',
+  '6000ms timeout exceeded',
 ]);
 
 import { AuthProvider } from '../context/AuthContext';
