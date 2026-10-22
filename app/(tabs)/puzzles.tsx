@@ -1,69 +1,145 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
-import { useTheme } from "../../context/ThemeContext";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
-  FlatList,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from "react-native";
-
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PageTransition from "@/components/PageTransition";
-import LevelsCarousel from "../../components/LevelsCarousel";
-import PuzzleItem from "../../components/PuzzleItem";
+import { LEARNING_DATA } from "../../constants/LearningData";
+import { useGamification } from "../../context/GamificationContext";
+import { useTheme } from "../../context/ThemeContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
-// --- 1. THE MASTER DATA (Untouched) ---
-const MODULES = [
-  { id: 'm1', title: 'Why Markets Exist?', level: 'Beginner', desc: 'Concept: Capital, IPOs, Shares.' },
-  { id: 'm2', title: 'The Ecosystem', level: 'Beginner', desc: 'Concept: NSE/BSE, SEBI, Brokers.' },
-  { id: 'm3', title: 'Stock Basics', level: 'Beginner', desc: 'Concept: Equity, Face Value, Dividends.' },
-  { id: 'm4', title: 'Market Cap & Sectors', level: 'Beginner', desc: 'Concept: Large Cap vs Small Cap.' },
-  { id: 'm5', title: 'Corporate Actions', level: 'Intermediate', desc: 'Concept: Splits, Bonuses, Buybacks.' },
-  { id: 'm6', title: 'Mutual Funds & ETFs', level: 'Intermediate', desc: 'Concept: NAV, Expense Ratio, NiftyBees.' },
-  { id: 'm7', title: 'Fundamental Analysis 1', level: 'Intermediate', desc: 'Concept: Revenue, Profit, EPS, P/E.' },
-  { id: 'm8', title: 'IPO Analysis', level: 'Intermediate', desc: 'Concept: GMP, Lot Size, Listing Gains.' },
-  { id: 'm9', title: 'Candlestick Anatomy', level: 'Advanced', desc: 'Concept: OHLC, Wicks, Bullish vs Bearish.' },
-  { id: 'm10', title: 'Trends & Volume', level: 'Advanced', desc: 'Concept: Uptrend, Downtrend, Sideways.' },
-  { id: 'm11', title: 'Support & Resistance', level: 'Advanced', desc: 'Concept: Breakouts & Breakdowns.' },
-  { id: 'm12', title: 'Order Types & Leverage', level: 'Advanced', desc: 'Concept: Limit, Stop-Loss, Margin.' },
-  { id: 'm13', title: 'Future Contracts', level: 'Expert', desc: 'Concept: Expiry, Lot Size, Long/Short.' },
-  { id: 'm14', title: 'Options Basics (Buying)', level: 'Expert', desc: 'Concept: CE/PE, Strike Price.' },
-  { id: 'm15', title: 'Moneyness & Greeks', level: 'Expert', desc: 'Concept: ATM/ITM/OTM, Theta Decay.' },
-  { id: 'm16', title: 'Risk Management', level: 'Expert', desc: 'Concept: Risk-Reward, Position Sizing.' },
-];
+export interface AcademyModule {
+  id: string;
+  title: string;
+  level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  readTime: string;
+  desc: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
 
-const PUZZLE_DATA = [
+export const ACADEMY_MODULES: AcademyModule[] = [
   {
-    id: "p1",
-    level: "Beginner",
-    title: "The Bullish Engulfing Pattern",
-    description: "Identify the correct entry point based on the chart pattern.",
-    progress: 0.5,
-    image: require("../../assets/images/Puzzle/p1.png"),
-    buttonLabel: "Continue",
+    id: 'm1',
+    title: 'Origins of Stocks & Why Markets Exist',
+    level: 'Beginner',
+    readTime: '4 min',
+    desc: 'The 1602 spice voyages, Dalal Street banyan tree, and equity vs bank loans.',
+    icon: 'compass-outline',
+  },
+  {
+    id: 'm2',
+    title: 'The Market Ecosystem & Regulators',
+    level: 'Beginner',
+    readTime: '4 min',
+    desc: 'NSE vs BSE, SEBI watchdog, Demat accounts, and Nifty 50 / Sensex indices.',
+    icon: 'shield-checkmark-outline',
+  },
+  {
+    id: 'm3',
+    title: 'Asset Classes: Where Money Grows',
+    level: 'Beginner',
+    readTime: '5 min',
+    desc: 'Equities, Debt & FDs, Mutual Funds, ETFs, Gold hedge, and Real Estate.',
+    icon: 'pie-chart-outline',
+  },
+  {
+    id: 'm4',
+    title: 'Why Stock Prices Move',
+    level: 'Beginner',
+    readTime: '5 min',
+    desc: 'Supply vs Demand, Quarterly Earnings, FII/DII institutional flows, and RBI repo rate.',
+    icon: 'trending-up-outline',
+  },
+  {
+    id: 'm5',
+    title: 'Anatomy of a Trade: Under the Hood',
+    level: 'Intermediate',
+    readTime: '5 min',
+    desc: 'Secondary market reality, T+1 settlement cycle, and CNC (Delivery) vs MIS (Intraday).',
+    icon: 'swap-horizontal-outline',
+  },
+  {
+    id: 'm6',
+    title: 'Order Types & Market Depth Mechanics',
+    level: 'Intermediate',
+    readTime: '5 min',
+    desc: 'Market vs Limit, Stop-Loss (SL/SL-M), Bid-Ask Spread, and GTT trigger orders.',
+    icon: 'list-outline',
+  },
+  {
+    id: 'm7',
+    title: 'Fundamental Analysis: What to Inspect',
+    level: 'Intermediate',
+    readTime: '6 min',
+    desc: 'The 3 financial statements (P&L, Balance Sheet, Cash Flow), and Warren Buffett moats.',
+    icon: 'document-text-outline',
+  },
+  {
+    id: 'm8',
+    title: 'Key Financial Ratios Made Simple',
+    level: 'Intermediate',
+    readTime: '5 min',
+    desc: 'P/E valuation, EPS, ROE capital efficiency, Debt-to-Equity, and Dividend Yield.',
+    icon: 'calculator-outline',
+  },
+  {
+    id: 'm9',
+    title: 'Promoter Health & Governance Red Flags',
+    level: 'Intermediate',
+    readTime: '4 min',
+    desc: 'Promoter skin in the game, danger of pledged shares, and auditor resignation alerts.',
+    icon: 'alert-circle-outline',
+  },
+  {
+    id: 'm10',
+    title: 'Candlestick Anatomy & Price Action',
+    level: 'Advanced',
+    readTime: '5 min',
+    desc: 'OHLC points, Green vs Red bodies, reading upper/lower wicks, Support & Resistance.',
+    icon: 'bar-chart-outline',
+  },
+  {
+    id: 'm11',
+    title: 'Trends, Volumes & Breakout Dynamics',
+    level: 'Advanced',
+    readTime: '5 min',
+    desc: 'Higher Highs, Volume institutional confirmation, Bull traps, and retest setups.',
+    icon: 'pulse-outline',
+  },
+  {
+    id: 'm12',
+    title: 'Risk Management & Trading Psychology',
+    level: 'Expert',
+    readTime: '6 min',
+    desc: 'The Golden 1% Rule, 1:2 Risk-to-Reward ratio, Position sizing, and defeating FOMO.',
+    icon: 'flame-outline',
   },
 ];
 
-const LEVELS = ["All", "Beginner", "Intermediate", "Advanced"];
+const LEVELS = ["All", "Beginner", "Intermediate", "Advanced", "Expert"];
 
 export default function PuzzlesScreen() {
   const router = useRouter();
-  const scrollViewRef = useRef<ScrollView>(null); 
+  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
-  const styles = getStyles(colors); 
+  const { currentRank, xp } = useGamification();
+  const styles = getStyles(colors);
 
   const [activeLevel, setActiveLevel] = useState<string>("All");
-  const [activeTab, setActiveTab] = useState<'puzzles' | 'roadmap'>('roadmap');
+  const [activeTab, setActiveTab] = useState<'modules' | 'quizzes'>('modules');
   const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const [dailyPred, setDailyPred] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -74,447 +150,631 @@ export default function PuzzlesScreen() {
             .filter(k => k.startsWith('module_completed_'))
             .map(k => k.replace('module_completed_', ''));
           setCompletedIds(completed);
-        } catch (e) { console.error(e); }
+
+          const pred = await AsyncStorage.getItem('paper_daily_nifty_pred');
+          setDailyPred(pred);
+        } catch (e) {
+          console.error(e);
+        }
       };
       checkProgress();
     }, [])
   );
 
-  const scrollToSection = (level: string) => {
-    const index = MODULES.findIndex(m => m.level === level);
-    if (index !== -1 && scrollViewRef.current) {
-      const yOffset = index * 120; 
-      scrollViewRef.current.scrollTo({ y: yOffset, animated: true });
+  const filteredModules = useMemo(() => {
+    if (activeLevel === "All") return ACADEMY_MODULES;
+    return ACADEMY_MODULES.filter(m => m.level === activeLevel);
+  }, [activeLevel]);
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case 'Beginner': return { border: '#10b981', bg: 'rgba(16, 185, 129, 0.12)', text: '#059669' };
+      case 'Intermediate': return { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)', text: '#d97706' };
+      case 'Advanced': return { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)', text: '#dc2626' };
+      case 'Expert': return { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)', text: '#7c3aed' };
+      default: return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', text: '#2563eb' };
     }
   };
 
-  const getBackgroundColor = (level: string) => {
-    switch (level) {
-      case 'Beginner': return '#ECFDF5'; 
-      case 'Intermediate': return '#FEF3C7'; 
-      case 'Advanced': return '#FEF2F2'; 
-      case 'Expert': return '#F3E8FF'; 
-      default: return '#FFFFFF';
-    }
-  };
-
-  const getBorderColor = (level: string) => {
-    switch (level) {
-      case 'Beginner': return '#059669'; 
-      case 'Intermediate': return '#D97706'; 
-      case 'Advanced': return '#DC2626'; 
-      case 'Expert': return '#7C3AED'; 
-      default: return '#94A3B8';
-    }
-  };
+  const progressPercent = Math.round((completedIds.length / ACADEMY_MODULES.length) * 100);
 
   return (
-  <PageTransition>
-    <SafeAreaView style={styles.screen}>
-      
-      {/* PREMIUM HEADER */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>GAMIFICATION</Text>
-          <Text style={styles.title}>Daily Hub</Text>
+    <PageTransition>
+      <View style={[styles.screen, { paddingTop: insets.top }]}>
+        
+        {/* PREMIUM HEADER WITH RANK & PROGRESS */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>ACADEMY & KNOWLEDGE HUB</Text>
+            <Text style={styles.title}>Learn & Master</Text>
+          </View>
+          <View style={styles.rankBadge}>
+            <Ionicons name="shield-checkmark" size={16} color={currentRank.color} />
+            <Text style={[styles.rankText, { color: currentRank.color }]}>{currentRank.name}</Text>
+          </View>
         </View>
-        <TouchableOpacity style={styles.notificationBtn}>
-          <Ionicons name="medal-outline" size={22} color="#0f62fe" />
-        </TouchableOpacity>
-      </View>
 
-      {/* MODERN TAB BAR */}
-      <View style={styles.tabContainer}>
-        <View style={styles.tabBackground}>
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'roadmap' && styles.activeTab]} 
-            onPress={() => setActiveTab('roadmap')}
-          >
-            <Text style={[styles.tabText, activeTab === 'roadmap' && styles.activeTabText]}>Syllabus</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.tab, activeTab === 'puzzles' && styles.activeTab]} 
-            onPress={() => setActiveTab('puzzles')}
-          >
-            <Text style={[styles.tabText, activeTab === 'puzzles' && styles.activeTabText]}>Puzzles</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {activeTab === 'puzzles' ? (
-        <ScrollView contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 20 }} showsVerticalScrollIndicator={false}>
-          
-          {/* DAILY INDEX SENTIMENT PREDICTOR (NIFTY 50 & SENSEX) */}
-          <View style={[styles.predictionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="analytics" size={22} color={colors.accent} />
-                <Text style={[styles.predictionTitle, { color: colors.text }]}>Daily Index Predictor (3:30 PM IST)</Text>
-              </View>
-              <View style={styles.liveTag}>
-                <Text style={styles.liveTagText}>LIVE 3:30 PM</Text>
-              </View>
+        {/* PROGRESS BANNER */}
+        <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.progressRow}>
+            <View>
+              <Text style={[styles.progressTitle, { color: colors.text }]}>Curriculum Progress</Text>
+              <Text style={[styles.progressSubtitle, { color: colors.textSecondary }]}>
+                {completedIds.length} of {ACADEMY_MODULES.length} Modules Mastered
+              </Text>
             </View>
-
-            <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 14, lineHeight: 18 }}>
-              Predict whether <Text style={{ fontWeight: '800', color: colors.text }}>NIFTY 50</Text> or <Text style={{ fontWeight: '800', color: colors.text }}>SENSEX</Text> will close GREEN or RED today. Predictions lock for 3:30 PM settlement to earn +100 XP!
-            </Text>
-
-            {/* PREDICTION BUTTONS */}
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-              <TouchableOpacity 
-                style={[
-                  styles.predBtn, 
-                  { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: '#10b981' }
-                ]}
-                onPress={async () => {
-                  await AsyncStorage.setItem('paper_daily_nifty_pred', 'BULLISH');
-                  alert("Prediction Locked! 🚀 You predicted NIFTY 50 to close BULLISH (GREEN) at 3:30 PM IST. Check back after market close for +100 XP!");
-                }}
-              >
-                <Ionicons name="trending-up" size={24} color="#10b981" />
-                <Text style={{ color: '#10b981', fontWeight: '900', fontSize: 13, marginTop: 4 }}>BULLISH (GREEN)</Text>
-                <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Up ↑</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={[
-                  styles.predBtn, 
-                  { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#ef4444' }
-                ]}
-                onPress={async () => {
-                  await AsyncStorage.setItem('paper_daily_nifty_pred', 'BEARISH');
-                  alert("Prediction Locked! 📉 You predicted NIFTY 50 to close BEARISH (RED) at 3:30 PM IST. Check back after market close for +100 XP!");
-                }}
-              >
-                <Ionicons name="trending-down" size={24} color="#ef4444" />
-                <Text style={{ color: '#ef4444', fontWeight: '900', fontSize: 13, marginTop: 4 }}>BEARISH (RED)</Text>
-                <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Down ↓</Text>
-              </TouchableOpacity>
+            <View style={[styles.progressPercentPill, { backgroundColor: colors.accent + '20' }]}>
+              <Text style={[styles.progressPercentText, { color: colors.accent }]}>{progressPercent}%</Text>
             </View>
           </View>
 
-          {/* TRADING ARCADE GAMES HEADER */}
-          <View style={[styles.arcadeHeaderCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <Ionicons name="game-controller-outline" size={24} color={colors.accent} />
-              <Text style={[styles.arcadeTitle, { color: colors.text }]}>Practical Trading Minigames</Text>
-            </View>
-            <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
-              Learn real market concepts (Order Execution, Intraday 5x Margin, and Risk-Reward Ratios) through interactive challenges.
-            </Text>
+          <View style={[styles.progressBarTrack, { backgroundColor: colors.border }]}>
+            <View style={[styles.progressBarFill, { width: `${progressPercent}%`, backgroundColor: colors.accent }]} />
           </View>
+        </View>
 
-          {/* GAME CARDS GRID */}
-          <View style={{ gap: 12, marginBottom: 20 }}>
-            {/* GAME 1 */}
+        {/* MODERN DUAL TAB BAR */}
+        <View style={styles.tabContainer}>
+          <View style={[styles.tabBackground, { backgroundColor: colors.border }]}>
             <TouchableOpacity 
-              style={[styles.gameCard, { backgroundColor: colors.card, borderColor: '#3b82f6' }]}
-              onPress={() => router.push('/play-puzzle')}
+              style={[styles.tab, activeTab === 'modules' && [styles.activeTab, { backgroundColor: colors.card }]]} 
+              onPress={() => setActiveTab('modules')}
+              activeOpacity={0.8}
             >
-              <View style={[styles.gameIconBadge, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
-                <Ionicons name="swap-horizontal" size={24} color="#3b82f6" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.gameCardTitle, { color: colors.text }]}>Order Matcher Arena</Text>
-                  <View style={[styles.xpTag, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
-                    <Text style={[styles.xpTagText, { color: '#3b82f6' }]}>+150 XP</Text>
-                  </View>
-                </View>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
-                  Match trading scenarios with CNC (Delivery), MIS (5x Intraday), Market, & Stop-Loss.
-                </Text>
-              </View>
-              <Ionicons name="play-circle" size={32} color="#3b82f6" />
+              <Ionicons 
+                name="book-outline" 
+                size={16} 
+                color={activeTab === 'modules' ? colors.text : colors.textSecondary} 
+                style={{ marginRight: 6 }} 
+              />
+              <Text style={[styles.tabText, { color: activeTab === 'modules' ? colors.text : colors.textSecondary }]}>
+                Modules (Textbook)
+              </Text>
             </TouchableOpacity>
 
-            {/* GAME 2 */}
             <TouchableOpacity 
-              style={[styles.gameCard, { backgroundColor: colors.card, borderColor: '#f59e0b' }]}
-              onPress={() => router.push('/play-puzzle')}
+              style={[styles.tab, activeTab === 'quizzes' && [styles.activeTab, { backgroundColor: colors.card }]]} 
+              onPress={() => setActiveTab('quizzes')}
+              activeOpacity={0.8}
             >
-              <View style={[styles.gameIconBadge, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-                <Ionicons name="calculator" size={24} color="#f59e0b" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={[styles.gameCardTitle, { color: colors.text }]}>Risk-Reward Sizer</Text>
-                  <View style={[styles.xpTag, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-                    <Text style={[styles.xpTagText, { color: '#f59e0b' }]}>+100 XP</Text>
-                  </View>
-                </View>
-                <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
-                  Calculate entry, stop-loss, and target ratios to achieve 1:2 risk management.
-                </Text>
-              </View>
-              <Ionicons name="play-circle" size={32} color="#f59e0b" />
+              <Ionicons 
+                name="school-outline" 
+                size={16} 
+                color={activeTab === 'quizzes' ? colors.text : colors.textSecondary} 
+                style={{ marginRight: 6 }} 
+              />
+              <Text style={[styles.tabText, { color: activeTab === 'quizzes' ? colors.text : colors.textSecondary }]}>
+                Knowledge Quizzes
+              </Text>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      ) : (
-        <View style={{flex: 1}}>
-          
-          {/* QUICK JUMP PILLS */}
-          <View style={styles.filterRow}>
-            {['Beginner', 'Intermediate', 'Advanced', 'Expert'].map((lvl) => (
-              <TouchableOpacity 
-                key={lvl} 
-                style={[styles.filterBtn, { backgroundColor: getBackgroundColor(lvl), borderColor: getBackgroundColor(lvl) }]}
-                onPress={() => scrollToSection(lvl)}
-              >
-                <Text style={[styles.filterText, { color: getBorderColor(lvl) }]}>{lvl}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        </View>
 
-          <ScrollView 
-            ref={scrollViewRef}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-          >
-            {MODULES.map((module) => {
-              const isDone = completedIds.includes(module.id);
-              const bgColor = getBackgroundColor(module.level);
-              const accentColor = getBorderColor(module.level);
-
+        {/* LEVEL FILTER PILLS */}
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {LEVELS.map((lvl) => {
+              const isSelected = activeLevel === lvl;
               return (
-                <TouchableOpacity 
-                  key={module.id} 
-                  style={[ styles.quizCard, { borderLeftColor: accentColor } ]}
-                  onPress={() => router.push({ 
-                    pathname: "/learn", 
-                    params: { moduleId: module.id, level: module.level } 
-                  })}
+                <TouchableOpacity
+                  key={lvl}
+                  style={[
+                    styles.filterPill,
+                    {
+                      backgroundColor: isSelected ? colors.accent : colors.card,
+                      borderColor: isSelected ? colors.accent : colors.border,
+                    }
+                  ]}
+                  onPress={() => setActiveLevel(lvl)}
+                  activeOpacity={0.7}
                 >
-                  <View style={styles.quizInfo}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                      <Text style={styles.quizTitle}>{module.title}</Text>
-                      {isDone && (
-                        <View style={[styles.badge, { backgroundColor: bgColor, marginLeft: 8 }]}>
-                          <Text style={[styles.badgeText, { color: accentColor }]}>COMPLETED</Text>
-                        </View>
-                      )}
-                    </View>
-                    
-                    <Text style={styles.quizDesc}>{module.desc}</Text>
-                    
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12 }}>
-                       <View style={[styles.levelTag, { backgroundColor: bgColor }]}>
-                          <Text style={[styles.levelLabel, { color: accentColor }]}>{module.level}</Text>
-                       </View>
-                       <Text style={styles.actionText}>{isDone ? "Review Module" : "Start Learning"}</Text>
-                    </View>
-                  </View>
-
-                  {/* Icon */}
-                  <View style={[styles.iconWrapper, { backgroundColor: isDone ? bgColor : colors.border }]}>
-                    {isDone ? (
-                        <Ionicons name="checkmark-done" size={20} color={accentColor} />
-                    ) : (
-                        <Ionicons name="lock-open-outline" size={20} color={colors.textSecondary} />
-                    )}
-                  </View>
+                  <Text style={[styles.filterPillText, { color: isSelected ? '#fff' : colors.textSecondary }]}>
+                    {lvl}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
         </View>
-      )}
-    </SafeAreaView>
-  </PageTransition>  
+
+        {/* TAB CONTENT */}
+        {activeTab === 'modules' ? (
+          /* MODULES READING TAB */
+          <ScrollView 
+            contentContainerStyle={styles.listContainer} 
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredModules.map((module, index) => {
+              const isDone = completedIds.includes(module.id);
+              const colorConfig = getLevelColor(module.level);
+
+              return (
+                <View 
+                  key={module.id} 
+                  style={[
+                    styles.moduleCard, 
+                    { 
+                      backgroundColor: colors.card, 
+                      borderColor: colors.border,
+                      borderLeftColor: colorConfig.border,
+                    }
+                  ]}
+                >
+                  {/* CARD HEADER */}
+                  <View style={styles.cardTopRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={[styles.levelBadge, { backgroundColor: colorConfig.bg }]}>
+                        <Text style={[styles.levelBadgeText, { color: colorConfig.text }]}>
+                          {module.level.toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={[styles.readTimeText, { color: colors.textSecondary }]}>
+                        • {module.readTime} read
+                      </Text>
+                    </View>
+
+                    {isDone ? (
+                      <View style={styles.completedBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+                        <Text style={styles.completedBadgeText}>COMPLETED</Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.moduleIndexText, { color: colors.textSecondary }]}>
+                        #{module.id.replace('m', '')}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* TITLE & DESCRIPTION */}
+                  <Text style={[styles.moduleTitle, { color: colors.text }]}>{module.title}</Text>
+                  <Text style={[styles.moduleDesc, { color: colors.textSecondary }]}>{module.desc}</Text>
+
+                  {/* ACTION BUTTONS */}
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity
+                      style={[styles.readBtn, { backgroundColor: colors.accent }]}
+                      onPress={() => router.push({
+                        pathname: "/learn",
+                        params: { moduleId: module.id, level: module.level }
+                      })}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="book" size={16} color="#fff" />
+                      <Text style={styles.readBtnText}>Read Module</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.quizOutlineBtn, 
+                        { 
+                          borderColor: isDone ? '#10b981' : colors.border,
+                          backgroundColor: isDone ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                        }
+                      ]}
+                      onPress={() => router.push({
+                        pathname: "/quiz",
+                        params: { moduleId: module.id, level: module.level }
+                      })}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons 
+                        name={isDone ? "checkmark-circle" : "school-outline"} 
+                        size={15} 
+                        color={isDone ? "#10b981" : colors.text} 
+                      />
+                      <Text style={[styles.quizOutlineText, { color: isDone ? "#10b981" : colors.text }]}>
+                        {isDone ? "Retake Quiz" : "Quiz (+250 XP)"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        ) : (
+          /* QUIZZES & PRACTICE TAB */
+          <ScrollView 
+            contentContainerStyle={styles.listContainer} 
+            showsVerticalScrollIndicator={false}
+          >
+            {/* DAILY INDEX SENTIMENT PREDICTOR */}
+            <View style={[styles.predictionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="analytics" size={20} color={colors.accent} />
+                  <Text style={[styles.predictionTitle, { color: colors.text }]}>Daily Index Sentiment (3:30 PM)</Text>
+                </View>
+                <View style={styles.liveTag}>
+                  <Text style={styles.liveTagText}>TODAY'S CLOSE</Text>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 12, lineHeight: 18 }}>
+                Predict whether <Text style={{ fontWeight: '800', color: colors.text }}>NIFTY 50</Text> will close GREEN or RED today. Earn +100 XP upon 3:30 PM market settlement!
+              </Text>
+
+              {dailyPred ? (
+                <View style={[styles.lockedCard, { backgroundColor: colors.border + '40', borderColor: colors.border }]}>
+                  <Ionicons name="lock-closed" size={16} color={colors.accent} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
+                    Prediction Locked: <Text style={{ color: dailyPred === 'BULLISH' ? '#10b981' : '#ef4444' }}>{dailyPred}</Text>
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity 
+                    style={[styles.predBtn, { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: '#10b981' }]}
+                    onPress={async () => {
+                      await AsyncStorage.setItem('paper_daily_nifty_pred', 'BULLISH');
+                      setDailyPred('BULLISH');
+                      alert("Prediction Locked! 🚀 You predicted NIFTY 50 to close BULLISH (GREEN).");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trending-up" size={20} color="#10b981" />
+                    <Text style={{ color: '#10b981', fontWeight: '900', fontSize: 12, marginTop: 2 }}>BULLISH (GREEN)</Text>
+                    <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Up ↑</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.predBtn, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#ef4444' }]}
+                    onPress={async () => {
+                      await AsyncStorage.setItem('paper_daily_nifty_pred', 'BEARISH');
+                      setDailyPred('BEARISH');
+                      alert("Prediction Locked! 📉 You predicted NIFTY 50 to close BEARISH (RED).");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trending-down" size={20} color="#ef4444" />
+                    <Text style={{ color: '#ef4444', fontWeight: '900', fontSize: 12, marginTop: 2 }}>BEARISH (RED)</Text>
+                    <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Down ↓</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* QUIZ CARDS GRID */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[styles.sectionHeaderTitle, { color: colors.text }]}>Knowledge Check Quizzes</Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 12 }}>
+                Test your mastery of any module directly. Answer 5 conceptual questions to earn XP and level up.
+              </Text>
+            </View>
+
+            {filteredModules.map((module) => {
+              const isDone = completedIds.includes(module.id);
+              const colorConfig = getLevelColor(module.level);
+
+              return (
+                <TouchableOpacity
+                  key={module.id}
+                  style={[
+                    styles.quizCardItem,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: isDone ? '#10b981' : colors.border,
+                    }
+                  ]}
+                  onPress={() => router.push({
+                    pathname: "/quiz",
+                    params: { moduleId: module.id, level: module.level }
+                  })}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.quizIconBox, { backgroundColor: colorConfig.bg }]}>
+                    <Ionicons name={module.icon} size={22} color={colorConfig.text} />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.quizCardTitle, { color: colors.text }]} numberOfLines={1}>
+                        {module.title}
+                      </Text>
+                      {isDone && (
+                        <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                      5 Questions • {module.level} • {isDone ? 'Completed' : '+250 XP'}
+                    </Text>
+                  </View>
+
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        )}
+      </View>
+    </PageTransition>
   );
 }
 
-/* PREMIUM STYLES */
 const getStyles = (colors: any) => StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  
+
   header: {
     paddingHorizontal: 20,
-    marginTop: Platform.OS === 'ios' ? 10 : 30,
-    marginBottom: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   greeting: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
-    fontWeight: "700",
+    fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
-  title: { fontSize: 26, fontWeight: "900", color: colors.text, marginTop: 2 },
-  notificationBtn: {
-    backgroundColor: colors.card,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
+  title: { fontSize: 24, fontWeight: "900", color: colors.text, marginTop: 2 },
+  rankBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  
-  /* --- TAB SWITCHER --- */
-  tabContainer: { paddingHorizontal: 20, marginBottom: 15 },
+  rankText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  /* PROGRESS CARD */
+  progressCard: {
+    marginHorizontal: 20,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  progressSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  progressPercentPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  progressPercentText: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+
+  /* TAB SWITCHER */
+  tabContainer: { paddingHorizontal: 20, marginBottom: 12 },
   tabBackground: {
     flexDirection: 'row',
-    backgroundColor: colors.border, // Inner gray track
     borderRadius: 16,
     padding: 4,
   },
   tab: {
     flex: 1,
+    flexDirection: 'row',
     paddingVertical: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 12,
   },
   activeTab: {
-    backgroundColor: colors.card,
-    shadowColor: colors.shadowColor,
+    shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  tabText: { fontSize: 14, color: colors.textSecondary, fontWeight: '700' },
-  activeTabText: { color: colors.text },
+  tabText: { fontSize: 13, fontWeight: '700' },
 
-  /* --- ROADMAP FILTERS --- */
-  filterRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    marginBottom: 10,
+  /* FILTER PILLS */
+  filterRow: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
-  filterBtn: { 
-    borderWidth: 1, 
-    borderRadius: 12, 
-    paddingVertical: 8, 
-    paddingHorizontal: 12, 
-    borderColor: colors.border,
-  },
-  filterText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
-
-  /* --- LISTS & CARDS --- */
-  listContainer: { paddingBottom: 120, paddingHorizontal: 20, paddingTop: 10 },
-  puzzleItemWrapper: { paddingHorizontal: 20, marginBottom: 15 },
-  
-  quizCard: { 
-    marginBottom: 16, 
-    padding: 18, 
-    borderRadius: 20, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: colors.card,
-    borderLeftWidth: 6, // Thick colored accent on the left
-    shadowColor: colors.shadowColor,
-    shadowOpacity: 0.03,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
-    borderTopWidth: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  quizInfo: { flex: 1, paddingRight: 10 },
-  quizTitle: { fontSize: 17, fontWeight: '800', color: colors.text },
-  quizDesc: { color: colors.textSecondary, fontSize: 13, lineHeight: 18 },
-  
-  levelTag: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginRight: 10 },
-  levelLabel: { fontWeight: '800', fontSize: 10, textTransform: 'uppercase' },
-  actionText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
-  
-  badge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
-  badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
-
-  iconWrapper: {
-    width: 40,
-    height: 40,
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
     borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 
-  /* --- PREDICTOR CARD STYLES --- */
+  /* LIST & MODULE CARDS */
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  moduleCard: {
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderLeftWidth: 5,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  levelBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  levelBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  readTimeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  completedBadgeText: {
+    color: '#10b981',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  moduleIndexText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  moduleTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  moduleDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  readBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 6,
+  },
+  readBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  quizOutlineBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  quizOutlineText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  /* PREDICTOR CARD */
   predictionCard: {
-    borderRadius: 20,
-    padding: 18,
+    padding: 16,
+    borderRadius: 18,
     borderWidth: 1.5,
     marginBottom: 16,
-    elevation: 3,
   },
   predictionTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
   },
   liveTag: {
     backgroundColor: '#ef4444',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 6,
   },
   liveTagText: {
     color: '#fff',
     fontSize: 9,
     fontWeight: '900',
-    letterSpacing: 0.8,
+  },
+  lockedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   predBtn: {
     flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  /* --- TRADING GAMES ARCADE STYLES --- */
-  arcadeHeaderCard: {
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 16,
-    elevation: 2,
-  },
-  arcadeTitle: {
-    fontSize: 17,
+  /* QUIZZES TAB LIST */
+  sectionHeaderTitle: {
+    fontSize: 16,
     fontWeight: '900',
   },
-  gameCard: {
+  quizCardItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 18,
-    borderWidth: 1.5,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 10,
     gap: 12,
-    elevation: 2,
   },
-  gameIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  quizIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  gameCardTitle: {
-    fontSize: 15,
+  quizCardTitle: {
+    fontSize: 14.5,
     fontWeight: '800',
-  },
-  xpTag: {
-    backgroundColor: 'rgba(16,185,129,0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  xpTagText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#10b981',
+    flex: 1,
   },
 });
