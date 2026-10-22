@@ -69,6 +69,13 @@ export default function FriendsScreen() {
       const res = await fetch(`${BASE_URL}/api/social/friends`, {
         credentials: "include",
       });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.warn("[Friends] Backend returned non-JSON response:", res.status);
+        return;
+      }
+
       const data = await res.json();
 
       if (data.success) {
@@ -113,6 +120,12 @@ export default function FriendsScreen() {
         const res = await fetch(`${BASE_URL}/api/social/users/search?q=${encodeURIComponent(cleanQuery)}`, {
           credentials: "include",
         });
+
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+          return;
+        }
+
         const data = await res.json();
 
         if (data.success) {
@@ -137,6 +150,12 @@ export default function FriendsScreen() {
         credentials: "include",
         body: JSON.stringify({ username: targetUsername }),
       });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        Alert.alert("Server Notice", "Backend service is updating. Please retry in a moment.");
+        return;
+      }
 
       const data = await res.json();
 
@@ -170,6 +189,11 @@ export default function FriendsScreen() {
         credentials: "include",
         body: JSON.stringify({ requesterId, action }),
       });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        return;
+      }
 
       const data = await res.json();
       if (!res.ok) {

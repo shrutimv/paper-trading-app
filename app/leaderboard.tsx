@@ -48,6 +48,13 @@ export default function LeaderboardScreen() {
       const res = await fetch(`${BASE_URL}/api/social/leaderboard`, {
         credentials: "include",
       });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.warn("[Leaderboard] Backend returned non-JSON response:", res.status);
+        return;
+      }
+
       const data = await res.json();
 
       if (data.success) {

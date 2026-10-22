@@ -3,9 +3,14 @@ import { DarkTheme, DefaultTheme, ThemeProvider as NavThemeProvider } from '@rea
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { LogBox, StyleSheet, Text } from 'react-native';
 import Animated, { FadeIn, ZoomIn, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
+
+LogBox.ignoreLogs([
+  'SafeAreaView has been deprecated',
+  '[expo-av]: Expo AV has been deprecated',
+]);
 
 import { AuthProvider } from '../context/AuthContext';
 import { GamificationProvider } from '../context/GamificationContext';

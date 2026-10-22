@@ -12,7 +12,6 @@ import {
   PanResponder,
   Platform,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +19,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import PageTransition from "@/components/PageTransition";
 import Toast from "../../../components/ui/Toast";
 import DailyRecapModal from "../../../components/DailyRecapModal";
