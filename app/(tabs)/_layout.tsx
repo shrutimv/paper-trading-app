@@ -1,65 +1,132 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, useRouter } from 'expo-router';
 import React from 'react';
-import { TouchableOpacity, useColorScheme } from 'react-native';
+import { Platform, TouchableOpacity, View, Text } from 'react-native';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const router = useRouter();
-
-  const iconColor = colorScheme === 'dark' ? '#fff' : '#000';
+  const { colors } = useTheme();
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#0f62fe', // Your blue brand color
-        headerShown: true, // Show header so we can put the profile icon there
+        tabBarActiveTintColor: colors.accent,
+        tabBarInactiveTintColor: colors.textSecondary,
+        headerShown: true,
+        tabBarHideOnKeyboard: true, // Prevents the navbar from jumping up when typing
+        headerStyle: {
+          backgroundColor: colors.background,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        headerTitleStyle: {
+          color: colors.text,
+          fontSize: 20,
+          fontWeight: '800',
+        },
+        headerTintColor: colors.text,
         headerRight: () => (
-          <TouchableOpacity 
-            onPress={() => router.push('/profile')} 
-            style={{ marginRight: 15 }}
-          >
-            <Ionicons name="person-circle-outline" size={30} color={iconColor} />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 15, gap: 10 }}>
+            <TouchableOpacity 
+              onPress={() => router.push('/forum' as any)} 
+              activeOpacity={0.8}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: colors.accent + '18',
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: colors.accent + '35',
+                gap: 5
+              }}
+            >
+              <Ionicons name="chatbubbles" size={15} color={colors.accent} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.accent }}>Forum</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              onPress={() => router.push('/profile')} 
+            >
+              <Ionicons name="person-circle-outline" size={28} color={colors.text} />
+            </TouchableOpacity>
+          </View>
         ),
+        // --- STRICTLY ANCHORED STYLING ---
+        tabBarStyle: {
+          backgroundColor: colors.tabBg,
+          borderTopWidth: 1,
+          borderTopColor: colors.border,
+          // Standard heights that won't float
+          height: Platform.OS === 'ios' ? 85 : 65,
+          paddingBottom: Platform.OS === 'ios' ? 25 : 10,
+          paddingTop: 10,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+        },
       }}>
 
-      {/* 1. HOME TAB */}
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Overview', // Matching your screenshot header
+          tabBarLabel: 'Home',
           tabBarIcon: ({ color }) => <Ionicons name="home" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('index');
+          },
+        })}
       />
 
-      {/* 2. PUZZLES TAB (Renamed from puzzles) */}
       <Tabs.Screen
         name="puzzles"
         options={{
           title: 'Puzzles',
+          tabBarLabel: 'Puzzles',
           tabBarIcon: ({ color }) => <Ionicons name="extension-puzzle" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('puzzles');
+          },
+        })}
       />
 
-      {/* 3. TRADING TAB */}
       <Tabs.Screen
         name="trading"
         options={{
           title: 'Trading',
+          tabBarLabel: 'Trading',
           tabBarIcon: ({ color }) => <Ionicons name="trending-up" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('trading', { screen: 'index' });
+          },
+        })}
       />
 
-      {/* 4. COURSES TAB */}
       <Tabs.Screen
         name="courses"
         options={{
           title: 'Courses',
+          tabBarLabel: 'Courses',
           tabBarIcon: ({ color }) => <Ionicons name="school" size={24} color={color} />,
         }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate('courses', { screen: 'index' });
+          },
+        })}
       />
-
     </Tabs>
   );
 }

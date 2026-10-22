@@ -1,277 +1,780 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
-  FlatList,
-  SafeAreaView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from "react-native";
-
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PageTransition from "@/components/PageTransition";
-import LevelsCarousel from "../../components/LevelsCarousel";
-import PuzzleItem from "../../components/PuzzleItem";
+import { LEARNING_DATA } from "../../constants/LearningData";
+import { useGamification } from "../../context/GamificationContext";
+import { useTheme } from "../../context/ThemeContext";
 
 const { width: SCREEN_W } = Dimensions.get("window");
-const CARD_MAX_WIDTH = 900;
 
-// --- 1. THE MASTER DATA (The Full Roadmap) ---
-const MODULES = [
-  // --- BEGINNER (Green) ---
-  { id: 'm1', title: 'Why Markets Exist?', level: 'Beginner', desc: 'Concept: Capital, IPOs, Shares.' },
-  { id: 'm2', title: 'The Ecosystem', level: 'Beginner', desc: 'Concept: NSE/BSE, SEBI, Brokers.' },
-  { id: 'm3', title: 'Stock Basics', level: 'Beginner', desc: 'Concept: Equity, Face Value, Dividends.' },
-  { id: 'm4', title: 'Market Cap & Sectors', level: 'Beginner', desc: 'Concept: Large Cap vs Small Cap.' },
+export interface AcademyModule {
+  id: string;
+  title: string;
+  level: 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert';
+  readTime: string;
+  desc: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
 
-  // --- INTERMEDIATE (Yellow/Orange) ---
-  { id: 'm5', title: 'Corporate Actions', level: 'Intermediate', desc: 'Concept: Splits, Bonuses, Buybacks.' },
-  { id: 'm6', title: 'Mutual Funds & ETFs', level: 'Intermediate', desc: 'Concept: NAV, Expense Ratio, NiftyBees.' },
-  { id: 'm7', title: 'Fundamental Analysis 1', level: 'Intermediate', desc: 'Concept: Revenue, Profit, EPS, P/E.' },
-  { id: 'm8', title: 'IPO Analysis', level: 'Intermediate', desc: 'Concept: GMP, Lot Size, Listing Gains.' },
-
-  // --- ADVANCED (Red) ---
-  { id: 'm9', title: 'Candlestick Anatomy', level: 'Advanced', desc: 'Concept: OHLC, Wicks, Bullish vs Bearish.' },
-  { id: 'm10', title: 'Trends & Volume', level: 'Advanced', desc: 'Concept: Uptrend, Downtrend, Sideways.' },
-  { id: 'm11', title: 'Support & Resistance', level: 'Advanced', desc: 'Concept: Breakouts & Breakdowns.' },
-  { id: 'm12', title: 'Order Types & Leverage', level: 'Advanced', desc: 'Concept: Limit, Stop-Loss, Margin.' },
-
-  // --- EXPERT (Purple) ---
-  { id: 'm13', title: 'Future Contracts', level: 'Expert', desc: 'Concept: Expiry, Lot Size, Long/Short.' },
-  { id: 'm14', title: 'Options Basics (Buying)', level: 'Expert', desc: 'Concept: CE/PE, Strike Price.' },
-  { id: 'm15', title: 'Moneyness & Greeks', level: 'Expert', desc: 'Concept: ATM/ITM/OTM, Theta Decay.' },
-  { id: 'm16', title: 'Risk Management', level: 'Expert', desc: 'Concept: Risk-Reward, Position Sizing.' },
-];
-
-// --- 2. THE DAILY PUZZLES DATA ---
-const PUZZLE_DATA = [
+export const ACADEMY_MODULES: AcademyModule[] = [
   {
-    id: "p1",
-    level: "Beginner",
-    title: "The Bullish Engulfing Pattern",
-    description: "Identify the correct entry point based on the chart pattern.",
-    progress: 0.5,
-    image: require("../../assets/images/Puzzle/p1.png"),
-    buttonLabel: "Continue",
+    id: 'm1',
+    title: 'Origins of Stocks & Why Markets Exist',
+    level: 'Beginner',
+    readTime: '4 min',
+    desc: 'The 1602 spice voyages, Dalal Street banyan tree, and equity vs bank loans.',
+    icon: 'compass-outline',
   },
-  // Add more puzzles here if needed
+  {
+    id: 'm2',
+    title: 'The Market Ecosystem & Regulators',
+    level: 'Beginner',
+    readTime: '4 min',
+    desc: 'NSE vs BSE, SEBI watchdog, Demat accounts, and Nifty 50 / Sensex indices.',
+    icon: 'shield-checkmark-outline',
+  },
+  {
+    id: 'm3',
+    title: 'Asset Classes: Where Money Grows',
+    level: 'Beginner',
+    readTime: '5 min',
+    desc: 'Equities, Debt & FDs, Mutual Funds, ETFs, Gold hedge, and Real Estate.',
+    icon: 'pie-chart-outline',
+  },
+  {
+    id: 'm4',
+    title: 'Why Stock Prices Move',
+    level: 'Beginner',
+    readTime: '5 min',
+    desc: 'Supply vs Demand, Quarterly Earnings, FII/DII institutional flows, and RBI repo rate.',
+    icon: 'trending-up-outline',
+  },
+  {
+    id: 'm5',
+    title: 'Anatomy of a Trade: Under the Hood',
+    level: 'Intermediate',
+    readTime: '5 min',
+    desc: 'Secondary market reality, T+1 settlement cycle, and CNC (Delivery) vs MIS (Intraday).',
+    icon: 'swap-horizontal-outline',
+  },
+  {
+    id: 'm6',
+    title: 'Order Types & Market Depth Mechanics',
+    level: 'Intermediate',
+    readTime: '5 min',
+    desc: 'Market vs Limit, Stop-Loss (SL/SL-M), Bid-Ask Spread, and GTT trigger orders.',
+    icon: 'list-outline',
+  },
+  {
+    id: 'm7',
+    title: 'Fundamental Analysis: What to Inspect',
+    level: 'Intermediate',
+    readTime: '6 min',
+    desc: 'The 3 financial statements (P&L, Balance Sheet, Cash Flow), and Warren Buffett moats.',
+    icon: 'document-text-outline',
+  },
+  {
+    id: 'm8',
+    title: 'Key Financial Ratios Made Simple',
+    level: 'Intermediate',
+    readTime: '5 min',
+    desc: 'P/E valuation, EPS, ROE capital efficiency, Debt-to-Equity, and Dividend Yield.',
+    icon: 'calculator-outline',
+  },
+  {
+    id: 'm9',
+    title: 'Promoter Health & Governance Red Flags',
+    level: 'Intermediate',
+    readTime: '4 min',
+    desc: 'Promoter skin in the game, danger of pledged shares, and auditor resignation alerts.',
+    icon: 'alert-circle-outline',
+  },
+  {
+    id: 'm10',
+    title: 'Candlestick Anatomy & Price Action',
+    level: 'Advanced',
+    readTime: '5 min',
+    desc: 'OHLC points, Green vs Red bodies, reading upper/lower wicks, Support & Resistance.',
+    icon: 'bar-chart-outline',
+  },
+  {
+    id: 'm11',
+    title: 'Trends, Volumes & Breakout Dynamics',
+    level: 'Advanced',
+    readTime: '5 min',
+    desc: 'Higher Highs, Volume institutional confirmation, Bull traps, and retest setups.',
+    icon: 'pulse-outline',
+  },
+  {
+    id: 'm12',
+    title: 'Risk Management & Trading Psychology',
+    level: 'Expert',
+    readTime: '6 min',
+    desc: 'The Golden 1% Rule, 1:2 Risk-to-Reward ratio, Position sizing, and defeating FOMO.',
+    icon: 'flame-outline',
+  },
 ];
 
-const LEVELS = ["All", "Beginner", "Intermediate", "Advanced"];
+const LEVELS = ["All", "Beginner", "Intermediate", "Advanced", "Expert"];
 
 export default function PuzzlesScreen() {
   const router = useRouter();
-  const scrollViewRef = useRef<ScrollView>(null); 
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const { currentRank, xp } = useGamification();
+  const styles = getStyles(colors);
 
   const [activeLevel, setActiveLevel] = useState<string>("All");
-  const [activeTab, setActiveTab] = useState<'puzzles' | 'roadmap'>('roadmap'); // Default to Roadmap
+  const [activeTab, setActiveTab] = useState<'modules' | 'quizzes'>('modules');
   const [completedIds, setCompletedIds] = useState<string[]>([]);
+  const [dailyPred, setDailyPred] = useState<string | null>(null);
 
-  // --- 3. CHECK PROGRESS (Runs every time you open the tab) ---
   useFocusEffect(
     useCallback(() => {
       const checkProgress = async () => {
         try {
           const keys = await AsyncStorage.getAllKeys();
-          // Find keys like "module_completed_m1"
           const completed = keys
             .filter(k => k.startsWith('module_completed_'))
             .map(k => k.replace('module_completed_', ''));
           setCompletedIds(completed);
-        } catch (e) { console.error(e); }
+
+          const pred = await AsyncStorage.getItem('paper_daily_nifty_pred');
+          setDailyPred(pred);
+        } catch (e) {
+          console.error(e);
+        }
       };
       checkProgress();
     }, [])
   );
 
-  // --- SCROLL TO SECTION ---
-  const scrollToSection = (level: string) => {
-    const index = MODULES.findIndex(m => m.level === level);
-    if (index !== -1 && scrollViewRef.current) {
-      const yOffset = index * 110; // Approx height per card
-      scrollViewRef.current.scrollTo({ y: yOffset, animated: true });
+  const filteredModules = useMemo(() => {
+    if (activeLevel === "All") return ACADEMY_MODULES;
+    return ACADEMY_MODULES.filter(m => m.level === activeLevel);
+  }, [activeLevel]);
+
+  const getLevelColor = (level: string) => {
+    switch (level) {
+      case 'Beginner': return { border: '#10b981', bg: 'rgba(16, 185, 129, 0.12)', text: '#059669' };
+      case 'Intermediate': return { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)', text: '#d97706' };
+      case 'Advanced': return { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)', text: '#dc2626' };
+      case 'Expert': return { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)', text: '#7c3aed' };
+      default: return { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.12)', text: '#2563eb' };
     }
   };
 
-  // --- COLORS ---
-  const getBackgroundColor = (level: string) => {
-    switch (level) {
-      case 'Beginner': return '#ecfdf5'; // Light Green
-      case 'Intermediate': return '#fffbeb'; // Light Yellow
-      case 'Advanced': return '#fef2f2'; // Light Red
-      case 'Expert': return '#f3e8ff'; // Light Purple
-      default: return '#fff';
-    }
-  };
-
-  const getBorderColor = (level: string) => {
-    switch (level) {
-      case 'Beginner': return '#10b981'; 
-      case 'Intermediate': return '#f59e0b'; 
-      case 'Advanced': return '#ef4444'; 
-      case 'Expert': return '#7c3aed'; 
-      default: return '#ccc';
-    }
-  };
+  const progressPercent = Math.round((completedIds.length / ACADEMY_MODULES.length) * 100);
 
   return (
-  <PageTransition>
-    <SafeAreaView style={styles.screen}>
-      {/* Top Nav */}
-      <View style={styles.topNav}>
-        {/* Back Button (Optional if this is a main tab) */}
-        {/* <TouchableOpacity style={styles.iconBtn} onPress={() => router.push("/")}>
-          <MaterialIcons name="arrow-back" size={22} color="#111827" />
-        </TouchableOpacity> */}
-        <Text style={styles.title}>Learning Hub</Text>
-        <View style={{ width: 40 }} /> 
-      </View>
-
-      {/* Tabs Switcher */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'puzzles' && styles.activeTab]} 
-          onPress={() => setActiveTab('puzzles')}
-        >
-          <Text style={[styles.tabText, activeTab === 'puzzles' && styles.activeTabText]}>Daily Puzzles</Text>
-        </TouchableOpacity>
+    <PageTransition>
+      <View style={[styles.screen, { paddingTop: insets.top }]}>
         
-        <TouchableOpacity 
-          style={[styles.tab, activeTab === 'roadmap' && styles.activeTab]} 
-          onPress={() => setActiveTab('roadmap')}
-        >
-          <Text style={[styles.tabText, activeTab === 'roadmap' && styles.activeTabText]}>Full Roadmap</Text>
-        </TouchableOpacity>
-      </View>
+        {/* PREMIUM HEADER WITH RANK & PROGRESS */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>ACADEMY & KNOWLEDGE HUB</Text>
+            <Text style={styles.title}>Learn & Master</Text>
+          </View>
+          <View style={styles.rankBadge}>
+            <Ionicons name="shield-checkmark" size={16} color={currentRank.color} />
+            <Text style={[styles.rankText, { color: currentRank.color }]}>{currentRank.name}</Text>
+          </View>
+        </View>
 
-      {activeTab === 'puzzles' ? (
-        // --- TAB 1: DAILY PUZZLES ---
-        <>
-          <LevelsCarousel levels={LEVELS} active={activeLevel} onSelect={(lvl) => setActiveLevel(lvl)} />
-          <FlatList
-            data={PUZZLE_DATA}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-               <View style={{paddingHorizontal:16, marginTop:10}}>
-                 <PuzzleItem {...item} onPress={() => router.push('/play-puzzle')} />
-               </View>
-            )}
-            contentContainerStyle={{paddingBottom: 100}}
-          />
-        </>
-      ) : (
-        // --- TAB 2: FULL ROADMAP ---
-        <View style={{flex: 1}}>
-          
-          {/* Quick Jump Buttons */}
-          <View style={styles.filterRow}>
-            {['Beginner', 'Intermediate', 'Advanced', 'Expert'].map((lvl) => (
-              <TouchableOpacity 
-                key={lvl} 
-                style={[styles.filterBtn, { borderColor: getBorderColor(lvl) }]}
-                onPress={() => scrollToSection(lvl)}
-              >
-                <Text style={[styles.filterText, { color: getBorderColor(lvl) }]}>{lvl}</Text>
-              </TouchableOpacity>
-            ))}
+        {/* PROGRESS BANNER */}
+        <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.progressRow}>
+            <View>
+              <Text style={[styles.progressTitle, { color: colors.text }]}>Curriculum Progress</Text>
+              <Text style={[styles.progressSubtitle, { color: colors.textSecondary }]}>
+                {completedIds.length} of {ACADEMY_MODULES.length} Modules Mastered
+              </Text>
+            </View>
+            <View style={[styles.progressPercentPill, { backgroundColor: colors.accent + '20' }]}>
+              <Text style={[styles.progressPercentText, { color: colors.accent }]}>{progressPercent}%</Text>
+            </View>
           </View>
 
-          <ScrollView 
-            ref={scrollViewRef}
-            contentContainerStyle={styles.listContainer}
-            showsVerticalScrollIndicator={false}
-          >
-            {MODULES.map((module) => {
-              const isDone = completedIds.includes(module.id);
-              const bgColor = getBackgroundColor(module.level);
-              const borderColor = getBorderColor(module.level);
+          <View style={[styles.progressBarTrack, { backgroundColor: colors.border }]}>
+            <View style={[styles.progressBarFill, { width: `${progressPercent}%`, backgroundColor: colors.accent }]} />
+          </View>
+        </View>
 
+        {/* MODERN DUAL TAB BAR */}
+        <View style={styles.tabContainer}>
+          <View style={[styles.tabBackground, { backgroundColor: colors.border }]}>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'modules' && [styles.activeTab, { backgroundColor: colors.card }]]} 
+              onPress={() => setActiveTab('modules')}
+              activeOpacity={0.8}
+            >
+              <Ionicons 
+                name="book-outline" 
+                size={16} 
+                color={activeTab === 'modules' ? colors.text : colors.textSecondary} 
+                style={{ marginRight: 6 }} 
+              />
+              <Text style={[styles.tabText, { color: activeTab === 'modules' ? colors.text : colors.textSecondary }]}>
+                Modules (Textbook)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'quizzes' && [styles.activeTab, { backgroundColor: colors.card }]]} 
+              onPress={() => setActiveTab('quizzes')}
+              activeOpacity={0.8}
+            >
+              <Ionicons 
+                name="school-outline" 
+                size={16} 
+                color={activeTab === 'quizzes' ? colors.text : colors.textSecondary} 
+                style={{ marginRight: 6 }} 
+              />
+              <Text style={[styles.tabText, { color: activeTab === 'quizzes' ? colors.text : colors.textSecondary }]}>
+                Knowledge Quizzes
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* LEVEL FILTER PILLS */}
+        <View style={styles.filterRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {LEVELS.map((lvl) => {
+              const isSelected = activeLevel === lvl;
               return (
-                <TouchableOpacity 
-                  key={module.id} 
+                <TouchableOpacity
+                  key={lvl}
                   style={[
-                    styles.quizCard, 
-                    { backgroundColor: bgColor, borderLeftColor: borderColor }
+                    styles.filterPill,
+                    {
+                      backgroundColor: isSelected ? colors.accent : colors.card,
+                      borderColor: isSelected ? colors.accent : colors.border,
+                    }
                   ]}
-                  // Navigate to Learn Screen
-                  onPress={() => router.push({ 
-                    pathname: "/learn", 
-                    params: { moduleId: module.id, level: module.level } 
-                  })}
+                  onPress={() => setActiveLevel(lvl)}
+                  activeOpacity={0.7}
                 >
-                  <View style={styles.quizInfo}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={styles.quizTitle}>{module.title}</Text>
-                      {isDone && (
-                        <View style={[styles.badge, { backgroundColor: borderColor }]}>
-                          <Text style={styles.badgeText}>DONE</Text>
-                        </View>
-                      )}
-                    </View>
-                    
-                    <Text style={styles.quizDesc}>{module.desc}</Text>
-                    <Text style={[styles.levelLabel, { color: borderColor }]}>
-                      {module.level} • {isDone ? "100% Score" : "Start Learning"}
-                    </Text>
-                  </View>
-
-                  {/* Icon on the Right */}
-                  {isDone ? (
-                     <Ionicons name="checkmark-circle" size={32} color={borderColor} />
-                  ) : (
-                     <Ionicons name="lock-open" size={24} color={borderColor} style={{opacity: 0.5}} />
-                  )}
+                  <Text style={[styles.filterPillText, { color: isSelected ? '#fff' : colors.textSecondary }]}>
+                    {lvl}
+                  </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
         </View>
-      )}
-    </SafeAreaView>
-    </PageTransition>  
+
+        {/* TAB CONTENT */}
+        {activeTab === 'modules' ? (
+          /* MODULES READING TAB */
+          <ScrollView 
+            contentContainerStyle={styles.listContainer} 
+            showsVerticalScrollIndicator={false}
+          >
+            {filteredModules.map((module, index) => {
+              const isDone = completedIds.includes(module.id);
+              const colorConfig = getLevelColor(module.level);
+
+              return (
+                <View 
+                  key={module.id} 
+                  style={[
+                    styles.moduleCard, 
+                    { 
+                      backgroundColor: colors.card, 
+                      borderColor: colors.border,
+                      borderLeftColor: colorConfig.border,
+                    }
+                  ]}
+                >
+                  {/* CARD HEADER */}
+                  <View style={styles.cardTopRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={[styles.levelBadge, { backgroundColor: colorConfig.bg }]}>
+                        <Text style={[styles.levelBadgeText, { color: colorConfig.text }]}>
+                          {module.level.toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={[styles.readTimeText, { color: colors.textSecondary }]}>
+                        • {module.readTime} read
+                      </Text>
+                    </View>
+
+                    {isDone ? (
+                      <View style={styles.completedBadge}>
+                        <Ionicons name="checkmark-circle" size={14} color="#10b981" />
+                        <Text style={styles.completedBadgeText}>COMPLETED</Text>
+                      </View>
+                    ) : (
+                      <Text style={[styles.moduleIndexText, { color: colors.textSecondary }]}>
+                        #{module.id.replace('m', '')}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* TITLE & DESCRIPTION */}
+                  <Text style={[styles.moduleTitle, { color: colors.text }]}>{module.title}</Text>
+                  <Text style={[styles.moduleDesc, { color: colors.textSecondary }]}>{module.desc}</Text>
+
+                  {/* ACTION BUTTONS */}
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity
+                      style={[styles.readBtn, { backgroundColor: colors.accent }]}
+                      onPress={() => router.push({
+                        pathname: "/learn",
+                        params: { moduleId: module.id, level: module.level }
+                      })}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="book" size={16} color="#fff" />
+                      <Text style={styles.readBtnText}>Read Module</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.quizOutlineBtn, 
+                        { 
+                          borderColor: isDone ? '#10b981' : colors.border,
+                          backgroundColor: isDone ? 'rgba(16, 185, 129, 0.08)' : 'transparent',
+                        }
+                      ]}
+                      onPress={() => router.push({
+                        pathname: "/quiz",
+                        params: { moduleId: module.id, level: module.level }
+                      })}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons 
+                        name={isDone ? "checkmark-circle" : "school-outline"} 
+                        size={15} 
+                        color={isDone ? "#10b981" : colors.text} 
+                      />
+                      <Text style={[styles.quizOutlineText, { color: isDone ? "#10b981" : colors.text }]}>
+                        {isDone ? "Retake Quiz" : "Quiz (+250 XP)"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        ) : (
+          /* QUIZZES & PRACTICE TAB */
+          <ScrollView 
+            contentContainerStyle={styles.listContainer} 
+            showsVerticalScrollIndicator={false}
+          >
+            {/* DAILY INDEX SENTIMENT PREDICTOR */}
+            <View style={[styles.predictionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="analytics" size={20} color={colors.accent} />
+                  <Text style={[styles.predictionTitle, { color: colors.text }]}>Daily Index Sentiment (3:30 PM)</Text>
+                </View>
+                <View style={styles.liveTag}>
+                  <Text style={styles.liveTagText}>TODAY'S CLOSE</Text>
+                </View>
+              </View>
+
+              <Text style={{ fontSize: 13, color: colors.textSecondary, marginBottom: 12, lineHeight: 18 }}>
+                Predict whether <Text style={{ fontWeight: '800', color: colors.text }}>NIFTY 50</Text> will close GREEN or RED today. Earn +100 XP upon 3:30 PM market settlement!
+              </Text>
+
+              {dailyPred ? (
+                <View style={[styles.lockedCard, { backgroundColor: colors.border + '40', borderColor: colors.border }]}>
+                  <Ionicons name="lock-closed" size={16} color={colors.accent} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: colors.text }}>
+                    Prediction Locked: <Text style={{ color: dailyPred === 'BULLISH' ? '#10b981' : '#ef4444' }}>{dailyPred}</Text>
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity 
+                    style={[styles.predBtn, { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderColor: '#10b981' }]}
+                    onPress={async () => {
+                      await AsyncStorage.setItem('paper_daily_nifty_pred', 'BULLISH');
+                      setDailyPred('BULLISH');
+                      alert("Prediction Locked! 🚀 You predicted NIFTY 50 to close BULLISH (GREEN).");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trending-up" size={20} color="#10b981" />
+                    <Text style={{ color: '#10b981', fontWeight: '900', fontSize: 12, marginTop: 2 }}>BULLISH (GREEN)</Text>
+                    <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Up ↑</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.predBtn, { backgroundColor: 'rgba(239, 68, 68, 0.12)', borderColor: '#ef4444' }]}
+                    onPress={async () => {
+                      await AsyncStorage.setItem('paper_daily_nifty_pred', 'BEARISH');
+                      setDailyPred('BEARISH');
+                      alert("Prediction Locked! 📉 You predicted NIFTY 50 to close BEARISH (RED).");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trending-down" size={20} color="#ef4444" />
+                    <Text style={{ color: '#ef4444', fontWeight: '900', fontSize: 12, marginTop: 2 }}>BEARISH (RED)</Text>
+                    <Text style={{ fontSize: 10, color: colors.textSecondary }}>Closes Down ↓</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* QUIZ CARDS GRID */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={[styles.sectionHeaderTitle, { color: colors.text }]}>Knowledge Check Quizzes</Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 12 }}>
+                Test your mastery of any module directly. Answer 5 conceptual questions to earn XP and level up.
+              </Text>
+            </View>
+
+            {filteredModules.map((module) => {
+              const isDone = completedIds.includes(module.id);
+              const colorConfig = getLevelColor(module.level);
+
+              return (
+                <TouchableOpacity
+                  key={module.id}
+                  style={[
+                    styles.quizCardItem,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: isDone ? '#10b981' : colors.border,
+                    }
+                  ]}
+                  onPress={() => router.push({
+                    pathname: "/quiz",
+                    params: { moduleId: module.id, level: module.level }
+                  })}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.quizIconBox, { backgroundColor: colorConfig.bg }]}>
+                    <Ionicons name={module.icon} size={22} color={colorConfig.text} />
+                  </View>
+
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.quizCardTitle, { color: colors.text }]} numberOfLines={1}>
+                        {module.title}
+                      </Text>
+                      {isDone && (
+                        <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
+                      5 Questions • {module.level} • {isDone ? 'Completed' : '+250 XP'}
+                    </Text>
+                  </View>
+
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              );
+            })}
+
+            <View style={{ height: 100 }} />
+          </ScrollView>
+        )}
+      </View>
+    </PageTransition>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#fff" },
-  topNav: { height: 60, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  iconBtn: { padding: 4, position: 'absolute', left: 16 },
-  title: { fontSize: 18, fontWeight: "700", color: "#111" },
-  
-  tabBar: { flexDirection: 'row', paddingHorizontal: 16, marginBottom: 10 },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: '#f3f4f6' },
-  activeTab: { borderBottomColor: '#0f62fe' },
-  tabText: { fontSize: 15, color: '#6b7280', fontWeight: '600' },
-  activeTabText: { color: '#0f62fe' },
+const getStyles = (colors: any) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.background },
 
-  filterRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10, paddingHorizontal: 8, backgroundColor: '#fff' },
-  filterBtn: { borderWidth: 1, borderRadius: 20, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#fff' },
-  filterText: { fontSize: 11, fontWeight: '700' },
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  greeting: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  title: { fontSize: 24, fontWeight: "900", color: colors.text, marginTop: 2 },
+  rankBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  rankText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
 
-  listContainer: { paddingBottom: 100, paddingHorizontal: 16, paddingTop: 10 },
-  
-  quizCard: { 
-    marginBottom: 12, 
-    padding: 16, 
-    borderRadius: 12, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    borderLeftWidth: 4,
-    elevation: 1,
+  /* PROGRESS CARD */
+  progressCard: {
+    marginHorizontal: 20,
+    marginBottom: 14,
+    padding: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  progressTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  progressSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  progressPercentPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  progressPercentText: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  progressBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+
+  /* TAB SWITCHER */
+  tabContainer: { paddingHorizontal: 20, marginBottom: 12 },
+  tabBackground: {
+    flexDirection: 'row',
+    borderRadius: 16,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    flexDirection: 'row',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+  },
+  activeTab: {
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 2 }
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  quizInfo: { flex: 1, paddingRight: 10 },
-  quizTitle: { fontSize: 16, fontWeight: '700', color: '#1f2937' },
-  quizDesc: { color: '#6b7280', marginTop: 4, fontSize: 13 },
-  levelLabel: { fontWeight: '600', marginTop: 8, fontSize: 11, textTransform: 'uppercase' },
-  
-  badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  badgeText: { color: '#fff', fontSize: 9, fontWeight: 'bold' }
+  tabText: { fontSize: 13, fontWeight: '700' },
+
+  /* FILTER PILLS */
+  filterRow: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  filterPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  /* LIST & MODULE CARDS */
+  listContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  moduleCard: {
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderLeftWidth: 5,
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  levelBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  levelBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  readTimeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  completedBadgeText: {
+    color: '#10b981',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  moduleIndexText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  moduleTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  moduleDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  readBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    gap: 6,
+  },
+  readBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  quizOutlineBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 6,
+  },
+  quizOutlineText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  /* PREDICTOR CARD */
+  predictionCard: {
+    padding: 16,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    marginBottom: 16,
+  },
+  predictionTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  liveTag: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  liveTagText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  lockedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  predBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* QUIZZES TAB LIST */
+  sectionHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  quizCardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 10,
+    gap: 12,
+  },
+  quizIconBox: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quizCardTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    flex: 1,
+  },
 });

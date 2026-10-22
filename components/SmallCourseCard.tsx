@@ -1,24 +1,31 @@
 // components/SmallCourseCard.tsx
 import React from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, ImageSourcePropType, StyleSheet, Text, View } from "react-native";
+import { useTheme } from "../context/ThemeContext";
+
+type SmallCourseCardProps = {
+  title: string;
+  subtitle: string;
+  progressLabel: string;
+  image: ImageSourcePropType;
+};
 
 export default function SmallCourseCard({
   title,
   subtitle,
   progressLabel,
   image,
-}: {
-  title: string;
-  subtitle: string;
-  progressLabel: string;
-  image: any;
-}) {
+}: SmallCourseCardProps) {
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
+
   return (
     <View style={styles.card}>
       <Image source={image} style={styles.image} />
-
       <View style={styles.textContainer}>
-        <Text style={styles.title}>{title}</Text>
+        <Text style={styles.title} numberOfLines={1}>
+          {title}
+        </Text>
         <Text style={styles.subtitle}>{subtitle}</Text>
         <Text style={styles.progress}>{progressLabel}</Text>
       </View>
@@ -26,15 +33,18 @@ export default function SmallCourseCard({
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   card: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.card,
     borderRadius: 16,
     overflow: "hidden",
     marginBottom: 14,
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.shadowColor,
+    shadowOpacity: 0.1,
     shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
 
@@ -51,12 +61,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#0f1724",
+    color: colors.text,
   },
 
   subtitle: {
     fontSize: 14,
-    color: "#6b7280",
+    color: colors.textSecondary,
     marginTop: 2,
   },
 
@@ -64,6 +74,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 13,
     fontWeight: "600",
-    color: "#0f62fe",
+    color: colors.accent, // Dynamic accent color (blue / glowing blue)
   },
 });

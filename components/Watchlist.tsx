@@ -3,57 +3,136 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Modal,
-  PanResponder,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Modal,
+    PanResponder,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import { useTrading } from '../context/TradingContext';
+import { useTrading, Holding } from '../context/TradingContext';
+import { useTheme } from '../context/ThemeContext';
+import { useGamification } from '../context/GamificationContext';
 import { API_BASE_URL } from '../src/config';
 import Toast from './ui/Toast';
+import SellStockModal from './SellStockModal';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SLIDER_WIDTH = SCREEN_WIDTH - 48; 
 const KNOB_SIZE = 54;
 const SUCCESS_THRESHOLD = SLIDER_WIDTH - KNOB_SIZE - 8;
 
-interface WatchlistProps { showSearch?: boolean; limit?: number; }
+interface WatchlistProps { showSearch?: boolean; limit?: number; onBuyComplete?: () => void; }
 interface LivePriceData { price: number; change: number; changePercent: number; }
+const formatCurrency = (val: number) => `₹${val?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`;
 
-export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistProps) {
+export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete }: WatchlistProps) {
   const router = useRouter();
-  const { watchlist, addToWatchlist, removeFromWatchlist, balance, buyStock } = useTrading();
+  const { colors } = useTheme();
+  const styles = getStyles(colors);
   
+  const { watchlist, addToWatchlist, removeFromWatchlist, balance, buyStock, sellStock, holdings, checkStopLossTriggers } = useTrading();
+  const { xp, proMode } = useGamification();
+
+  // Gamification Unlocking Thresholds
+  const limitUnlocked = proMode || xp >= 500;
+  const stopLossUnlocked = proMode || xp >= 1500;
+  const intradayUnlocked = proMode || xp >= 3000;
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [liveData, setLiveData] = useState<Record<string, LivePriceData>>({});
-
+  
+  // Modal Trading Settings States
   const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
   const [selectedStock, setSelectedStock] = useState<any>(null);
-  const [quantity, setQuantity] = useState('1'); 
+  const [quantity, setQuantity] = useState('1');
+  const [productType, setProductType] = useState<'cnc' | 'mis'>('cnc'); // CNC = LongTerm, MIS = Intraday
+  const [orderType, setOrderType] = useState<'market' | 'limit'>('market');
+  const [limitPrice, setLimitPrice] = useState('');
+  const [stopLossActive, setStopLossActive] = useState(false);
+  const [stopLossTrigger, setStopLossTrigger] = useState('');
 
-  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'success' | 'error' }>({
-    visible: false,
-    message: '',
-    type: 'success'
-  });
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [toast, setToast] = useState<{ visible: boolean; message: string; type: 'loading' | 'success' | 'error' }>({ visible: false, message: '', type: 'success' });
+
+  // Sell Stock Modal State (with Cost & Real-Time P&L Preview)
+  const [sellModalVisible, setSellModalVisible] = useState(false);
+  const [selectedHoldingToSell, setSelectedHoldingToSell] = useState<Holding | null>(null);
+  const [sellMarketPrice, setSellMarketPrice] = useState<number>(0);
+
+  const handleQuickSell = (stockSymbol: string) => {
+    const owned = holdings.find(
+      h => h.symbol === stockSymbol || h.symbol.replace('.NS', '') === stockSymbol.replace('.NS', '')
+    );
+    if (!owned) {
+      setToast({ visible: true, message: "You don't own shares of this stock.", type: 'error' });
+      return;
+    }
+
+    const currentPrice = liveData[stockSymbol]?.price || liveData[owned.symbol]?.price || owned.averagePrice || 100;
+    setSelectedHoldingToSell(owned);
+    setSellMarketPrice(currentPrice);
+    setSellModalVisible(true);
+
+    // Fetch freshest live market price from NSE so P&L is 100% accurate
+    fetch(`${API_BASE_URL}/stock?symbol=${owned.symbol}`)
+      .then(res => res.json())
+      .then(data => {
+        const live = data?.meta?.regularMarketPrice;
+        if (live && live > 0) {
+          setSellMarketPrice(live);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const handleConfirmSellModal = async (qty: number, effPrice: number): Promise<boolean> => {
+    if (!selectedHoldingToSell) return false;
+    const symbol = selectedHoldingToSell.symbol;
+    const pType = selectedHoldingToSell.productType || 'cnc';
+    const success = await sellStock(symbol, effPrice, qty, pType);
+    if (success) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const costBasis = selectedHoldingToSell.averagePrice * qty;
+      const saleVal = effPrice * qty;
+      const diff = saleVal - costBasis;
+      setToast({
+        visible: true,
+        message: `Sold ${qty} shares of ${symbol.replace('.NS', '')} (P&L: ${diff >= 0 ? '+' : ''}${formatCurrency(diff)})`,
+        type: 'success',
+      });
+      if (onBuyComplete) onBuyComplete();
+      return true;
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setToast({
+        visible: true,
+        message: `Unable to complete sell order.`,
+        type: 'error',
+      });
+      return false;
+    }
+  };
 
   const pan = useRef(new Animated.Value(0)).current;
-  const lastHapticValue = useRef(0); 
-  const confirmActionRef = useRef<() => void>();
+  const lastHapticValue = useRef(0);
+  const confirmActionRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    if (watchlist.length > 0) fetchLivePrices();
+    fetchLivePrices();
+    const interval = setInterval(fetchLivePrices, 15000);
+    return () => clearInterval(interval);
   }, [watchlist]);
 
   const handleConfirmBuy = async () => {
+    if (isPlacingOrder) return;
     const qty = parseInt(quantity);
     if (!selectedStock || isNaN(qty) || qty <= 0) {
       Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
@@ -62,34 +141,60 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
 
     const symbol = selectedStock.symbol;
     const shortName = selectedStock.shortname;
-    const price = liveData[symbol]?.price;
+    const livePrice = liveData[symbol]?.price;
 
-    if (!price) {
-      setToast({ visible: true, message: "Price unavailable.", type: 'error' });
+    if (!livePrice) {
+      setToast({ visible: true, message: "Live price unavailable.", type: 'error' });
       Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
       return;
     }
 
-    const success = await buyStock(symbol, shortName, price, qty);
-    
-    if (success) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setToast({
-        visible: true,
-        message: `Bought ${qty} shares of ${symbol.replace('.NS', '')}`,
-        type: 'success'
-      });
-      setIsBuyModalOpen(false);
-      pan.setValue(0);
-    } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setToast({
-        visible: true,
-        message: "Insufficient Margin Available.",
-        type: 'error'
-      });
-      Animated.spring(pan, { toValue: 0, useNativeDriver: true }).start();
-    }
+    const tradePrice = orderType === 'limit' ? parseFloat(limitPrice) || livePrice : livePrice;
+    const slVal = stopLossActive ? parseFloat(stopLossTrigger) || undefined : undefined;
+
+    // 1. INSTANT UI FEEDBACK (Close modal immediately & slide smoothly)
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setIsBuyModalOpen(false);
+    pan.setValue(0);
+
+    setToast({
+      visible: true,
+      message: `Placing order for ${qty} shares of ${symbol.replace('.NS', '')}...`,
+      type: 'loading',
+    });
+
+    // 2. ASYNC BACKGROUND EXECUTION
+    (async () => {
+      try {
+        const success = await buyStock(symbol, shortName, tradePrice, qty, productType, slVal);
+        if (success) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setToast({
+            visible: true,
+            message: `Order Executed: ${qty} shares of ${symbol.replace('.NS', '')} bought (${productType.toUpperCase()})`,
+            type: 'success',
+          });
+          if (onBuyComplete) onBuyComplete();
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setToast({
+            visible: true,
+            message: "Order Failed: Insufficient Margin Available.",
+            type: 'error',
+          });
+        }
+      } catch (e) {
+        setToast({
+          visible: true,
+          message: "Order Failed: Connection Error.",
+          type: 'error',
+        });
+      } finally {
+        setTimeout(() => {
+          setToast(t => ({ ...t, visible: false }));
+        }, 3500);
+      }
+    })();
   };
 
   confirmActionRef.current = handleConfirmBuy;
@@ -98,20 +203,17 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dx >= 0 && gestureState.dx <= SUCCESS_THRESHOLD) {
-          pan.setValue(gestureState.dx);
+        const clamped = Math.max(0, Math.min(gestureState.dx, SUCCESS_THRESHOLD));
+        pan.setValue(clamped);
 
-          // --- LIGHTER TICK VIBRATION ---
-          // Increased threshold to 20px and switched to Light impact for a subtle feel
-          if (Math.abs(gestureState.dx - lastHapticValue.current) > 20) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
-            lastHapticValue.current = gestureState.dx;
-          }
+        if (Math.abs(gestureState.dx - lastHapticValue.current) > 20) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
+          lastHapticValue.current = gestureState.dx;
         }
       },
       onPanResponderRelease: (_, gestureState) => {
         lastHapticValue.current = 0; 
-        if (gestureState.dx >= SUCCESS_THRESHOLD - 15) {
+        if (gestureState.dx >= SUCCESS_THRESHOLD * 0.65) {
           Animated.spring(pan, { toValue: SUCCESS_THRESHOLD, useNativeDriver: true }).start(() => {
             confirmActionRef.current?.();
           });
@@ -148,25 +250,46 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
         })
       );
       setLiveData(newData);
+
+      // Automated Stop-Loss Trigger Check
+      if (checkStopLossTriggers) {
+        const simplePrices: Record<string, number> = {};
+        Object.entries(newData).forEach(([sym, d]) => {
+          simplePrices[sym] = d.price;
+        });
+        checkStopLossTriggers(simplePrices).then(res => {
+          if (res.triggered && res.message) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            setToast({ visible: true, message: res.message, type: 'error' });
+          }
+        });
+      }
     } catch (error) { console.error("Failed to fetch prices", error); }
   };
 
   const openBuyModal = (stock: any) => {
     setSelectedStock(stock);
     setQuantity('1');
+    setProductType('cnc');
+    setOrderType('market');
+    setLimitPrice('');
+    setStopLossActive(false);
+    setStopLossTrigger('');
     pan.setValue(0);
     setIsBuyModalOpen(true);
   };
 
-  const formatCurrency = (val: number) => "₹" + val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const modalLivePrice = selectedStock ? liveData[selectedStock.symbol]?.price || 0 : 0;
-  const requiredMargin = modalLivePrice * (parseInt(quantity) || 0);
+  
+  // Margin calculation based on product types
+  const tradePrice = orderType === 'limit' ? parseFloat(limitPrice) || modalLivePrice : modalLivePrice;
+  const tradeValue = tradePrice * (parseInt(quantity) || 0);
+  const requiredMargin = productType === 'mis' ? tradeValue * 0.20 : tradeValue; // 5x leverage for MIS
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Watchlist</Text>
 
-      {/* RENDER TOAST HERE: Outside ScrollView, inside main View to keep it floating centered */}
       <Toast 
         visible={toast.visible} 
         message={toast.message} 
@@ -176,27 +299,36 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
 
       {showSearch && (
         <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color="#6b7280" style={styles.searchIcon} />
+          <Ionicons name="search" size={20} color={colors.textSecondary} style={styles.searchIcon} />
           <TextInput
+            placeholder="Search stocks or tickers..."
+            placeholderTextColor={colors.textSecondary}
             style={styles.searchInput}
-            placeholder="Search stocks..."
             value={searchQuery}
             onChangeText={handleSearch}
-            placeholderTextColor="#9ca3af"
+            autoCapitalize="characters"
           />
-          {isSearching && <ActivityIndicator size="small" color="#0f62fe" style={{ marginRight: 10 }} />}
+          {isSearching && <ActivityIndicator style={{ marginRight: 12 }} color={colors.accent} />}
         </View>
       )}
 
       {searchResults.length > 0 && (
         <View style={styles.resultsDropdown}>
           {searchResults.map((item) => (
-            <TouchableOpacity key={item.symbol} style={styles.resultItem} onPress={() => { addToWatchlist(item); setSearchResults([]); setSearchQuery(''); }}>
+            <TouchableOpacity 
+              key={item.symbol} 
+              style={styles.resultItem} 
+              onPress={() => {
+                addToWatchlist(item);
+                setSearchResults([]);
+                setSearchQuery('');
+              }}
+            >
               <View>
                 <Text style={styles.resultSymbol}>{item.symbol.replace('.NS', '')}</Text>
                 <Text style={styles.resultName} numberOfLines={1}>{item.shortname}</Text>
               </View>
-              <Ionicons name="add-circle" size={24} color="#0f62fe" />
+              <Ionicons name="add-circle" size={24} color={colors.accent} />
             </TouchableOpacity>
           ))}
         </View>
@@ -211,7 +343,17 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
               </TouchableOpacity>
               <View style={styles.stockInfo}>
-                <Text style={styles.stockSymbol}>{stock.symbol.replace('.NS', '')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Text style={styles.stockSymbol}>{stock.symbol.replace('.NS', '')}</Text>
+                  {(() => {
+                    const owned = holdings.find(h => h.symbol === stock.symbol);
+                    return owned ? (
+                      <View style={{ backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#10b981' }}>{owned.quantity}</Text>
+                      </View>
+                    ) : null;
+                  })()}
+                </View>
                 <Text style={styles.stockName} numberOfLines={1}>{stock.shortname}</Text>
               </View>
               <View style={styles.priceContainer}>
@@ -224,9 +366,26 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
                   </>
                 ) : <ActivityIndicator size="small" color="#d1d5db" />}
               </View>
-              <TouchableOpacity style={styles.buyBtn} onPress={() => openBuyModal(stock)}>
-                <Text style={styles.buyText}>BUY</Text>
-              </TouchableOpacity>
+              {(() => {
+                const owned = holdings.find(h => h.symbol === stock.symbol);
+                if (owned) {
+                  return (
+                    <View style={{ flexDirection: 'row', gap: 5 }}>
+                      <TouchableOpacity style={[styles.buyBtn, { paddingHorizontal: 10 }]} onPress={() => openBuyModal(stock)}>
+                        <Text style={styles.buyText}>BUY</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.buyBtn, { backgroundColor: '#ef4444', paddingHorizontal: 10 }]} onPress={() => handleQuickSell(stock.symbol)}>
+                        <Text style={styles.buyText}>SELL</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
+                return (
+                  <TouchableOpacity style={styles.buyBtn} onPress={() => openBuyModal(stock)}>
+                    <Text style={styles.buyText}>BUY</Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </TouchableOpacity>
           );
         })}
@@ -235,21 +394,89 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
       <Modal visible={isBuyModalOpen} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            
+            {/* Modal Header */}
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Buy {selectedStock?.symbol.replace('.NS', '')}</Text>
                 <Text style={styles.modalPrice}>{formatCurrency(modalLivePrice)}</Text>
               </View>
               <TouchableOpacity onPress={() => setIsBuyModalOpen(false)}>
-                <Ionicons name="close-circle" size={32} color="#9ca3af" />
+                <Ionicons name="close-circle" size={32} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
+            {/* Novice mode educational message */}
+            {!limitUnlocked && (
+              <View style={styles.bannerBox}>
+                <Text style={styles.bannerText}>
+                  💡 Novice Mode Active. Earn 500 XP in quizzes to unlock Limit Orders & Stop-Loss protection!
+                </Text>
+              </View>
+            )}
+
+            {/* Product Selection Tab Selector (Long-Term CNC vs Intraday MIS) */}
+            <View style={styles.optionSection}>
+              <Text style={styles.sectionLabel}>Product Type</Text>
+              <View style={styles.tabTrack}>
+                <TouchableOpacity 
+                  style={[styles.tabSegment, productType === 'cnc' && styles.tabSegmentActive]}
+                  onPress={() => setProductType('cnc')}
+                >
+                  <Text style={[styles.tabSegmentText, productType === 'cnc' && styles.tabSegmentTextActive]}>
+                    Long-Term (CNC)
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[
+                    styles.tabSegment, 
+                    productType === 'mis' && styles.tabSegmentActive,
+                    !intradayUnlocked && styles.tabSegmentLocked
+                  ]}
+                  onPress={() => intradayUnlocked ? setProductType('mis') : null}
+                >
+                  <Text style={[styles.tabSegmentText, productType === 'mis' && styles.tabSegmentTextActive]}>
+                    {intradayUnlocked ? 'Intraday (MIS 5x)' : '🔒 Intraday (Gold)'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Order Type Selection Tab Selector (Market vs Limit) */}
+            <View style={styles.optionSection}>
+              <Text style={styles.sectionLabel}>Order Type</Text>
+              <View style={styles.tabTrack}>
+                <TouchableOpacity 
+                  style={[styles.tabSegment, orderType === 'market' && styles.tabSegmentActive]}
+                  onPress={() => setOrderType('market')}
+                >
+                  <Text style={[styles.tabSegmentText, orderType === 'market' && styles.tabSegmentTextActive]}>
+                    Market
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[
+                    styles.tabSegment, 
+                    orderType === 'limit' && styles.tabSegmentActive,
+                    !limitUnlocked && styles.tabSegmentLocked
+                  ]}
+                  onPress={() => limitUnlocked ? setOrderType('limit') : null}
+                >
+                  <Text style={[styles.tabSegmentText, orderType === 'limit' && styles.tabSegmentTextActive]}>
+                    {limitUnlocked ? 'Limit Price' : '🔒 Limit (Bronze)'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Quantity Row */}
             <View style={styles.counterRow}>
               <Text style={styles.inputLabel}>Quantity</Text>
               <View style={styles.counterGroup}>
                 <TouchableOpacity style={styles.countBtn} onPress={() => setQuantity(q => String(Math.max(1, (parseInt(q) || 0) - 1)))}>
-                  <Ionicons name="remove" size={24} color="#111827" />
+                  <Ionicons name="remove" size={24} color={colors.text} />
                 </TouchableOpacity>
                 
                 <TextInput 
@@ -261,30 +488,88 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
                 />
 
                 <TouchableOpacity style={styles.countBtn} onPress={() => setQuantity(q => String((parseInt(q) || 0) + 1))}>
-                  <Ionicons name="add" size={24} color="#111827" />
+                  <Ionicons name="add" size={24} color={colors.text} />
                 </TouchableOpacity>
               </View>
             </View>
 
+            {/* Limit Price Input Field */}
+            {orderType === 'limit' && (
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Limit Price</Text>
+                <TextInput
+                  style={styles.numericTextInput}
+                  keyboardType="numeric"
+                  value={limitPrice}
+                  onChangeText={setLimitPrice}
+                  placeholder={String(modalLivePrice)}
+                  placeholderTextColor={colors.textSecondary}
+                />
+              </View>
+            )}
+
+            {/* Stop Loss (SL) Protection Feature */}
+            {stopLossUnlocked ? (
+              <View style={styles.optionSection}>
+                <TouchableOpacity 
+                  style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}
+                  onPress={() => setStopLossActive(!stopLossActive)}
+                >
+                  <Text style={styles.sectionLabel}>Add Stop-Loss Protection</Text>
+                  <Ionicons 
+                    name={stopLossActive ? "checkbox" : "square-outline"} 
+                    size={24} 
+                    color={stopLossActive ? colors.accent : colors.textSecondary} 
+                  />
+                </TouchableOpacity>
+                {stopLossActive && (
+                  <View style={[styles.inputRow, { marginTop: 10 }]}>
+                    <Text style={styles.inputLabel}>Trigger Price</Text>
+                    <TextInput
+                      style={styles.numericTextInput}
+                      keyboardType="numeric"
+                      value={stopLossTrigger}
+                      onChangeText={setStopLossTrigger}
+                      placeholder={String((modalLivePrice * 0.95).toFixed(1))}
+                      placeholderTextColor={colors.textSecondary}
+                    />
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={[styles.optionSection, { opacity: 0.5 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 6 }}>
+                  <Text style={styles.sectionLabel}>🔒 Stop-Loss Protection (Silver Rank)</Text>
+                  <Ionicons name="lock-closed" size={20} color={colors.textSecondary} />
+                </View>
+              </View>
+            )}
+
+            {/* Margin Calculation Summary */}
             <View style={styles.marginBox}>
               <View style={styles.marginRow}>
                 <Text style={styles.marginLabel}>Required Margin:</Text>
                 <Text style={styles.marginValue}>{formatCurrency(requiredMargin)}</Text>
               </View>
               <View style={styles.marginRow}>
-                <Text style={styles.marginLabel}>Available:</Text>
+                <Text style={styles.marginLabel}>Available Balance:</Text>
                 <Text style={[styles.marginValue, { color: balance >= requiredMargin ? '#16a34a' : '#dc2626' }]}>
                   {formatCurrency(balance)}
                 </Text>
               </View>
             </View>
 
-            <View style={[styles.sliderTrack, balance < requiredMargin && { opacity: 0.5 }]}>
+            {/* Swipe to Confirm Button */}
+            <View style={[styles.sliderTrack, (balance < requiredMargin || isPlacingOrder) && { opacity: 0.7 }]}>
               <Text style={styles.sliderPlaceholder}>
-                {balance >= requiredMargin ? 'SLIDE TO BUY' : 'INSUFFICIENT FUNDS'}
+                {isPlacingOrder
+                  ? 'EXECUTING ORDER...'
+                  : balance >= requiredMargin
+                  ? 'SLIDE TO BUY'
+                  : 'INSUFFICIENT FUNDS'}
               </Text>
               
-              {balance >= requiredMargin && (
+              {balance >= requiredMargin && !isPlacingOrder && (
                 <Animated.View 
                   style={[styles.sliderKnob, { transform: [{ translateX: pan }] }]} 
                   {...panResponder.panHandlers}
@@ -292,53 +577,82 @@ export default function Watchlist({ showSearch = true, limit = 5 }: WatchlistPro
                   <Ionicons name="chevron-forward" size={28} color="#fff" />
                 </Animated.View>
               )}
+              {isPlacingOrder && (
+                <View style={[styles.sliderKnob, { right: 8, left: undefined }]}>
+                  <ActivityIndicator size="small" color="#fff" />
+                </View>
+              )}
             </View>
           </View>
         </View>
       </Modal>
+
+      {/* Sell Stock Order Preview Modal */}
+      <SellStockModal
+        visible={sellModalVisible}
+        onClose={() => setSellModalVisible(false)}
+        holding={selectedHoldingToSell}
+        currentPrice={sellMarketPrice}
+        onConfirmSell={handleConfirmSellModal}
+      />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: any) => StyleSheet.create({
   container: { marginTop: 10, flex: 1 },
-  title: { fontSize: 16, fontWeight: "800", color: "#111827", marginBottom: 12 },
-  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', marginBottom: 12 },
+  title: { fontSize: 16, fontWeight: "800", color: colors.text, marginBottom: 12 },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 12 },
   searchIcon: { padding: 12 },
-  searchInput: { flex: 1, height: 48, fontSize: 15, color: '#111' },
-  resultsDropdown: { backgroundColor: '#fff', borderRadius: 12, padding: 8, marginBottom: 16, elevation: 3 },
-  resultItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
-  resultSymbol: { fontSize: 15, fontWeight: '700', color: '#111' },
-  resultName: { fontSize: 12, color: '#6b7280', maxWidth: 200 },
+  searchInput: { flex: 1, height: 48, fontSize: 15, color: colors.text },
+  resultsDropdown: { backgroundColor: colors.card, borderRadius: 12, padding: 8, marginBottom: 16, borderWidth: 1, borderColor: colors.border, elevation: 3, zIndex: 10 },
+  resultItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+  resultSymbol: { fontSize: 15, fontWeight: '700', color: colors.text },
+  resultName: { fontSize: 12, color: colors.textSecondary, maxWidth: 200 },
   listContainer: { gap: 10 },
-  stockCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', padding: 12, borderRadius: 12, elevation: 1 },
+  stockCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.card, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, elevation: 1 },
   stockInfo: { flex: 1 },
-  stockSymbol: { fontSize: 16, fontWeight: '800', color: '#111' },
-  stockName: { fontSize: 12, color: '#6b7280', marginTop: 2 },
+  stockSymbol: { fontSize: 16, fontWeight: '800', color: colors.text },
+  stockName: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   priceContainer: { alignItems: 'flex-end', marginRight: 16 },
-  price: { fontSize: 15, fontWeight: '700', color: '#111' },
+  price: { fontSize: 15, fontWeight: '700', color: colors.text },
   change: { fontSize: 12, fontWeight: '600', marginTop: 2 },
-  buyBtn: { backgroundColor: '#2563eb', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
+  buyBtn: { backgroundColor: colors.accent, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 },
   buyText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
 
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 50 },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 30 },
-  modalTitle: { fontSize: 24, fontWeight: '900', color: '#111' },
-  modalPrice: { fontSize: 18, fontWeight: '700', color: '#16a34a', marginTop: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: colors.card, borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 24, paddingBottom: 50, borderWidth: 1, borderColor: colors.border },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  modalTitle: { fontSize: 24, fontWeight: '900', color: colors.text },
+  modalPrice: { fontSize: 18, fontWeight: '700', color: colors.isDark ? '#34D399' : '#16a34a', marginTop: 4 },
   
-  counterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-  inputLabel: { fontSize: 16, fontWeight: '700', color: '#4b5563' },
-  counterGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f3f4f6', borderRadius: 15, padding: 4 },
-  countBtn: { padding: 10, backgroundColor: '#fff', borderRadius: 12, elevation: 1 },
-  quantityInput: { fontSize: 20, fontWeight: '900', marginHorizontal: 15, width: 60, textAlign: 'center', color: '#111' },
+  bannerBox: { backgroundColor: colors.isDark ? 'rgba(59, 130, 246, 0.1)' : '#eff6ff', padding: 12, borderRadius: 12, marginBottom: 15, borderWidth: 1, borderColor: colors.border },
+  bannerText: { fontSize: 12, color: colors.accent, fontWeight: '600', lineHeight: 16 },
 
-  marginBox: { backgroundColor: '#f8fafc', padding: 20, borderRadius: 16, marginBottom: 30, borderWidth: 1, borderColor: '#e2e8f0' },
-  marginRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
-  marginLabel: { fontSize: 14, color: '#64748b', fontWeight: '600' },
-  marginValue: { fontSize: 16, fontWeight: '800', color: '#0f172a' },
+  optionSection: { marginBottom: 16 },
+  sectionLabel: { fontSize: 14, fontWeight: '700', color: colors.textSecondary, marginBottom: 8 },
+  tabTrack: { flexDirection: 'row', backgroundColor: colors.border, borderRadius: 12, padding: 3, borderWidth: 0.5, borderColor: colors.border },
+  tabSegment: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 9 },
+  tabSegmentActive: { backgroundColor: colors.card, elevation: 1 },
+  tabSegmentLocked: { opacity: 0.6 },
+  tabSegmentText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
+  tabSegmentTextActive: { color: colors.text },
 
-  sliderTrack: { height: 64, backgroundColor: '#f3f4f6', borderRadius: 32, justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden' },
-  sliderPlaceholder: { fontSize: 15, fontWeight: '900', color: '#9ca3af', letterSpacing: 1 },
-  sliderKnob: { position: 'absolute', left: 5, width: KNOB_SIZE, height: KNOB_SIZE, backgroundColor: '#10b981', borderRadius: 27, justifyContent: 'center', alignItems: 'center', elevation: 4 }
+  counterRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 8 },
+  inputLabel: { fontSize: 15, fontWeight: '700', color: colors.textSecondary },
+  counterGroup: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.border, borderRadius: 12, padding: 3 },
+  countBtn: { padding: 8, backgroundColor: colors.card, borderRadius: 9, elevation: 1 },
+  quantityInput: { fontSize: 18, fontWeight: '900', marginHorizontal: 12, width: 50, textAlign: 'center', color: colors.text },
+
+  inputRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  numericTextInput: { fontSize: 16, fontWeight: '800', borderBottomWidth: 1.5, borderBottomColor: colors.accent, width: 100, textAlign: 'right', color: colors.text, paddingVertical: 4 },
+
+  marginBox: { backgroundColor: colors.background, padding: 16, borderRadius: 16, marginBottom: 20, borderWidth: 1, borderColor: colors.border },
+  marginRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  marginLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  marginValue: { fontSize: 15, fontWeight: '800', color: colors.text },
+
+  sliderTrack: { height: 60, backgroundColor: colors.border, borderRadius: 30, justifyContent: 'center', alignItems: 'center', position: 'relative', overflow: 'hidden', borderWidth: 1, borderColor: colors.isDark ? '#334155' : '#CBD5E1' },
+  sliderPlaceholder: { fontSize: 14, fontWeight: '900', color: colors.textSecondary, letterSpacing: 1 },
+  sliderKnob: { position: 'absolute', left: 4, width: 52, height: 52, backgroundColor: '#10B981', borderRadius: 26, justifyContent: 'center', alignItems: 'center', elevation: 4 }
 });

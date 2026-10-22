@@ -4,17 +4,22 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LEARNING_DATA } from '../constants/LearningData';
+import { useTheme } from '../context/ThemeContext';
 
 // --- HELPER: Parse **Bold** Text ---
-const ParsedText = ({ text, style }: { text: string, style?: any }) => {
+const ParsedText = ({ text, style }: { text: string; style?: any }) => {
   if (!text) return null;
   const parts = text.split(/(\*\*.*?\*\*)/g);
-  
+
   return (
     <Text style={style}>
       {parts.map((part, index) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-          return <Text key={index} style={{ fontWeight: '800' }}>{part.slice(2, -2)}</Text>;
+          return (
+            <Text key={index} style={{ fontWeight: '800' }}>
+              {part.slice(2, -2)}
+            </Text>
+          );
         }
         return <Text key={index}>{part}</Text>;
       })}
@@ -24,68 +29,148 @@ const ParsedText = ({ text, style }: { text: string, style?: any }) => {
 
 export default function LearnScreen() {
   const insets = useSafeAreaInsets();
-  const { moduleId, level } = useLocalSearchParams(); 
+  const { moduleId, level } = useLocalSearchParams();
   const router = useRouter();
+  const { colors } = useTheme();
+
   const idKey = String(moduleId);
   const lesson = LEARNING_DATA[idKey];
 
-  // --- THEME COLORS ---
+  // --- THEME ACCENTS BASED ON LEVEL ---
   const getTheme = (lvl: string) => {
-    switch(lvl) {
-      case 'Beginner': return { bg: '#ecfdf5', dark: '#10b981', light: '#d1fae5' };
-      case 'Intermediate': return { bg: '#fffbeb', dark: '#d97706', light: '#fde68a' }; 
-      case 'Advanced': return { bg: '#fef2f2', dark: '#dc2626', light: '#fecaca' };
-      case 'Expert': return { bg: '#f3e8ff', dark: '#7c3aed', light: '#e9d5ff' };
-      default: return { bg: '#f3f4f6', dark: '#4b5563', light: '#e5e7eb' };
+    switch (lvl) {
+      case 'Beginner':
+        return { dark: '#059669', light: '#ecfdf5', border: '#a7f3d0' };
+      case 'Intermediate':
+        return { dark: '#d97706', light: '#fffbeb', border: '#fde68a' };
+      case 'Advanced':
+        return { dark: '#dc2626', light: '#fef2f2', border: '#fecaca' };
+      case 'Expert':
+        return { dark: '#7c3aed', light: '#f3e8ff', border: '#e9d5ff' };
+      default:
+        return { dark: '#2563eb', light: '#eff6ff', border: '#bfdbfe' };
     }
   };
 
   const theme = getTheme(String(level));
 
-  if (!lesson) return null;
+  if (!lesson) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Module Not Found</Text>
+        </View>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: colors.textSecondary, fontSize: 16 }}>This module content is coming soon.</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
-    // FIX 1: Standard View with exact notch padding injected
-    <View style={[styles.container, { backgroundColor: theme.bg, paddingTop: insets.top }]}> 
-      
-      {/* 1. COMPACT HEADER */}
-      <View style={[styles.header, { borderBottomColor: theme.dark }]}>
-        <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
-          <Ionicons name="arrow-back" size={24} color={theme.dark} />
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+      {/* 1. TOP HEADER */}
+      <View style={[styles.header, { borderBottomColor: colors.border, backgroundColor: colors.card }]}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.dark }]}>
-          {String(level).toUpperCase()} MODULE • {idKey.replace('m','')}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerCategory, { color: theme.dark }]}>
+            {lesson.level.toUpperCase()} • MODULE {idKey.replace('m', '')}
+          </Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+            {lesson.title}
+          </Text>
+        </View>
+        <View style={[styles.readPill, { backgroundColor: theme.light, borderColor: theme.border }]}>
+          <Ionicons name="time-outline" size={13} color={theme.dark} />
+          <Text style={[styles.readPillText, { color: theme.dark }]}>{lesson.readTime}</Text>
+        </View>
       </View>
 
+      {/* 2. MAIN SCROLLABLE CONTENT */}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <Text style={[styles.mainTitle, { color: '#111' }]}>{lesson.title}</Text>
+        {/* HERO TITLE & TAGLINE */}
+        <View style={styles.heroBox}>
+          <View style={[styles.taglineBadge, { backgroundColor: theme.light }]}>
+            <Text style={[styles.taglineText, { color: theme.dark }]}>{lesson.level} Track</Text>
+          </View>
+          <Text style={[styles.mainTitle, { color: colors.text }]}>{lesson.title}</Text>
+          <Text style={[styles.mainTagline, { color: colors.textSecondary }]}>{lesson.tagline}</Text>
+        </View>
 
-        {/* 2. DENSE CONTENT BLOCKS */}
-        {lesson.content.map((section: any, index: number) => (
-          <View key={index} style={styles.section}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-              <View style={[styles.bullet, { backgroundColor: theme.dark }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.heading, { color: theme.dark }]}>{section.heading}</Text>
-                <ParsedText text={section.body} style={styles.body} />
+        {/* CURRICULUM SECTIONS */}
+        {lesson.content.map((section, index) => (
+          <View key={index} style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.stepCircle, { backgroundColor: theme.dark }]}>
+                <Text style={styles.stepNum}>{index + 1}</Text>
               </View>
+              <Text style={[styles.heading, { color: colors.text }]}>{section.heading}</Text>
             </View>
+
+            <ParsedText text={section.body} style={[styles.body, { color: colors.textSecondary }]} />
+
+            {/* PRO-TIP CALLOUT BOX */}
+            {section.proTip && (
+              <View style={[styles.proTipBox, { backgroundColor: theme.light, borderColor: theme.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <Ionicons name="bulb-outline" size={16} color={theme.dark} />
+                  <Text style={[styles.proTipTitle, { color: theme.dark }]}>PRO INSIGHT</Text>
+                </View>
+                <Text style={[styles.proTipText, { color: colors.text }]}>{section.proTip}</Text>
+              </View>
+            )}
           </View>
         ))}
 
-        {/* Extra padding so text doesn't hide behind the absolute footer */}
-        <View style={{ height: 100 + insets.bottom }} /> 
+        {/* KEY TAKEAWAYS CARD */}
+        {lesson.takeaway && (
+          <View style={[styles.takeawayCard, { borderColor: theme.dark }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Ionicons name="checkmark-circle" size={22} color={theme.dark} />
+              <Text style={[styles.takeawayTitle, { color: theme.dark }]}>KEY TAKEAWAY</Text>
+            </View>
+            <Text style={[styles.takeawayBody, { color: colors.text }]}>{lesson.takeaway}</Text>
+          </View>
+        )}
+
+        {/* EXTRA PADDING FOR FIXED FOOTER */}
+        <View style={{ height: 110 + insets.bottom }} />
       </ScrollView>
 
-      {/* 3. THEMED FOOTER BUTTON */}
-      {/* FIX 2: Dynamic padding bottom for the nav bar */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom > 0 ? insets.bottom + 10 : 20 }]}>
-        <TouchableOpacity 
-          style={[styles.quizBtn, { backgroundColor: theme.dark }]} 
-          onPress={() => router.replace({ pathname: "/quiz", params: { moduleId: idKey, level: level } })}
+      {/* 3. FIXED BOTTOM ACTION BAR */}
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            paddingBottom: insets.bottom > 0 ? insets.bottom + 8 : 16,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={[styles.outlineBtn, { borderColor: colors.border }]}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
         >
-          <Text style={styles.btnText}>Start Quiz 📝</Text>
+          <Text style={[styles.outlineBtnText, { color: colors.textSecondary }]}>Syllabus</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.quizBtn, { backgroundColor: theme.dark }]}
+          onPress={() => router.replace({ pathname: '/quiz', params: { moduleId: idKey, level: level } })}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="school" size={18} color="#fff" />
+          <Text style={styles.btnText}>Test Your Knowledge</Text>
+          <View style={styles.xpBadge}>
+            <Text style={styles.xpBadgeText}>+250 XP</Text>
+          </View>
         </TouchableOpacity>
       </View>
     </View>
@@ -94,23 +179,203 @@ export default function LearnScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { 
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingVertical: 12, 
-    backgroundColor: 'rgba(255,255,255,0.6)', 
-    borderBottomWidth: 1 
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
   },
-  headerTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  backBtn: {
+    padding: 6,
+    borderRadius: 10,
+  },
+  headerCategory: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  headerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  readPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  readPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
 
-  scrollContent: { padding: 20 },
-  mainTitle: { fontSize: 26, fontWeight: '900', marginBottom: 20, lineHeight: 32 },
-  
-  section: { marginBottom: 18 }, 
-  bullet: { width: 4, height: 18, borderRadius: 2, marginTop: 4 }, 
-  heading: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
-  body: { fontSize: 15, lineHeight: 22, color: '#333', textAlign: 'justify' },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
 
-  footer: { position: 'absolute', bottom: 0, width: '100%', paddingHorizontal: 16, paddingTop: 16, backgroundColor: 'rgba(255,255,255,0.95)' },
-  quizBtn: { padding: 16, borderRadius: 12, alignItems: 'center', elevation: 2 },
-  btnText: { color: '#fff', fontSize: 16, fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5 }
+  heroBox: {
+    marginBottom: 20,
+  },
+  taglineBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  taglineText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  mainTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    lineHeight: 32,
+    marginBottom: 6,
+  },
+  mainTagline: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '500',
+  },
+
+  sectionCard: {
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  stepCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepNum: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  heading: {
+    fontSize: 17,
+    fontWeight: '800',
+    flex: 1,
+  },
+  body: {
+    fontSize: 14.5,
+    lineHeight: 23,
+    textAlign: 'left',
+  },
+
+  proTipBox: {
+    marginTop: 14,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  proTipTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  proTipText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+
+  takeawayCard: {
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 2,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    marginBottom: 20,
+  },
+  takeawayTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  takeawayBody: {
+    fontSize: 14,
+    lineHeight: 22,
+    fontWeight: '600',
+  },
+
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -3 },
+  },
+  outlineBtn: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outlineBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  quizBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    gap: 8,
+  },
+  btnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  xpBadge: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  xpBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
 });

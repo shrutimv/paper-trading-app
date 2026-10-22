@@ -9,12 +9,12 @@ module.exports = [
     username: "bob",
     email: "bob@example.com",
     password: "bob123",
-    balance: 125000,
+    balance: 100000,
   },
   {
     username: "charlie",
     email: "charlie@example.com",
     password: "charlie123",
-    balance: 98000,
+    balance: 100000,
   },
 ];

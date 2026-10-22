@@ -1,204 +1,146 @@
 # Paper Trading Application 📈
 
-This is a full-stack paper trading application with a FastAPI backend and React Native Expo frontend.
+A full-stack, real-time paper trading application featuring a **React Native Expo** mobile frontend, a **Node.js Express** backend (handling authentication and trades), and a **Python FastAPI** service (powering live stock market data, charts, IPO hubs, and news).
+
+---
+
+## 🏗️ Architecture Overview
+
+The project consists of three main components:
+1. **Frontend (`/`)**: React Native Expo mobile application.
+2. **Express Backend (`/backend`)**: Node.js & Express server handling user registration, authentication, sessions, and database schema for portfolio trades. Powered by MongoDB.
+3. **FastAPI Engine (`/API`)**: Python FastAPI server providing real-time stock price simulation, market charts, IPO details, and Indian stock market news cached from NewsAPI.
+
+---
+
+## ⚙️ Environment Configuration
+
+To keep the application secure, sensitive configurations are kept in `.env` files. Template files (`.env.example`) are provided to show the required variables.
+
+### 1. Express Backend Setup (`/backend/.env`)
+Create a `.env` file inside the `backend/` directory (or use the one in the root folder) and configure the following variables:
+* `PORT`: The port on which the Express server runs (default: `5000`).
+* `MONGO_URI`: Your MongoDB database connection string.
+* `SESSION_SECRET`: A secure, secret key used to sign Express session cookies.
+* `FASTAPI_URL`: The URL of the FastAPI service (default: `http://localhost:8000`).
+
+### 2. FastAPI Setup (`/API/.env`)
+Create a `.env` file inside the `API/` directory and configure:
+* `NEWS_API_KEY`: Your developer key from [newsapi.org](https://newsapi.org) to fetch live financial news.
 
 ---
 
 ## 🚀 Complete Setup Guide
 
 ### Prerequisites
-- Python 3.8+
-- Node.js 16+
-- Expo CLI installed globally (`npm install -g expo-cli`)
+* **Node.js** (v16 or higher)
+* **Python 3.8+**
+* **MongoDB** (Atlas cloud cluster or local database)
 
 ---
 
-## Part 1: Backend API Setup
+### Part 1: Express Backend Setup
 
-### Step 1: Create `.env` file in `/API` directory
+1. Navigate to the `backend` directory:
+   ```bash
+   cd backend
+   ```
 
-Navigate to the `/API` folder and create a `.env` file with the following content:
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-```
-NEWS_API_KEY=your_newsapi_org_key_here
-```
+3. Create the `.env` file using the template:
+   ```bash
+   # Copy template and fill in your MONGO_URI and SESSION_SECRET
+   cp .env.example .env
+   ```
 
-**Path:** `D:\VESIT\Project\PaperTradeApplication\paper-trading-app\API\.env`
-
-Get your NEWS_API_KEY from [newsapi.org](https://newsapi.org)
-
-### Step 2: Install API dependencies
-
-From the project root directory:
-
-```bash
-# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
-
-pip install -r API/requirements.txt
-```
-
-### Step 3: Start the FastAPI server
-
-From the project root directory:
-
-```bash
-# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
-
-uvicorn API.app:app --reload --host 0.0.0.0 --port 8000
-```
-
-✅ You should see: `Uvicorn running on http://0.0.0.0:8000`
-
-The API will be accessible at:
-- **Local:** `http://localhost:8000`
-- **Network:** `http://<your-ipv4-address>:8000` (e.g., `http://192.168.0.105:8000`)
+4. Start the Express server:
+   ```bash
+   # Run with Nodemon for development
+   npm run dev
+   # Or run directly with Node
+   node app.js
+   ```
+   *The backend will run on `http://localhost:5000`.*
 
 ---
 
-## Part 2: Frontend Setup
+### Part 2: FastAPI Engine Setup
 
-### Step 1: Find your IPv4 address
+1. Navigate to the `API` directory:
+   ```bash
+   cd API
+   ```
 
-Run in PowerShell/Command Prompt:
+2. Create a virtual environment and activate it:
+   ```bash
+   # Windows
+   python -m venv .venv
+   .venv\Scripts\activate
 
-```bash
-ipconfig
-```
+   # macOS/Linux
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
 
-Look for "IPv4 Address" (usually starts with 192.168.x.x or 10.0.x.x)
+3. Install required Python packages:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### Step 2: Update API endpoint in config
+4. Create the `.env` file using the template:
+   ```bash
+   # Copy template and fill in your NEWS_API_KEY
+   cp .env.example .env
+   ```
 
-Edit the file: `src/config.ts`
-
-Update the API URL with your IPv4 address:
-
-```typescript
-export const API_BASE_URL = 'http://192.168.0.105:8000'; // Replace 192.168.0.105 with your IPv4
-```
-
-### Step 3: Install frontend dependencies
-
-From the project root directory:
-
-```bash
-# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
-
-npm install
-npm install axios
-```
-
-### Step 4: Start the Expo development server
-
-From the project root directory:
-
-```bash
-# From: D:\VESIT\Project\PaperTradeApplication\paper-trading-app
-
-npx expo start
-```
-
-In the output, you'll find options to open the app in a
-
-- [Expo Go](https://expo.dev/go) - Scan QR code with your phone
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Web browser](https://docs.expo.dev/workflow/web/)
+5. Start the FastAPI server:
+   ```bash
+   uvicorn app:app --reload --host 0.0.0.0 --port 8000
+   ```
+   *The FastAPI engine will run on `http://localhost:8000`.*
 
 ---
 
-## 🔄 Running Both Backend and Frontend Together
+### Part 3: React Native Frontend Setup
 
-**Terminal 1 - Start Backend API:**
+1. Navigate to the root directory of the project.
 
-```bash
-cd D:\VESIT\Project\PaperTradeApplication\paper-trading-app
-uvicorn API.app:app --reload --host 0.0.0.0 --port 8000
-```
+2. Configure Server Endpoints:
+   * **FastAPI Service URL**: Update `src/config.ts` with your local IP address (or `localhost` for emulators):
+     ```typescript
+     export const API_BASE_URL = 'http://<your-pc-ip-address>:8000';
+     ```
+   * **Express Service URL**: Update `src/config/api.ts` with your local IP address:
+     ```typescript
+     export const BASE_URL = 'http://<your-pc-ip-address>:5000';
+     ```
 
-**Terminal 2 - Start Frontend:**
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-```bash
-cd D:\VESIT\Project\PaperTradeApplication\paper-trading-app
-npx expo start
-```
+4. Start the Expo development server:
+   ```bash
+   npx expo start
+   ```
 
-Both servers should now be running and the app can communicate with the backend.
-
----
-
-## ⚙️ Configuration Checklist
-
-- [ ] Created `.env` file in `/API` directory with `NEWS_API_KEY`
-- [ ] Updated IPv4 address in `src/config.ts`
-- [ ] Installed API requirements: `pip install -r API/requirements.txt`
-- [ ] Installed frontend dependencies: `npm install && npm install axios`
-- [ ] Backend running on port 8000
-- [ ] Frontend running (Expo dev server)
-- [ ] Mobile device/emulator connected on same Wi-Fi network (for testing on actual device)
+5. Run the app:
+   * Scan the QR code using the **Expo Go** app on your phone (ensure your phone and PC are on the same Wi-Fi network).
+   * Press `a` for Android emulator or `i` for iOS simulator.
 
 ---
 
 ## 🐛 Troubleshooting
 
-### API connection refused error
-- Ensure API server is running: `uvicorn API.app:app --reload --host 0.0.0.0 --port 8000`
-- Verify IPv4 address is correct in `src/config.ts`
-- Check firewall allows port 8000
-
-### `ModuleNotFoundError: No module named 'API'`
-- Make sure you're running uvicorn from the **project root** directory
-- Correct: `D:\VESIT\Project\PaperTradeApplication\paper-trading-app>`
-- Wrong: `D:\VESIT\Project\PaperTradeApplication\paper-trading-app\API>`
-
-### News endpoint not working
-- Verify `NEWS_API_KEY` is set in `API/.env`
-- Check that the key is valid at [newsapi.org](https://newsapi.org)
-
----
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-
-## NEWS API MODULE
-
-This project now includes a News API integration for Indian stock market news.
-
-### Setup
-
-1. Add your NewsAPI.org key to `API/.env`:
-
-```env
-NEWS_API_KEY=your_api_key_here
-```
-
-2. Install backend dependencies:
-
-```bash
-pip install -r API/requirements.txt
-```
-
-3. Start the backend:
-
-```bash
-uvicorn API.app:app --reload
-```
-
-4. Confirm the endpoint works:
-
-```bash
-curl "http://192.168.0.105:8000/news"
-```
-
-### Frontend
-
-- `components/NewsCarousel.tsx` loads `/news` and displays horizontal news cards.
-- `src/api/newsApi.ts` provides `fetchNews(sector?, keyword?, industry?)`.
-- The home screen in `app/(tabs)/index.tsx` now renders the news carousel.
-
-### Notes
-
-- The backend caches news and refreshes every 15 minutes via `API/news_cache.py`.
-- Use your local LAN IP in `src/config.ts` if needed.
+* **Connection Refused (Port 5000 or 8000)**:
+  * Ensure both servers are running in separate terminal windows.
+  * Verify that the IP address specified in `src/config.ts` and `src/config/api.ts` matches your PC's current IPv4 address (run `ipconfig` on Windows or `ifconfig` on macOS).
+  * Double-check that your firewall allows traffic on ports 5000 and 8000.
+* **Database Connection Errors**:
+  * Verify that the database connection string in your `.env` is correct.
+  * Ensure your MongoDB Atlas cluster has IP Access list configured to allow your current IP address.

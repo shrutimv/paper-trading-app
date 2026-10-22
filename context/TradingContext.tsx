@@ -1,58 +1,161 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
+import { BASE_URL } from '@/src/config/api';
+import { useAuth } from './AuthContext';
 
 // Types
-export type Holding = { symbol: string; name: string; quantity: number; averagePrice: number; };
+export type Holding = { 
+  symbol: string; 
+  name: string; 
+  quantity: number; 
+  averagePrice: number; 
+  productType?: 'cnc' | 'mis'; 
+  stopLoss?: number; 
+};
 export type WatchlistStock = { symbol: string; shortname: string; exchange: string; };
 
+export type Transaction = {
+  _id?: string;
+  id?: string;
+  symbol: string;
+  companyName?: string;
+  type: 'BUY' | 'SELL';
+  productType?: 'cnc' | 'mis';
+  quantity: number;
+  price: number;
+  totalAmount: number;
+  stopLoss?: number;
+  status?: string;
+  createdAt: string;
+  pnl?: number;
+};
+
 type TradingContextType = {
+  isGuest?: boolean;
+  setIsGuest?: React.Dispatch<React.SetStateAction<boolean>>;
   balance: number;
   holdings: Holding[];
-  watchlist: WatchlistStock[]; // <-- NEW!
-  buyStock: (symbol: string, name: string, price: number, quantity: number) => Promise<boolean>;
-  sellStock: (symbol: string, price: number, quantity: number) => Promise<boolean>;
-  addToWatchlist: (stock: WatchlistStock) => void; // <-- NEW!
-  removeFromWatchlist: (symbol: string) => void; // <-- NEW!
+  watchlist: WatchlistStock[];
+  transactions: Transaction[];
+  buyStock: (
+    symbol: string, 
+    name: string, 
+    price: number, 
+    quantity: number, 
+    productType?: 'cnc' | 'mis', 
+    stopLoss?: number
+  ) => Promise<boolean>;
+  sellStock: (
+    symbol: string, 
+    price: number, 
+    quantity: number, 
+    productType?: 'cnc' | 'mis',
+    reason?: string
+  ) => Promise<boolean>;
+  addToWatchlist: (stock: WatchlistStock) => void;
+  removeFromWatchlist: (symbol: string) => void;
   totalInvestment: number;
+  setHoldings: React.Dispatch<React.SetStateAction<Holding[]>>;
+  setBalance: React.Dispatch<React.SetStateAction<number>>;
+  fetchTransactions: () => Promise<void>;
+  checkStopLossTriggers: (priceMap: Record<string, number>) => Promise<{ triggered: boolean; message?: string }>;
 };
 
 const TradingContext = createContext<TradingContextType | undefined>(undefined);
 const STARTING_BALANCE = 100000;
 
 export const TradingProvider = ({ children }: { children: React.ReactNode }) => {
+  const { user, isGuest, refreshUser } = useAuth();
   const [balance, setBalance] = useState<number>(STARTING_BALANCE);
   const [holdings, setHoldings] = useState<Holding[]>([]);
-  const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]); // <-- NEW!
+  const [watchlist, setWatchlist] = useState<WatchlistStock[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  // Load Saved Data
+  const fetchTransactions = async () => {
+    try {
+      if (user && !isGuest) {
+        const res = await axios.get(`${BASE_URL}/api/trade/history`, { withCredentials: true });
+        if (res.data && Array.isArray(res.data.transactions)) {
+          setTransactions(res.data.transactions);
+          return;
+        }
+      }
+      const storageKey = user && !isGuest ? `paper_tx_${user.id || 'user'}` : 'paper_transactions';
+      const savedTx = await AsyncStorage.getItem(storageKey);
+      if (savedTx) {
+        setTransactions(JSON.parse(savedTx));
+      }
+    } catch (e) {
+      console.log("Error loading transaction history:", e);
+    }
+  };
+
+  // Load Saved Data or Sync with Backend User
   useEffect(() => {
     const loadData = async () => {
       try {
-        const savedBalance = await AsyncStorage.getItem('paper_balance');
-        const savedHoldings = await AsyncStorage.getItem('paper_holdings');
-        const savedWatchlist = await AsyncStorage.getItem('paper_watchlist'); // <-- NEW!
-        
-        if (savedBalance !== null) setBalance(parseFloat(savedBalance));
-        if (savedHoldings !== null) setHoldings(JSON.parse(savedHoldings));
-        if (savedWatchlist !== null) setWatchlist(JSON.parse(savedWatchlist)); // <-- NEW!
-      } catch (e) { console.error("Failed to load trading data", e); }
+        if (user && !isGuest) {
+          if (typeof user.balance === 'number') {
+            setBalance(user.balance);
+          }
+          try {
+            const res = await axios.get(`${BASE_URL}/api/trade/holdings`, { withCredentials: true });
+            if (res.data && Array.isArray(res.data.holdings) && res.data.holdings.length > 0) {
+              setHoldings(res.data.holdings);
+            } else {
+              const savedHoldings = await AsyncStorage.getItem(`paper_holdings_${user.id || 'user'}`);
+              if (savedHoldings) {
+                const parsed = JSON.parse(savedHoldings);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                  setHoldings(parsed);
+                }
+              }
+            }
+          } catch {
+            const savedHoldings = await AsyncStorage.getItem(`paper_holdings_${user.id || 'user'}`);
+            if (savedHoldings) setHoldings(JSON.parse(savedHoldings));
+          }
+        } else {
+          const savedBalance = await AsyncStorage.getItem('paper_balance');
+          const savedHoldings = await AsyncStorage.getItem('paper_holdings');
+          const savedWatchlist = await AsyncStorage.getItem('paper_watchlist');
+          
+          if (savedBalance !== null) setBalance(parseFloat(savedBalance));
+          if (savedHoldings !== null) setHoldings(JSON.parse(savedHoldings));
+          if (savedWatchlist !== null) setWatchlist(JSON.parse(savedWatchlist));
+        }
+        await fetchTransactions();
+      } catch (e) { 
+        console.error("Failed to load trading data", e); 
+      }
     };
     loadData();
-  }, []);
+  }, [user, isGuest]);
 
   // Save Data on Change
   useEffect(() => {
     const saveData = async () => {
       try {
-        await AsyncStorage.setItem('paper_balance', balance.toString());
-        await AsyncStorage.setItem('paper_holdings', JSON.stringify(holdings));
-        await AsyncStorage.setItem('paper_watchlist', JSON.stringify(watchlist)); // <-- NEW!
-      } catch (e) { console.error("Failed to save trading data", e); }
+        const txKey = user && !isGuest ? `paper_tx_${user.id || 'user'}` : 'paper_transactions';
+        await AsyncStorage.setItem(txKey, JSON.stringify(transactions));
+
+        if (user && !isGuest) {
+          await AsyncStorage.setItem(`paper_holdings_${user.id || 'user'}`, JSON.stringify(holdings));
+          await AsyncStorage.setItem(`paper_watchlist_${user.id || 'user'}`, JSON.stringify(watchlist));
+        } else {
+          await AsyncStorage.setItem('paper_balance', balance.toString());
+          await AsyncStorage.setItem('paper_holdings', JSON.stringify(holdings));
+          await AsyncStorage.setItem('paper_watchlist', JSON.stringify(watchlist));
+        }
+      } catch (e) { 
+        console.error("Failed to save trading data", e); 
+      }
     };
     saveData();
-  }, [balance, holdings, watchlist]);
+  }, [balance, holdings, watchlist, transactions, user, isGuest]);
 
-  // --- NEW: Watchlist Actions ---
+  // --- Watchlist Actions ---
   const addToWatchlist = (stock: WatchlistStock) => {
     if (!watchlist.find(s => s.symbol === stock.symbol)) {
       setWatchlist(prev => [...prev, stock]);
@@ -63,41 +166,210 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     setWatchlist(prev => prev.filter(s => s.symbol !== symbol));
   };
 
-  // --- BUY / SELL LOGIC ---
-  const buyStock = async (symbol: string, name: string, price: number, quantity: number) => {
-    const cost = price * quantity;
+  // --- BUY LOGIC ---
+  const buyStock = async (
+    symbol: string, 
+    name: string, 
+    price: number, 
+    quantity: number, 
+    productType: 'cnc' | 'mis' = 'cnc', 
+    stopLoss?: number
+  ) => {
+    const totalValue = price * quantity;
+    const cost = productType === 'mis' ? totalValue * 0.20 : totalValue;
+    
     if (balance < cost) return false;
 
-    setBalance(prev => prev - cost);
-    setHoldings(prev => {
-      const existing = prev.find(h => h.symbol === symbol);
-      if (existing) {
-        const totalValue = (existing.averagePrice * existing.quantity) + cost;
-        const newQuantity = existing.quantity + quantity;
-        return prev.map(h => h.symbol === symbol ? { ...h, quantity: newQuantity, averagePrice: totalValue / newQuantity } : h);
+    let newTx: Transaction = {
+      id: Date.now().toString(),
+      symbol,
+      companyName: name || symbol,
+      type: 'BUY',
+      productType,
+      quantity,
+      price,
+      totalAmount: totalValue,
+      stopLoss,
+      status: 'EXECUTED',
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      const guestId = (await AsyncStorage.getItem('@forum_guest_id')) || 'guest_default';
+      const response = await axios.post(
+        `${BASE_URL}/api/trade/buy`,
+        { symbol, quantity, price, name, productType, stopLoss, guestId, currentBalance: balance },
+        { withCredentials: true, timeout: 10000 }
+      );
+      if (response.data?.balance !== undefined) {
+        setBalance(response.data.balance);
+      } else {
+        setBalance(prev => prev - cost);
       }
-      return [...prev, { symbol, name, quantity, averagePrice: price }];
-    });
-    return true;
-  };
+      if (response.data?.transaction) {
+        newTx = {
+          ...response.data.transaction,
+          id: response.data.transaction._id || Date.now().toString(),
+          createdAt: response.data.transaction.createdAt || new Date().toISOString()
+        };
+      }
+      if (user && !isGuest && refreshUser) await refreshUser();
+    } catch (err) {
+      console.log("Backend trade buy sync failed, recording locally", err);
+      setBalance(prev => prev - cost);
+    }
 
-  const sellStock = async (symbol: string, price: number, quantity: number) => {
-    const existing = holdings.find(h => h.symbol === symbol);
-    if (!existing || existing.quantity < quantity) return false;
+    setTransactions(prev => [newTx, ...prev]);
 
-    const revenue = price * quantity;
-    setBalance(prev => prev + revenue);
     setHoldings(prev => {
-      if (existing.quantity === quantity) return prev.filter(h => h.symbol !== symbol);
-      return prev.map(h => h.symbol === symbol ? { ...h, quantity: h.quantity - quantity } : h);
+      const existing = prev.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
+      if (existing) {
+        const totalSharesValue = (existing.averagePrice * existing.quantity) + totalValue;
+        const newQuantity = existing.quantity + quantity;
+        return prev.map(h => h.symbol === symbol && (h.productType || 'cnc') === productType 
+          ? { ...h, quantity: newQuantity, averagePrice: totalSharesValue / newQuantity, stopLoss } 
+          : h
+        );
+      }
+      return [...prev, { symbol, name, quantity, averagePrice: price, productType, stopLoss }];
     });
     return true;
   };
 
-  const totalInvestment = holdings.reduce((sum, h) => sum + (h.averagePrice * h.quantity), 0);
+  // --- SELL LOGIC ---
+  const sellStock = async (
+    symbol: string, 
+    price: number, 
+    quantity: number, 
+    productType: 'cnc' | 'mis' = 'cnc',
+    reason?: string
+  ) => {
+    let existing = holdings.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
+    
+    // Fallback: If not found in current holdings, reconstruct from transaction history
+    if (!existing) {
+      const recentBuy = transactions.find(t => t.symbol === symbol && t.type === 'BUY' && (t.productType || 'cnc') === productType);
+      existing = {
+        symbol,
+        name: recentBuy?.companyName || symbol,
+        quantity: Math.max(quantity, recentBuy?.quantity || 1),
+        averagePrice: recentBuy?.price || price || 100,
+        productType,
+      };
+    }
+
+    const effectiveSellPrice = (price && price > 0) ? price : (existing.averagePrice > 0 ? existing.averagePrice : 100);
+    const calculatedPnl = (effectiveSellPrice - existing.averagePrice) * quantity;
+
+    let revenue = effectiveSellPrice * quantity;
+    if (productType === 'mis') {
+      revenue = (effectiveSellPrice * quantity) - (existing.averagePrice * quantity * 0.80);
+    }
+
+    let newTx: Transaction = {
+      id: Date.now().toString(),
+      symbol,
+      companyName: existing.name || symbol,
+      type: 'SELL',
+      productType,
+      quantity,
+      price: effectiveSellPrice,
+      totalAmount: effectiveSellPrice * quantity,
+      status: reason || 'EXECUTED',
+      createdAt: new Date().toISOString(),
+      pnl: calculatedPnl,
+    };
+
+    try {
+      const guestId = (await AsyncStorage.getItem('@forum_guest_id')) || 'guest_default';
+      const response = await axios.post(
+        `${BASE_URL}/api/trade/sell`,
+        { symbol, quantity, price: effectiveSellPrice, productType, guestId, currentBalance: balance },
+        { withCredentials: true, timeout: 10000 }
+      );
+      if (response.data?.balance !== undefined) {
+        setBalance(response.data.balance);
+      } else {
+        setBalance(prev => prev + revenue);
+      }
+      if (response.data?.transaction) {
+        newTx = {
+          ...response.data.transaction,
+          id: response.data.transaction._id || Date.now().toString(),
+          createdAt: response.data.transaction.createdAt || new Date().toISOString(),
+          status: reason || response.data.transaction.status || 'EXECUTED',
+          pnl: calculatedPnl,
+        };
+      }
+      if (user && !isGuest && refreshUser) await refreshUser();
+    } catch (err) {
+      console.log("Backend trade sell sync failed, recording locally", err);
+      setBalance(prev => prev + revenue);
+    }
+
+    setTransactions(prev => [newTx, ...prev]);
+
+    setHoldings(prev => {
+      const current = prev.find(h => h.symbol === symbol && (h.productType || 'cnc') === productType);
+      if (!current || current.quantity <= quantity) {
+        return prev.filter(h => !(h.symbol === symbol && (h.productType || 'cnc') === productType));
+      }
+      return prev.map(h => h.symbol === symbol && (h.productType || 'cnc') === productType 
+        ? { ...h, quantity: h.quantity - quantity } 
+        : h
+      );
+    });
+    return true;
+  };
+
+  // --- AUTOMATED STOP-LOSS EXECUTION ENGINE ---
+  const checkStopLossTriggers = async (priceMap: Record<string, number>): Promise<{ triggered: boolean; message?: string }> => {
+    let triggeredCount = 0;
+    let lastSummary = '';
+
+    for (const h of holdings) {
+      if (!h.stopLoss || h.stopLoss <= 0) continue;
+      const rawSym = h.symbol.replace('.NS', '').replace('.BO', '');
+      const curPrice = priceMap[h.symbol] || priceMap[rawSym] || priceMap[`${rawSym}.NS`];
+
+      // If market price fell to or below user's predefined protective stop loss
+      if (curPrice && curPrice <= h.stopLoss) {
+        const success = await sellStock(h.symbol, h.stopLoss, h.quantity, h.productType || 'cnc', 'STOP_LOSS_EXECUTED');
+        if (success) {
+          triggeredCount++;
+          lastSummary = `Stop-Loss Executed: Sold ${h.quantity} shares of ${rawSym} at ₹${h.stopLoss.toFixed(2)} to protect your capital.`;
+        }
+      }
+    }
+
+    return {
+      triggered: triggeredCount > 0,
+      message: lastSummary,
+    };
+  };
+
+  const totalInvestment = holdings.reduce((sum, h) => {
+    const val = h.averagePrice * h.quantity;
+    return sum + ((h.productType || 'cnc') === 'mis' ? val * 0.20 : val);
+  }, 0);
 
   return (
-    <TradingContext.Provider value={{ balance, holdings, watchlist, buyStock, sellStock, addToWatchlist, removeFromWatchlist, totalInvestment }}>
+    <TradingContext.Provider value={{ 
+      isGuest,
+      balance, 
+      holdings, 
+      watchlist, 
+      transactions,
+      buyStock, 
+      sellStock, 
+      addToWatchlist, 
+      removeFromWatchlist, 
+      totalInvestment,
+      setHoldings,
+      setBalance,
+      fetchTransactions,
+      checkStopLossTriggers
+    }}>
       {children}
     </TradingContext.Provider>
   );

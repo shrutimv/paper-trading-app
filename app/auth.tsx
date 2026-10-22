@@ -2,293 +2,534 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { BASE_URL } from "@/src/config/api";
 import {
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-
-
+import { useTheme } from "../context/ThemeContext";
+import { useGamification } from "../context/GamificationContext";
+import { useAuth } from "../context/AuthContext";
+import { BASE_URL } from "../src/config/api";
 
 export default function AuthScreen() {
   const router = useRouter();
+  const { colors, isDark, toggleTheme } = useTheme();
+  const { proMode, setProMode } = useGamification();
+  const { login, continueAsGuest } = useAuth();
+  const styles = getStyles(colors);
 
   const [isLogin, setIsLogin] = useState(true);
-
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
+  const [otp, setOtp] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
 
+  // --- STEP 1: SEND EMAIL VERIFICATION CODE (ANTI-BOT) ---
+  const handleSendOtp = async () => {
+    if (!email.trim() || !email.includes("@")) {
+      Alert.alert("Invalid Email", "Please enter a valid email address first.");
+      return;
+    }
+
+    setSendingOtp(true);
+    setDevOtpHint(null);
+
+    try {
+      const res = await fetch(`${BASE_URL}/api/auth/send-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        Alert.alert(
+          "Server Updating",
+          "The cloud backend returned a non-JSON response (404). This happens because Render is still running the old code from 'main' where send-otp is not deployed yet."
+        );
+        return;
+      }
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        Alert.alert("Verification Error", data.message || "Failed to send verification code.");
+        return;
+      }
+
+      setOtpSent(true);
+      if (data.devOtp) {
+        setDevOtpHint(data.devOtp);
+      }
+
+      Alert.alert(
+        "Code Sent! 📬",
+        `A 6-digit code has been dispatched to ${email.trim()}. Please enter it below to verify your account.`
+      );
+    } catch (err: any) {
+      console.error("sendOtp error:", err);
+      Alert.alert(
+        "Connection Error",
+        err?.message || "Could not connect to backend server. Please verify backend deployment."
+      );
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  // --- STEP 2: AUTHENTICATE / REGISTER ---
   const handleAuth = async () => {
     if (isLogin) {
-      if (!username || !password) {
-        Alert.alert("Error", "Please fill in all fields");
+      if (!username.trim() || !password) {
+        Alert.alert("Error", "Please fill in both username and password.");
         return;
       }
     } else {
-      if (!username || !email || !password) {
-        Alert.alert("Error", "Please fill in all fields");
+      if (!username.trim() || !email.trim() || !password) {
+        Alert.alert("Error", "Please fill in all fields (username, email, password).");
+        return;
+      }
+      if (!otp.trim()) {
+        Alert.alert("Verification Required", "Please enter the 6-digit verification code sent to your email.");
         return;
       }
     }
 
+    setLoading(true);
     try {
       if (isLogin) {
         // LOGIN
         const response = await fetch(`${BASE_URL}/api/auth/login`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            username,
+            username: username.trim(),
             password,
           }),
         });
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          Alert.alert("Login Failed", data.message);
+        const loginContentType = response.headers.get("content-type");
+        if (!loginContentType || !loginContentType.includes("application/json")) {
+          Alert.alert("Server Notice", "The backend server returned an invalid response. Please try again in a moment.");
+          setLoading(false);
           return;
         }
 
-        await AsyncStorage.setItem(
-          "userSession",
-          JSON.stringify(data.user)
-        );
+        const data = await response.json();
+
+        if (!response.ok) {
+          Alert.alert("Login Failed", data.message || "Invalid credentials");
+          setLoading(false);
+          return;
+        }
+
+        const userData = {
+          ...data.user,
+          isGuest: false,
+        };
+
+        await AsyncStorage.setItem("userSession", JSON.stringify(userData));
+        if (login) await login(userData);
 
         router.replace("/(tabs)");
       } else {
-        // SIGNUP
+        // SIGNUP WITH OTP
         const response = await fetch(`${BASE_URL}/api/auth/signup`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
-            username,
-            email,
+            username: username.trim(),
+            email: email.trim().toLowerCase(),
             password,
+            otp: otp.trim(),
           }),
         });
+
+        const signupContentType = response.headers.get("content-type");
+        if (!signupContentType || !signupContentType.includes("application/json")) {
+          Alert.alert("Server Notice", "Backend service returned a non-JSON response. Please ensure backend is updated.");
+          setLoading(false);
+          return;
+        }
 
         const data = await response.json();
 
         if (!response.ok) {
-          Alert.alert("Signup Failed", data.message);
+          Alert.alert("Signup Failed", data.message || "Unable to register");
+          setLoading(false);
           return;
         }
 
-        Alert.alert("Success", "Account created successfully!");
+        const userData = {
+          ...data.user,
+          isGuest: false,
+        };
 
-        await AsyncStorage.setItem(
-          "userSession",
-          JSON.stringify(data.user)
-        );
+        Alert.alert("Welcome aboard! 🎉", `Account created! Welcome, @${data.user.username}. Start paper trading now!`);
+        await AsyncStorage.setItem("userSession", JSON.stringify(userData));
+        if (login) await login(userData);
 
         router.replace("/(tabs)");
       }
     } catch (err) {
-      console.log(err);
-      Alert.alert("Error", "Unable to connect to the server.");
+      console.log("Auth error:", err);
+      Alert.alert(
+        "Connection Error",
+        "Unable to connect to the backend server. Please verify backend terminal status."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleGuest = async () => {
-    await AsyncStorage.setItem(
-      "userSession",
-      JSON.stringify({ isGuest: true })
-    );
-
+    const guestUser = { username: "Guest User", balance: 100000, isGuest: true };
+    await AsyncStorage.setItem("userSession", JSON.stringify(guestUser));
+    if (continueAsGuest) await continueAsGuest();
     router.replace("/(tabs)");
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.logoText}>PaperTrade</Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.logoText}>PaperTrade</Text>
+        <Text style={styles.subtitle}>
+          {isLogin ? "Welcome Back, Trader" : "Create Verified Account"}
+        </Text>
 
-      <Text style={styles.subtitle}>
-        {isLogin ? "Welcome Back" : "Create Account"}
-      </Text>
-
-      {isLogin ? (
+        {/* USERNAME */}
         <TextInput
-          style={styles.input}
-          placeholder="Username"
+          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.text }]}
+          placeholder="Unique Username (e.g. trader_raj)"
+          placeholderTextColor={colors.textSecondary}
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
-        />
-      ) : (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Username"
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-          />
-
-          <TextInput
-            style={styles.input}
-            placeholder="Email"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </>
-      )}
-
-      <View style={styles.passwordContainer}>
-        <TextInput
-          style={styles.passwordInput}
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry={!showPassword}
+          autoCorrect={false}
         />
 
-        <TouchableOpacity
-          onPress={() => setShowPassword(!showPassword)}
+        {/* EMAIL + SEND OTP ROW (SIGNUP ONLY) */}
+        {!isLogin && (
+          <View style={{ marginBottom: 15 }}>
+            <View style={styles.emailRow}>
+              <TextInput
+                style={[
+                  styles.emailInput,
+                  { backgroundColor: colors.card, borderColor: colors.border, color: colors.text },
+                ]}
+                placeholder="Email Address"
+                placeholderTextColor={colors.textSecondary}
+                value={email}
+                onChangeText={(val) => {
+                  setEmail(val);
+                  setOtpSent(false);
+                }}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                autoCorrect={false}
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.otpSendBtn,
+                  { backgroundColor: otpSent ? '#10b981' : colors.accent },
+                  sendingOtp && { opacity: 0.7 },
+                ]}
+                onPress={handleSendOtp}
+                disabled={sendingOtp}
+                activeOpacity={0.8}
+              >
+                {sendingOtp ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.otpSendBtnText}>{otpSent ? "Resend" : "Send OTP"}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* OTP INPUT BOX */}
+            {otpSent && (
+              <View style={styles.otpContainer}>
+                <View style={[styles.otpBox, { backgroundColor: colors.card, borderColor: '#10b981' }]}>
+                  <Ionicons name="shield-checkmark" size={20} color="#10b981" />
+                  <TextInput
+                    style={[styles.otpTextInput, { color: colors.text }]}
+                    placeholder="Enter 6-digit OTP"
+                    placeholderTextColor={colors.textSecondary}
+                    value={otp}
+                    onChangeText={setOtp}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                  />
+                </View>
+                {devOtpHint && (
+                  <Text style={{ fontSize: 11, color: '#10b981', fontWeight: '800', marginTop: 4 }}>
+                    ⚡ Dev Mode OTP: {devOtpHint}
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* PASSWORD */}
+        <View
+          style={[
+            styles.passwordContainer,
+            { backgroundColor: colors.card, borderColor: colors.border },
+          ]}
         >
-          <Ionicons
-            name={showPassword ? "eye-off-outline" : "eye-outline"}
-            size={22}
-            color="#6b7280"
+          <TextInput
+            style={[styles.passwordInput, { color: colors.text }]}
+            placeholder="Password"
+            placeholderTextColor={colors.textSecondary}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
           />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+            <Ionicons
+              name={showPassword ? "eye-off-outline" : "eye-outline"}
+              size={22}
+              color={colors.textSecondary}
+            />
+          </TouchableOpacity>
+        </View>
+
+        {/* SUBMIT BUTTON */}
+        <TouchableOpacity
+          style={[styles.mainBtn, { backgroundColor: colors.accent }, loading && { opacity: 0.7 }]}
+          onPress={handleAuth}
+          disabled={loading}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.btnText}>
+            {loading ? "Processing..." : isLogin ? "Login to Terminal" : "Verify & Register"}
+          </Text>
         </TouchableOpacity>
-      </View>
 
-      <TouchableOpacity
-        style={styles.mainBtn}
-        onPress={handleAuth}
-      >
-        <Text style={styles.btnText}>
-          {isLogin ? "Login" : "Sign Up"}
-        </Text>
-      </TouchableOpacity>
+        {/* TOGGLE LOGIN / SIGNUP */}
+        <TouchableOpacity
+          onPress={() => {
+            setIsLogin(!isLogin);
+            setUsername("");
+            setEmail("");
+            setPassword("");
+            setOtp("");
+            setOtpSent(false);
+            setDevOtpHint(null);
+          }}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.toggleText, { color: colors.accent }]}>
+            {isLogin ? "Don't have an account? Sign Up with OTP" : "Already have an account? Login"}
+          </Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => {
-          setIsLogin(!isLogin);
-          setUsername("");
-          setEmail("");
-          setPassword("");
-        }}
-      >
-        <Text style={styles.toggleText}>
-          {isLogin
-            ? "Don't have an account? Sign Up"
-            : "Already have an account? Login"}
-        </Text>
-      </TouchableOpacity>
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
-      <View style={styles.divider} />
+        {/* GUEST ACCESS */}
+        <TouchableOpacity
+          style={[styles.guestBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={handleGuest}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="flash-outline" size={18} color={colors.text} style={{ marginRight: 6 }} />
+          <Text style={[styles.guestBtnText, { color: colors.text }]}>Continue as Guest Trader</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.guestBtn}
-        onPress={handleGuest}
-      >
-        <Text style={styles.guestBtnText}>
-          Continue as Guest
-        </Text>
-      </TouchableOpacity>
-    </View>
+        {/* QUICK SETTINGS */}
+        <View style={[styles.settingsForm, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Text style={[styles.settingsTitle, { color: colors.text }]}>Quick Preferences</Text>
+
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: colors.textSecondary }]}>Dark Theme</Text>
+            <Switch
+              value={isDark}
+              onValueChange={toggleTheme}
+              trackColor={{ false: "#767577", true: colors.accent }}
+              thumbColor={isDark ? "#fff" : "#f4f3f4"}
+            />
+          </View>
+
+          <View style={styles.settingRow}>
+            <Text style={[styles.settingLabel, { color: colors.textSecondary }]}>Pro Mode (Skip Locks)</Text>
+            <Switch
+              value={proMode}
+              onValueChange={setProMode}
+              trackColor={{ false: "#767577", true: colors.accent }}
+              thumbColor={proMode ? "#fff" : "#f4f3f4"}
+            />
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    padding: 30,
-    justifyContent: "center",
-  },
-
-  logoText: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#0f62fe",
-    textAlign: "center",
-    marginBottom: 10,
-  },
-
-  subtitle: {
-    fontSize: 18,
-    color: "#6b7280",
-    textAlign: "center",
-    marginBottom: 40,
-  },
-
-  input: {
-    backgroundColor: "#f3f4f6",
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 15,
-    fontSize: 16,
-  },
-
-  passwordContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#f3f4f6",
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-  },
-
-  passwordInput: {
-    flex: 1,
-    paddingVertical: 15,
-    fontSize: 16,
-  },
-
-  mainBtn: {
-    backgroundColor: "#0f62fe",
-    padding: 18,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 10,
-  },
-
-  btnText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-
-  toggleText: {
-    color: "#0f62fe",
-    textAlign: "center",
-    marginTop: 20,
-    fontWeight: "600",
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: "#e5e7eb",
-    marginVertical: 30,
-  },
-
-  guestBtn: {
-    borderWidth: 1,
-    borderColor: "#0f62fe",
-    padding: 15,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-
-  guestBtnText: {
-    color: "#0f62fe",
-    fontWeight: "bold",
-  },
-});
+const getStyles = (colors: any) =>
+  StyleSheet.create({
+    scrollContent: {
+      flexGrow: 1,
+      paddingHorizontal: 26,
+      paddingVertical: 50,
+      justifyContent: "center",
+    },
+    logoText: {
+      fontSize: 32,
+      fontWeight: "900",
+      color: colors.accent,
+      textAlign: "center",
+      marginBottom: 6,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      textAlign: "center",
+      marginBottom: 26,
+      fontWeight: "600",
+    },
+    input: {
+      padding: 14,
+      borderRadius: 14,
+      marginBottom: 14,
+      fontSize: 15,
+      borderWidth: 1,
+    },
+    emailRow: {
+      flexDirection: "row",
+      gap: 10,
+      alignItems: "center",
+    },
+    emailInput: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 14,
+      fontSize: 15,
+      borderWidth: 1,
+    },
+    otpSendBtn: {
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    otpSendBtnText: {
+      color: "#fff",
+      fontSize: 13,
+      fontWeight: "800",
+    },
+    otpContainer: {
+      marginTop: 10,
+    },
+    otpBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      borderWidth: 1.5,
+      gap: 10,
+    },
+    otpTextInput: {
+      flex: 1,
+      paddingVertical: 12,
+      fontSize: 15,
+      fontWeight: "800",
+      letterSpacing: 2,
+    },
+    passwordContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      marginBottom: 16,
+      borderWidth: 1,
+    },
+    passwordInput: {
+      flex: 1,
+      paddingVertical: 14,
+      fontSize: 15,
+    },
+    mainBtn: {
+      padding: 16,
+      borderRadius: 14,
+      alignItems: "center",
+      marginBottom: 16,
+      elevation: 2,
+    },
+    btnText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+    toggleText: {
+      textAlign: "center",
+      fontSize: 14,
+      fontWeight: "700",
+      marginBottom: 20,
+    },
+    divider: {
+      height: 1,
+      marginVertical: 16,
+    },
+    guestBtn: {
+      flexDirection: "row",
+      padding: 14,
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 24,
+      borderWidth: 1,
+    },
+    guestBtnText: {
+      fontSize: 14,
+      fontWeight: "700",
+    },
+    settingsForm: {
+      padding: 16,
+      borderRadius: 16,
+      borderWidth: 1,
+    },
+    settingsTitle: {
+      fontSize: 13,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 1,
+      marginBottom: 12,
+    },
+    settingRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    settingLabel: {
+      fontSize: 14,
+      fontWeight: "600",
+    },
+  });
