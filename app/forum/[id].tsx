@@ -14,8 +14,9 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -25,6 +26,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 interface ForumComment {
   _id: string;
+  author?: string;
+  guestId?: string;
   authorUsername: string;
   text: string;
   likesCount?: number;
@@ -34,6 +37,8 @@ interface ForumComment {
 
 interface FullPost {
   _id: string;
+  author?: string;
+  guestId?: string;
   authorUsername: string;
   title: string;
   content: string;
@@ -46,96 +51,6 @@ interface FullPost {
   createdAt: string;
 }
 
-// Fallback comments for offline/cold-start viewing
-const FALLBACK_COMMENTS_MAP: Record<string, { post: FullPost; comments: ForumComment[] }> = {
-  'fb-1': {
-    post: {
-      _id: 'fb-1',
-      authorUsername: 'Rahul_SwingTrader',
-      title: 'Tata Motors Commercial Vehicles (TMCV) at ₹410: Post-Demerger Analysis',
-      content:
-        'Now that the commercial vehicle entity is trading around ₹410, EV fleet orders and margin expansion make this a solid accumulation zone. With the CV cycle turning positive and infrastructure spending picking up, ₹410 provides a strong support floor. Anyone else buying for long-term?',
-      category: 'ANALYSIS',
-      stockTag: 'TATAMOTORS',
-      likesCount: 24,
-      commentsCount: 3,
-      isLiked: false,
-      isPinned: true,
-      createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    },
-    comments: [
-      {
-        _id: 'c-1',
-        authorUsername: 'Arjun_Capital',
-        text: 'Agreed! Q2 operating margins for heavy CVs expanded by 140 bps. Keeping an eye on the ₹395 stop loss.',
-        createdAt: new Date(Date.now() - 3600000).toISOString(),
-        likesCount: 4,
-        isLiked: false,
-      },
-      {
-        _id: 'c-2',
-        authorUsername: 'Deepak_Trader',
-        text: 'The PV business demerger unlocked significant value. TMCV cash flow generation is best in class among peers.',
-        createdAt: new Date(Date.now() - 1800000).toISOString(),
-        likesCount: 2,
-        isLiked: false,
-      },
-    ],
-  },
-  'fb-2': {
-    post: {
-      _id: 'fb-2',
-      authorUsername: 'Priya_Quant',
-      title: 'Zomato touching ₹249: Blinkit quick-commerce unit economics',
-      content:
-        'Quick commerce EBITDA break-even in 10 major metro clusters is driving this continuous volume. Setting trailing stop-loss at ₹238. Delivery density in Tier-1 cities is driving margins way faster than traditional retail.',
-      category: 'STRATEGY',
-      stockTag: 'ZOMATO',
-      likesCount: 19,
-      commentsCount: 2,
-      isLiked: true,
-      isPinned: false,
-      createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    },
-    comments: [
-      {
-        _id: 'c-3',
-        authorUsername: 'Siddharth_Alpha',
-        text: 'Watch out for Swiggy market share competition in Bangalore and NCR. ₹245-₹250 is key resistance.',
-        createdAt: new Date(Date.now() - 7200000).toISOString(),
-        likesCount: 5,
-        isLiked: false,
-      },
-    ],
-  },
-  'fb-3': {
-    post: {
-      _id: 'fb-3',
-      authorUsername: 'BeginnerTrader_Aman',
-      title: 'What is the exact difference between CNC vs MIS for intraday?',
-      content:
-        'I noticed MIS gives 5x leverage while CNC requires full cash. If I keep MIS past 3:20 PM, does the broker auto square-off at market price? How does this work in our paper trading app?',
-      category: 'QUESTION',
-      stockTag: 'NIFTY50',
-      likesCount: 31,
-      commentsCount: 2,
-      isLiked: false,
-      isPinned: false,
-      createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    },
-    comments: [
-      {
-        _id: 'c-4',
-        authorUsername: 'ProTrader_Kavita',
-        text: 'Yes! MIS (Margin Intraday Square-off) automatically closes your position before market close so you do not carry overnight gap risk. CNC (Cash and Carry) is for holding overnight or delivery.',
-        createdAt: new Date(Date.now() - 14400000).toISOString(),
-        likesCount: 8,
-        isLiked: false,
-      },
-    ],
-  },
-};
-
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -147,8 +62,26 @@ export default function PostDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [newCommentText, setNewCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [guestId, setGuestId] = useState<string>('');
 
   const scrollViewRef = useRef<ScrollView>(null);
+
+  // Load guest ID
+  useEffect(() => {
+    const initGuestId = async () => {
+      try {
+        let stored = await AsyncStorage.getItem('@forum_guest_id');
+        if (!stored) {
+          stored = 'guest_' + Math.random().toString(36).substring(2, 10);
+          await AsyncStorage.setItem('@forum_guest_id', stored);
+        }
+        setGuestId(stored);
+      } catch {
+        // Fallback
+      }
+    };
+    initGuestId();
+  }, []);
 
   const fetchPostDetails = useCallback(async () => {
     if (!id) return;
@@ -156,43 +89,32 @@ export default function PostDetailScreen() {
 
     try {
       const res = await axios.get(`${BASE_URL}/api/forum/posts/${id}`, {
+        params: { guestId },
         withCredentials: true,
-        timeout: 6000,
+        timeout: 10000,
       });
 
       if (res.data?.success && res.data.post) {
         setPost(res.data.post);
         setComments(res.data.comments || []);
-        return;
+      } else {
+        setPost(null);
+        setComments([]);
       }
-    } catch {
-      // Fallback if offline or mock id
-    }
-
-    // Check fallback
-    if (FALLBACK_COMMENTS_MAP[id]) {
-      setPost(FALLBACK_COMMENTS_MAP[id].post);
-      setComments(FALLBACK_COMMENTS_MAP[id].comments);
-    } else {
-      // Generic fallback
-      setPost({
-        _id: id,
-        authorUsername: 'Trader',
-        title: 'Community Discussion',
-        content: 'Analyzing market trends and price action setups.',
-        category: 'ANALYSIS',
-        likesCount: 5,
-        commentsCount: 0,
-        createdAt: new Date().toISOString(),
-      });
+    } catch (err: any) {
+      console.log('Error loading post:', err?.message);
+      setPost(null);
       setComments([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [id]);
+  }, [id, guestId]);
 
   useEffect(() => {
-    fetchPostDetails();
-  }, [fetchPostDetails]);
+    if (guestId) {
+      fetchPostDetails();
+    }
+  }, [guestId, fetchPostDetails]);
 
   const handleTogglePostLike = async () => {
     if (!post) return;
@@ -210,9 +132,13 @@ export default function PostDetailScreen() {
     );
 
     try {
-      await axios.post(`${BASE_URL}/api/forum/posts/${post._id}/like`, {}, { withCredentials: true, timeout: 5000 });
+      await axios.post(
+        `${BASE_URL}/api/forum/posts/${post._id}/like`,
+        { guestId },
+        { withCredentials: true, timeout: 6000 }
+      );
     } catch {
-      // Non-blocking
+      // Revert if failed
     }
   };
 
@@ -223,40 +149,34 @@ export default function PostDetailScreen() {
     setSubmittingComment(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Optimistic comment
-    const optimisticComment: ForumComment = {
-      _id: 'temp-' + Date.now(),
-      authorUsername: user?.username || 'You',
-      text: commentBody,
-      likesCount: 0,
-      isLiked: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    setComments(prev => [...prev, optimisticComment]);
-    setPost(prev => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : null));
-    setNewCommentText('');
+    const authorName = user?.username || (await AsyncStorage.getItem('guestTraderName')) || 'Guest Trader';
 
     try {
       const res = await axios.post(
         `${BASE_URL}/api/forum/posts/${post._id}/comment`,
-        { text: commentBody },
-        { withCredentials: true, timeout: 8000 }
+        {
+          text: commentBody,
+          authorUsername: authorName,
+          guestId,
+        },
+        { withCredentials: true, timeout: 10000 }
       );
 
       if (res.data?.success && res.data.comment) {
-        setComments(prev =>
-          prev.map(c => (c._id === optimisticComment._id ? res.data.comment : c))
-        );
+        setComments(prev => [...prev, res.data.comment]);
+        setPost(prev => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : null));
+        setNewCommentText('');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => {
+          scrollViewRef.current?.scrollToEnd({ animated: true });
+        }, 200);
+      } else {
+        Alert.alert('Comment Failed', res.data?.message || 'Could not post comment.');
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
-      // Keep optimistic comment for offline demo
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to submit comment to server.');
     } finally {
       setSubmittingComment(false);
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 200);
     }
   };
 
@@ -277,6 +197,32 @@ export default function PostDetailScreen() {
     }
   };
 
+  // Check if current user is author of post
+  const isMyPost = Boolean(
+    (user?.username &&
+      user.username !== 'Guest User' &&
+      post?.authorUsername &&
+      post.authorUsername.toLowerCase() === user.username.toLowerCase()) ||
+      (guestId && post?.guestId && post.guestId === guestId)
+  );
+
+  // Check if current user is author of comment
+  const isMyComment = (c: ForumComment) => {
+    const isUserMatch =
+      user?.username &&
+      user.username !== 'Guest User' &&
+      c.authorUsername.toLowerCase() === user.username.toLowerCase();
+    const isGuestMatch = guestId && c.guestId && c.guestId === guestId;
+    return Boolean(isUserMatch || isGuestMatch);
+  };
+
+  const isCommentFromPostAuthor = (c: ForumComment) => {
+    return Boolean(
+      post?.authorUsername &&
+        c.authorUsername.toLowerCase() === post.authorUsername.toLowerCase()
+    );
+  };
+
   const categoryColor =
     post?.category === 'ANALYSIS'
       ? '#2563eb'
@@ -290,7 +236,10 @@ export default function PostDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      {/* Top Navigation Bar */}
+      {/* Hide native Stack navigation header */}
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* Top Custom Navigation Bar */}
       <View style={[styles.headerBar, { borderBottomColor: colors.border }]}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -300,7 +249,7 @@ export default function PostDetailScreen() {
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-          Discussion Thread
+          Discussion
         </Text>
         <View style={{ width: 32 }} />
       </View>
@@ -312,14 +261,14 @@ export default function PostDetailScreen() {
         <ScrollView
           ref={scrollViewRef}
           style={styles.contentScroll}
-          contentContainerStyle={{ paddingBottom: 90 }}
+          contentContainerStyle={{ paddingBottom: 100 }}
           keyboardShouldPersistTaps="handled"
         >
           {loading ? (
             <View style={styles.centerContainer}>
               <ActivityIndicator size="large" color={colors.accent} />
               <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-                Loading thread...
+                Loading discussion...
               </Text>
             </View>
           ) : post ? (
@@ -330,21 +279,28 @@ export default function PostDetailScreen() {
                   styles.mainPostCard,
                   {
                     backgroundColor: colors.card,
-                    borderColor: colors.border,
+                    borderColor: isMyPost ? (isDark ? 'rgba(37,99,235,0.45)' : '#93c5fd') : colors.border,
                   },
                 ]}
               >
                 {/* Author Info & Badges */}
                 <View style={styles.authorSection}>
-                  <View style={[styles.avatar, { backgroundColor: isDark ? 'rgba(37,99,235,0.2)' : '#dbeafe' }]}>
-                    <Text style={styles.avatarText}>
+                  <View style={[styles.avatar, { backgroundColor: isMyPost ? (isDark ? '#1e3a8a' : '#bfdbfe') : (isDark ? 'rgba(37,99,235,0.2)' : '#dbeafe') }]}>
+                    <Text style={[styles.avatarText, isMyPost && { color: '#2563eb' }]}>
                       {post.authorUsername.charAt(0).toUpperCase()}
                     </Text>
                   </View>
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={[styles.authorName, { color: colors.text }]}>
-                      {post.authorUsername}
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={[styles.authorName, { color: colors.text }]}>
+                        {post.authorUsername}
+                      </Text>
+                      {isMyPost && (
+                        <View style={styles.youBadge}>
+                          <Text style={styles.youBadgeText}>YOU</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={[styles.postDate, { color: colors.textSecondary }]}>
                       Posted {formatTime(post.createdAt)}
                     </Text>
@@ -425,88 +381,131 @@ export default function PostDetailScreen() {
                     No comments yet
                   </Text>
                   <Text style={[styles.emptyCommentsDesc, { color: colors.textSecondary }]}>
-                    Share your market outlook or question below to start the conversation!
+                    Be the first to share your market perspective or answer below!
                   </Text>
                 </View>
               ) : (
-                comments.map((item, index) => (
-                  <View
-                    key={item._id || index.toString()}
-                    style={[
-                      styles.commentCard,
-                      {
-                        backgroundColor: colors.card,
-                        borderColor: colors.border,
-                      },
-                    ]}
-                  >
-                    <View style={styles.commentHeader}>
-                      <View style={[styles.commentAvatar, { backgroundColor: isDark ? 'rgba(16,185,129,0.2)' : '#dcfce7' }]}>
-                        <Text style={[styles.commentAvatarText, { color: isDark ? '#34d399' : '#059669' }]}>
-                          {item.authorUsername.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={[styles.commentAuthor, { color: colors.text }]}>
-                          {item.authorUsername}
-                        </Text>
-                        <Text style={[styles.commentTime, { color: colors.textSecondary }]}>
-                          {formatTime(item.createdAt)}
-                        </Text>
-                      </View>
-                    </View>
+                comments.map((item, index) => {
+                  const isMine = isMyComment(item);
+                  const isAuthor = isCommentFromPostAuthor(item);
 
-                    <Text style={[styles.commentText, { color: isDark ? '#e2e8f0' : '#1e293b' }]}>
-                      {item.text}
-                    </Text>
-                  </View>
-                ))
+                  return (
+                    <View
+                      key={item._id || index.toString()}
+                      style={[
+                        styles.commentCard,
+                        {
+                          backgroundColor: colors.card,
+                          borderColor: isMine ? (isDark ? 'rgba(37,99,235,0.35)' : '#bfdbfe') : colors.border,
+                        },
+                      ]}
+                    >
+                      <View style={styles.commentHeader}>
+                        <View style={[styles.commentAvatar, { backgroundColor: isMine ? (isDark ? '#1e3a8a' : '#bfdbfe') : (isDark ? 'rgba(16,185,129,0.2)' : '#dcfce7') }]}>
+                          <Text style={[styles.commentAvatarText, { color: isMine ? '#2563eb' : (isDark ? '#34d399' : '#059669') }]}>
+                            {item.authorUsername.charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={[styles.commentAuthor, { color: colors.text }]}>
+                              {item.authorUsername}
+                            </Text>
+
+                            {isMine && (
+                              <View style={styles.youBadge}>
+                                <Text style={styles.youBadgeText}>YOU</Text>
+                              </View>
+                            )}
+
+                            {isAuthor && !isMine && (
+                              <View style={styles.opBadge}>
+                                <Text style={styles.opBadgeText}>OP</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={[styles.commentTime, { color: colors.textSecondary }]}>
+                            {formatTime(item.createdAt)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <Text style={[styles.commentText, { color: isDark ? '#e2e8f0' : '#1e293b' }]}>
+                        {item.text}
+                      </Text>
+                    </View>
+                  );
+                })
               )}
             </View>
-          ) : null}
+          ) : (
+            <View style={styles.centerContainer}>
+              <Ionicons name="alert-circle-outline" size={48} color={colors.textSecondary} />
+              <Text style={[styles.emptyCommentsTitle, { color: colors.text, marginTop: 12 }]}>
+                Post Not Found
+              </Text>
+              <Text style={[styles.emptyCommentsDesc, { color: colors.textSecondary }]}>
+                This discussion may have been removed or does not exist.
+              </Text>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: colors.accent,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                  marginTop: 16,
+                }}
+                onPress={() => router.back()}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '700' }}>Back to Forum</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </ScrollView>
 
         {/* Sticky Comment Input Bar at the Bottom */}
-        <View
-          style={[
-            styles.bottomInputBar,
-            {
-              backgroundColor: colors.card,
-              borderTopColor: colors.border,
-            },
-          ]}
-        >
-          <TextInput
+        {post && (
+          <View
             style={[
-              styles.commentInput,
+              styles.bottomInputBar,
               {
-                backgroundColor: isDark ? '#0f172a' : '#f8fafc',
-                color: colors.text,
-                borderColor: colors.border,
+                backgroundColor: colors.card,
+                borderTopColor: colors.border,
               },
             ]}
-            placeholder="Write a constructive response..."
-            placeholderTextColor={colors.textSecondary}
-            value={newCommentText}
-            onChangeText={setNewCommentText}
-            multiline
-            maxLength={500}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendBtn,
-              { backgroundColor: newCommentText.trim() ? colors.accent : (isDark ? '#334155' : '#cbd5e1') },
-            ]}
-            disabled={!newCommentText.trim() || submittingComment}
-            onPress={handleAddComment}
           >
-            {submittingComment ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Ionicons name="send" size={17} color="#ffffff" />
-            )}
-          </TouchableOpacity>
-        </View>
+            <TextInput
+              style={[
+                styles.commentInput,
+                {
+                  backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                  color: colors.text,
+                  borderColor: colors.border,
+                },
+              ]}
+              placeholder="Write a constructive response..."
+              placeholderTextColor={colors.textSecondary}
+              value={newCommentText}
+              onChangeText={setNewCommentText}
+              multiline
+              maxLength={600}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                { backgroundColor: newCommentText.trim() ? colors.accent : (isDark ? '#334155' : '#cbd5e1') },
+              ]}
+              disabled={!newCommentText.trim() || submittingComment}
+              onPress={handleAddComment}
+            >
+              {submittingComment ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <Ionicons name="send" size={17} color="#ffffff" />
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -540,6 +539,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 80,
+    paddingHorizontal: 20,
   },
   loadingText: {
     marginTop: 12,
@@ -580,6 +580,32 @@ const styles = StyleSheet.create({
   postDate: {
     fontSize: 12,
     marginTop: 2,
+  },
+  youBadge: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  youBadgeText: {
+    color: '#ffffff',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  opBadge: {
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  opBadgeText: {
+    color: '#10b981',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   badgesWrapper: {
     flexDirection: 'row',

@@ -103,6 +103,8 @@ function RootLayoutContent() {
           <Stack.Screen name="quiz" options={{ presentation: 'modal', title: 'Quiz' }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
           <Stack.Screen name="learn" options={{ headerShown: false }} /> 
+          <Stack.Screen name="forum/index" options={{ headerShown: false }} />
+          <Stack.Screen name="forum/[id]" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style={isDark ? "light" : "dark"} />
         

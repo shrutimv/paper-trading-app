@@ -6,12 +6,36 @@ import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Switch, Text, 
 import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
 
-// IMPORT BOTH GLOBAL CONTEXTS!
 import { RANKS, useGamification } from '../context/GamificationContext';
 import { useTrading } from '../context/TradingContext';
 import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
+import { BASE_URL } from '../src/config/api';
 
 const formatCurrency = (val: number) => "₹" + (val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+interface UserActivityPost {
+  _id: string;
+  title: string;
+  category: string;
+  stockTag?: string;
+  likesCount: number;
+  commentsCount: number;
+  createdAt: string;
+}
+
+interface UserActivityComment {
+  _id: string;
+  text: string;
+  createdAt: string;
+  likesCount: number;
+  post?: {
+    _id: string;
+    title: string;
+    category?: string;
+    stockTag?: string;
+  } | string;
+}
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -27,15 +51,51 @@ export default function ProfileScreen() {
   const { xp, currentRank, nextRank, progressPercent, proMode, setProMode } = useGamification();
   const [isRankModalOpen, setIsRankModalOpen] = useState(false);
 
+  // Reddit-Style Forum Activity States
+  const [activityTab, setActivityTab] = useState<'posts' | 'comments'>('posts');
+  const [userPosts, setUserPosts] = useState<UserActivityPost[]>([]);
+  const [userComments, setUserComments] = useState<UserActivityComment[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+
   useEffect(() => { loadUser(); }, []);
+
+  const loadCommunityActivity = async (currentUser: any) => {
+    try {
+      setLoadingActivity(true);
+      const guestId = await AsyncStorage.getItem('@forum_guest_id');
+      const res = await axios.get(`${BASE_URL}/api/forum/activity`, {
+        params: {
+          userId: currentUser?.id || currentUser?._id,
+          username: currentUser?.username,
+          guestId: guestId || '',
+        },
+        withCredentials: true,
+        timeout: 8000,
+      });
+      if (res.data?.success) {
+        setUserPosts(res.data.posts || []);
+        setUserComments(res.data.comments || []);
+      }
+    } catch (err) {
+      console.log('Error loading user forum activity:', err);
+    } finally {
+      setLoadingActivity(false);
+    }
+  };
 
   const loadUser = async () => {
     try {
       const session = await AsyncStorage.getItem('userSession');
-      if (session) setLocalUser(JSON.parse(session));
+      let parsedUser = null;
+      if (session) {
+        parsedUser = JSON.parse(session);
+        setLocalUser(parsedUser);
+      }
+      loadCommunityActivity(authUser || parsedUser);
     } catch (e) {
       console.error("Failed to load user", e);
     } finally {
+      setLoadingActivity(false);
       setLoading(false);
     }
   };
@@ -209,6 +269,176 @@ export default function ProfileScreen() {
               </View>
             );
           })
+        )}
+      </View>
+
+      {/* ── REDDIT-STYLE COMMUNITY ACTIVITY (MY POSTS & MY COMMENTS) ── */}
+      <View style={styles.communityActivitySection}>
+        <View style={styles.sectionHeaderRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="chatbubbles-outline" size={18} color={colors.accent} style={{ marginRight: 6 }} />
+            <Text style={styles.sectionTitle}>Community Activity</Text>
+          </View>
+          <TouchableOpacity onPress={() => router.push('/forum' as any)}>
+            <Text style={styles.viewAllText}>Open Forum →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Reddit-Style Segmented Control */}
+        <View style={styles.tabSegmentContainer}>
+          <TouchableOpacity
+            style={[styles.tabSegmentBtn, activityTab === 'posts' && styles.tabSegmentBtnActive]}
+            onPress={() => setActivityTab('posts')}
+          >
+            <Ionicons
+              name="newspaper-outline"
+              size={15}
+              color={activityTab === 'posts' ? '#ffffff' : colors.textSecondary}
+              style={{ marginRight: 5 }}
+            />
+            <Text
+              style={[
+                styles.tabSegmentText,
+                activityTab === 'posts' ? styles.tabSegmentTextActive : { color: colors.textSecondary },
+              ]}
+            >
+              My Posts ({userPosts.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabSegmentBtn, activityTab === 'comments' && styles.tabSegmentBtnActive]}
+            onPress={() => setActivityTab('comments')}
+          >
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={15}
+              color={activityTab === 'comments' ? '#ffffff' : colors.textSecondary}
+              style={{ marginRight: 5 }}
+            />
+            <Text
+              style={[
+                styles.tabSegmentText,
+                activityTab === 'comments' ? styles.tabSegmentTextActive : { color: colors.textSecondary },
+              ]}
+            >
+              My Comments ({userComments.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Activity Tab Content */}
+        {loadingActivity ? (
+          <View style={[styles.emptyActivityCard, { paddingVertical: 20 }]}>
+            <ActivityIndicator size="small" color={colors.accent} />
+          </View>
+        ) : activityTab === 'posts' ? (
+          userPosts.length === 0 ? (
+            <View style={styles.emptyActivityCard}>
+              <Text style={styles.emptyActivityText}>You haven't posted in the Traders Lounge yet.</Text>
+              <TouchableOpacity
+                style={styles.actionPillBtn}
+                onPress={() => router.push('/forum' as any)}
+              >
+                <Text style={styles.actionPillBtnText}>Start First Post</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            userPosts.map(p => (
+              <TouchableOpacity
+                key={p._id}
+                style={styles.redditActivityCard}
+                activeOpacity={0.8}
+                onPress={() => router.push(`/forum/${p._id}` as any)}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={styles.youBadge}>
+                      <Text style={styles.youBadgeText}>YOU</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>{p.category}</Text>
+                    {p.stockTag ? (
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>${p.stockTag}</Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.activityDate}>
+                    {new Date(p.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                  </Text>
+                </View>
+
+                <Text style={styles.redditPostTitle} numberOfLines={2}>
+                  {p.title}
+                </Text>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="heart-outline" size={14} color={colors.textSecondary} />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{p.likesCount || 0}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
+                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{p.commentsCount || 0} replies</Text>
+                  </View>
+                  <View style={{ flex: 1 }} />
+                  <Ionicons name="chevron-forward" size={14} color={colors.accent} />
+                </View>
+              </TouchableOpacity>
+            ))
+          )
+        ) : (
+          userComments.length === 0 ? (
+            <View style={styles.emptyActivityCard}>
+              <Text style={styles.emptyActivityText}>You haven't commented on any discussions yet.</Text>
+              <TouchableOpacity
+                style={styles.actionPillBtn}
+                onPress={() => router.push('/forum' as any)}
+              >
+                <Text style={styles.actionPillBtnText}>Explore Discussions</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            userComments.map(c => {
+              const targetPostId = typeof c.post === 'object' && c.post?._id ? c.post._id : (typeof c.post === 'string' ? c.post : null);
+              const targetPostTitle = typeof c.post === 'object' && c.post?.title ? c.post.title : 'Discussion Thread';
+
+              return (
+                <TouchableOpacity
+                  key={c._id}
+                  style={styles.redditActivityCard}
+                  activeOpacity={0.8}
+                  disabled={!targetPostId}
+                  onPress={() => {
+                    if (targetPostId) {
+                      router.push(`/forum/${targetPostId}` as any);
+                    }
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                      <View style={styles.youBadge}>
+                        <Text style={styles.youBadgeText}>YOU</Text>
+                      </View>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1}>
+                        Commented on: <Text style={{ fontWeight: '700', color: colors.text }}>{targetPostTitle}</Text>
+                      </Text>
+                    </View>
+                    <Text style={styles.activityDate}>
+                      {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.redditCommentSnippet} numberOfLines={2}>
+                    "{c.text}"
+                  </Text>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 6, gap: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>View thread</Text>
+                    <Ionicons name="chevron-forward" size={12} color={colors.accent} />
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )
         )}
       </View>
 
@@ -542,4 +772,82 @@ const getStyles = (colors: any) => StyleSheet.create({
 
   questBadgeCard: { width: 110, padding: 10, borderRadius: 14, borderWidth: 1, alignItems: 'center', gap: 4 },
   questBadgeTitle: { fontSize: 11, fontWeight: '800', textAlign: 'center' },
+
+  // --- REDDIT-STYLE COMMUNITY ACTIVITY STYLES ---
+  communityActivitySection: { marginBottom: 20 },
+  tabSegmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: colors.isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
+    borderRadius: 12,
+    padding: 3,
+    marginBottom: 12,
+  },
+  tabSegmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  tabSegmentBtnActive: {
+    backgroundColor: colors.accent,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+  },
+  tabSegmentText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tabSegmentTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  redditActivityCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  redditPostTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.text,
+    lineHeight: 19,
+  },
+  redditCommentSnippet: {
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
+    fontStyle: 'italic',
+  },
+  actionPillBtn: {
+    marginTop: 10,
+    backgroundColor: colors.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 16,
+  },
+  actionPillBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  youBadge: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  youBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
 });
