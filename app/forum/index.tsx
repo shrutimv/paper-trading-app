@@ -14,6 +14,7 @@ import {
   Platform,
   Dimensions,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
@@ -503,21 +504,30 @@ export default function ForumScreen() {
       {/* Create Post Modal */}
       <Modal visible={isCreateOpen} animationType="slide" transparent>
         <SafeAreaView style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>New Discussion</Text>
-                <Text style={styles.modalSub}>Share insights with the community</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+            style={{ width: '100%', maxHeight: '90%', justifyContent: 'flex-end' }}
+          >
+            <View style={styles.modalCard}>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>New Discussion</Text>
+                  <Text style={styles.modalSub}>Share insights with the community</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setIsCreateOpen(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                onPress={() => setIsCreateOpen(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-            </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: '80%' }}>
+              <ScrollView 
+                showsVerticalScrollIndicator={false} 
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
               {/* Category Picker */}
               <Text style={styles.inputLabel}>CATEGORY</Text>
               <View style={styles.modalCategoryRow}>
@@ -597,10 +607,11 @@ export default function ForumScreen() {
               </TouchableOpacity>
             </ScrollView>
           </View>
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
-  );
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  </SafeAreaView>
+);
 }
 
 const getStyles = (colors: any, isDark: boolean) =>

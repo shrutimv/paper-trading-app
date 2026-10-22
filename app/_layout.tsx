@@ -105,6 +105,7 @@ function RootLayoutContent() {
           <Stack.Screen name="learn" options={{ headerShown: false }} /> 
           <Stack.Screen name="forum/index" options={{ headerShown: false }} />
           <Stack.Screen name="forum/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="activity" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style={isDark ? "light" : "dark"} />
         

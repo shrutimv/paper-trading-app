@@ -272,174 +272,69 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* ── REDDIT-STYLE COMMUNITY ACTIVITY (MY POSTS & MY COMMENTS) ── */}
+      {/* ── COMMUNITY ACTIVITY HUB (COMPACT CARD LINKING TO /activity) ── */}
       <View style={styles.communityActivitySection}>
         <View style={styles.sectionHeaderRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="chatbubbles-outline" size={18} color={colors.accent} style={{ marginRight: 6 }} />
             <Text style={styles.sectionTitle}>Community Activity</Text>
           </View>
-          <TouchableOpacity onPress={() => router.push('/forum' as any)}>
-            <Text style={styles.viewAllText}>Open Forum →</Text>
+          <TouchableOpacity onPress={() => router.push('/activity' as any)}>
+            <Text style={styles.viewAllText}>View All ({userPosts.length + userComments.length}) →</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Reddit-Style Segmented Control */}
-        <View style={styles.tabSegmentContainer}>
-          <TouchableOpacity
-            style={[styles.tabSegmentBtn, activityTab === 'posts' && styles.tabSegmentBtnActive]}
-            onPress={() => setActivityTab('posts')}
-          >
-            <Ionicons
-              name="newspaper-outline"
-              size={15}
-              color={activityTab === 'posts' ? '#ffffff' : colors.textSecondary}
-              style={{ marginRight: 5 }}
-            />
-            <Text
-              style={[
-                styles.tabSegmentText,
-                activityTab === 'posts' ? styles.tabSegmentTextActive : { color: colors.textSecondary },
-              ]}
-            >
-              My Posts ({userPosts.length})
-            </Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.activityOverviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          activeOpacity={0.88}
+          onPress={() => router.push('/activity' as any)}
+        >
+          {/* Quick Counter Pills */}
+          <View style={styles.activityStatsRow}>
+            <View style={[styles.activityStatPill, { backgroundColor: isDark ? 'rgba(37,99,235,0.12)' : '#eff6ff' }]}>
+              <Ionicons name="newspaper-outline" size={16} color="#2563eb" style={{ marginRight: 6 }} />
+              <Text style={[styles.activityStatNum, { color: colors.text }]}>{userPosts.length}</Text>
+              <Text style={[styles.activityStatLabel, { color: colors.textSecondary }]}>Discussions</Text>
+            </View>
 
-          <TouchableOpacity
-            style={[styles.tabSegmentBtn, activityTab === 'comments' && styles.tabSegmentBtnActive]}
-            onPress={() => setActivityTab('comments')}
-          >
-            <Ionicons
-              name="chatbubble-ellipses-outline"
-              size={15}
-              color={activityTab === 'comments' ? '#ffffff' : colors.textSecondary}
-              style={{ marginRight: 5 }}
-            />
-            <Text
-              style={[
-                styles.tabSegmentText,
-                activityTab === 'comments' ? styles.tabSegmentTextActive : { color: colors.textSecondary },
-              ]}
-            >
-              My Comments ({userComments.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Activity Tab Content */}
-        {loadingActivity ? (
-          <View style={[styles.emptyActivityCard, { paddingVertical: 20 }]}>
-            <ActivityIndicator size="small" color={colors.accent} />
+            <View style={[styles.activityStatPill, { backgroundColor: isDark ? 'rgba(16,185,129,0.12)' : '#ecfdf5' }]}>
+              <Ionicons name="chatbubble-ellipses-outline" size={16} color="#10b981" style={{ marginRight: 6 }} />
+              <Text style={[styles.activityStatNum, { color: colors.text }]}>{userComments.length}</Text>
+              <Text style={[styles.activityStatLabel, { color: colors.textSecondary }]}>Comments</Text>
+            </View>
           </View>
-        ) : activityTab === 'posts' ? (
-          userPosts.length === 0 ? (
-            <View style={styles.emptyActivityCard}>
-              <Text style={styles.emptyActivityText}>You haven't posted in the Traders Lounge yet.</Text>
-              <TouchableOpacity
-                style={styles.actionPillBtn}
-                onPress={() => router.push('/forum' as any)}
-              >
-                <Text style={styles.actionPillBtnText}>Start First Post</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            userPosts.map(p => (
-              <TouchableOpacity
-                key={p._id}
-                style={styles.redditActivityCard}
-                activeOpacity={0.8}
-                onPress={() => router.push(`/forum/${p._id}` as any)}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <View style={styles.youBadge}>
-                      <Text style={styles.youBadgeText}>YOU</Text>
-                    </View>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>{p.category}</Text>
-                    {p.stockTag ? (
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: colors.textSecondary }}>${p.stockTag}</Text>
-                    ) : null}
-                  </View>
-                  <Text style={styles.activityDate}>
-                    {new Date(p.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                  </Text>
-                </View>
 
-                <Text style={styles.redditPostTitle} numberOfLines={2}>
-                  {p.title}
+          {/* Latest interaction snippet */}
+          {userPosts.length > 0 || userComments.length > 0 ? (
+            <View style={[styles.latestInteractionBox, { borderTopColor: colors.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <View style={styles.youBadge}>
+                  <Text style={styles.youBadgeText}>YOU</Text>
+                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>
+                  {userPosts.length > 0 ? 'Latest Discussion' : 'Latest Comment'}
                 </Text>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="heart-outline" size={14} color={colors.textSecondary} />
-                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{p.likesCount || 0}</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="chatbubble-outline" size={13} color={colors.textSecondary} />
-                    <Text style={{ fontSize: 12, color: colors.textSecondary }}>{p.commentsCount || 0} replies</Text>
-                  </View>
-                  <View style={{ flex: 1 }} />
-                  <Ionicons name="chevron-forward" size={14} color={colors.accent} />
-                </View>
-              </TouchableOpacity>
-            ))
-          )
-        ) : (
-          userComments.length === 0 ? (
-            <View style={styles.emptyActivityCard}>
-              <Text style={styles.emptyActivityText}>You haven't commented on any discussions yet.</Text>
-              <TouchableOpacity
-                style={styles.actionPillBtn}
-                onPress={() => router.push('/forum' as any)}
-              >
-                <Text style={styles.actionPillBtnText}>Explore Discussions</Text>
-              </TouchableOpacity>
+              </View>
+              <Text style={{ fontSize: 13, color: colors.text, fontWeight: '600' }} numberOfLines={1}>
+                {userPosts.length > 0 ? userPosts[0].title : `"${userComments[0].text}"`}
+              </Text>
             </View>
           ) : (
-            userComments.map(c => {
-              const targetPostId = typeof c.post === 'object' && c.post?._id ? c.post._id : (typeof c.post === 'string' ? c.post : null);
-              const targetPostTitle = typeof c.post === 'object' && c.post?.title ? c.post.title : 'Discussion Thread';
+            <View style={[styles.latestInteractionBox, { borderTopColor: colors.border }]}>
+              <Text style={{ fontSize: 12, color: colors.textSecondary }}>
+                No community activity yet. Share your trade setups in Traders Lounge!
+              </Text>
+            </View>
+          )}
 
-              return (
-                <TouchableOpacity
-                  key={c._id}
-                  style={styles.redditActivityCard}
-                  activeOpacity={0.8}
-                  disabled={!targetPostId}
-                  onPress={() => {
-                    if (targetPostId) {
-                      router.push(`/forum/${targetPostId}` as any);
-                    }
-                  }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                      <View style={styles.youBadge}>
-                        <Text style={styles.youBadgeText}>YOU</Text>
-                      </View>
-                      <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1}>
-                        Commented on: <Text style={{ fontWeight: '700', color: colors.text }}>{targetPostTitle}</Text>
-                      </Text>
-                    </View>
-                    <Text style={styles.activityDate}>
-                      {new Date(c.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.redditCommentSnippet} numberOfLines={2}>
-                    "{c.text}"
-                  </Text>
-
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 6, gap: 4 }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: colors.accent }}>View thread</Text>
-                    <Ionicons name="chevron-forward" size={12} color={colors.accent} />
-                  </View>
-                </TouchableOpacity>
-              );
-            })
-          )
-        )}
+          {/* Action Footer */}
+          <View style={[styles.activityCardFooter, { borderTopColor: colors.border }]}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: colors.accent }}>
+              Open My Full Reddit-Style Activity Feed
+            </Text>
+            <Ionicons name="arrow-forward" size={14} color={colors.accent} />
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.menu}>
@@ -773,70 +668,46 @@ const getStyles = (colors: any) => StyleSheet.create({
   questBadgeCard: { width: 110, padding: 10, borderRadius: 14, borderWidth: 1, alignItems: 'center', gap: 4 },
   questBadgeTitle: { fontSize: 11, fontWeight: '800', textAlign: 'center' },
 
-  // --- REDDIT-STYLE COMMUNITY ACTIVITY STYLES ---
+  // --- COMMUNITY ACTIVITY HUB STYLES ---
   communityActivitySection: { marginBottom: 20 },
-  tabSegmentContainer: {
+  activityOverviewCard: {
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+  },
+  activityStatsRow: {
     flexDirection: 'row',
-    backgroundColor: colors.isDark ? 'rgba(255,255,255,0.06)' : '#f1f5f9',
-    borderRadius: 12,
-    padding: 3,
+    gap: 10,
     marginBottom: 12,
   },
-  tabSegmentBtn: {
+  activityStatPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  tabSegmentBtnActive: {
-    backgroundColor: colors.accent,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
+  activityStatNum: {
+    fontSize: 16,
+    fontWeight: '900',
+    marginRight: 6,
   },
-  tabSegmentText: {
+  activityStatLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  tabSegmentTextActive: {
-    color: '#ffffff',
-    fontWeight: '800',
+  latestInteractionBox: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+    marginBottom: 10,
   },
-  redditActivityCard: {
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  redditPostTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.text,
-    lineHeight: 19,
-  },
-  redditCommentSnippet: {
-    fontSize: 13,
-    color: colors.text,
-    lineHeight: 18,
-    fontStyle: 'italic',
-  },
-  actionPillBtn: {
-    marginTop: 10,
-    backgroundColor: colors.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-  },
-  actionPillBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '700',
+  activityCardFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   youBadge: {
     backgroundColor: '#2563eb',
