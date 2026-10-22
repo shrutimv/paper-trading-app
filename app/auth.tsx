@@ -55,6 +55,15 @@ export default function AuthScreen() {
         body: JSON.stringify({ email: email.trim().toLowerCase() }),
       });
 
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        Alert.alert(
+          "Server Updating",
+          "The cloud backend returned a non-JSON response (404). This happens because Render is still running the old code from 'main' where send-otp is not deployed yet."
+        );
+        return;
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
@@ -71,11 +80,11 @@ export default function AuthScreen() {
         "Code Sent! 📬",
         `A 6-digit code has been dispatched to ${email.trim()}. Please enter it below to verify your account.`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error("sendOtp error:", err);
       Alert.alert(
         "Connection Error",
-        "Could not connect to backend server. Make sure port 5000 is running."
+        err?.message || "Could not connect to backend server. Please verify backend deployment."
       );
     } finally {
       setSendingOtp(false);
@@ -114,6 +123,13 @@ export default function AuthScreen() {
           }),
         });
 
+        const loginContentType = response.headers.get("content-type");
+        if (!loginContentType || !loginContentType.includes("application/json")) {
+          Alert.alert("Server Notice", "The backend server returned an invalid response. Please try again in a moment.");
+          setLoading(false);
+          return;
+        }
+
         const data = await response.json();
 
         if (!response.ok) {
@@ -144,6 +160,13 @@ export default function AuthScreen() {
             otp: otp.trim(),
           }),
         });
+
+        const signupContentType = response.headers.get("content-type");
+        if (!signupContentType || !signupContentType.includes("application/json")) {
+          Alert.alert("Server Notice", "Backend service returned a non-JSON response. Please ensure backend is updated.");
+          setLoading(false);
+          return;
+        }
 
         const data = await response.json();
 
