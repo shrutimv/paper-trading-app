@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { QUIZ_DATA } from '../constants/Questions';
 import { recordCourseCompleted, recordPuzzleSolved } from '../src/services/progressService';
 import { useGamification } from '../context/GamificationContext';
 import { useTheme } from '../context/ThemeContext';
