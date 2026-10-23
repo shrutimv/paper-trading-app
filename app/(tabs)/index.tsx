@@ -16,16 +16,12 @@ import {
 } from "react-native";
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import CourseCard from "../../components/CourseCard";
-import HorizontalCardCarousel from "../../components/HorizontalCardCarousel";
 import NewsCarousel from "../../components/NewsCarousel";
-import PaperTradingCard from "../../components/PaperTradingCard";
-import PuzzleCard from "../../components/PuzzleCard";
-import SmallCard from "../../components/SmallCard";
-import SmallCourseCard from "../../components/SmallCourseCard";
+import RecommendedStockCarousel from "../../components/RecommendedStockCarousel";
 import AIRecommendations from "../../components/AIRecommendations";
 import DailyRecapModal from "../../components/DailyRecapModal";
 import { useAuth } from "../../context/AuthContext";
+import { getRealProgress } from "../../src/services/progressService";
 
 // --- THE ANIMATED CARD WRAPPER ---
 const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: string }) => {
@@ -140,26 +136,10 @@ export default function Home() {
         }
         setStreak(currentStreak);
 
-        // 2. Real Puzzles Solved
-        const puzzles = await AsyncStorage.getItem("paper_puzzles_completed");
-        if (puzzles !== null) {
-          setPuzzlesSolved(parseInt(puzzles, 10));
-        } else if (authUser?.puzzlesCompleted) {
-          setPuzzlesSolved(authUser.puzzlesCompleted);
-        } else {
-          setPuzzlesSolved(2); // Initial active user count
-        }
-
-        // 3. Real Courses/Modules Completed
-        const allKeys = await AsyncStorage.getAllKeys();
-        const completedCourses = allKeys.filter((k) => k.startsWith("module_completed_")).length;
-        if (completedCourses > 0) {
-          setCoursesCompletedCount(completedCourses);
-        } else if (authUser?.coursesCompleted?.length) {
-          setCoursesCompletedCount(authUser.coursesCompleted.length);
-        } else {
-          setCoursesCompletedCount(1);
-        }
+        // 2 & 3. Real Puzzles & Courses (reconciled across local storage & DB)
+        const progress = await getRealProgress();
+        setPuzzlesSolved(progress.puzzlesSolved);
+        setCoursesCompletedCount(progress.coursesCompletedCount);
       } catch (e) {
         console.error("Failed to load user and stats", e);
       }
@@ -291,97 +271,9 @@ export default function Home() {
           </View>
         </Animated.View>
 
-        {/* --- PUZZLES SECTION --- */}
+        {/* --- RECOMMENDED STOCK GRAPH (POWERED BY ML & USER PURCHASES) --- */}
         <Animated.View entering={FadeInDown.duration(600).delay(400)}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Daily Puzzles</Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/puzzles")}>
-              <Text style={styles.link}>View all</Text>
-            </TouchableOpacity>
-          </View>
-
-          <AnimatedTabCard href="/(tabs)/puzzles">
-            <View style={styles.cardWrapper}>
-              <PuzzleCard />
-            </View>
-          </AnimatedTabCard>
-        </Animated.View>
-
-        {/* --- HORIZONTAL SKILLS CAROUSEL --- */}
-        <Animated.View entering={FadeInDown.duration(600).delay(450)} style={{ marginTop: 15 }}>
-          <HorizontalCardCarousel cardWidth={260} cardSpacing={14}>
-            <SmallCard 
-              title="Reading Volume" 
-              subtitle="Understand trade volume & price action." 
-              progress={0.6} 
-              onPress={() => router.push("/(tabs)/courses/c1")}
-            />
-            <SmallCard 
-              title="Risk Management" 
-              subtitle="Learn stop-losses and risk mitigation." 
-              tag="Popular" 
-              onPress={() => router.push("/(tabs)/courses/c3")}
-            />
-            <SmallCard 
-              title="Support & Resistance" 
-              subtitle="Identify institutional supply & demand zones." 
-              progress={0.15} 
-              onPress={() => router.push("/(tabs)/courses/c2")}
-            />
-          </HorizontalCardCarousel>
-        </Animated.View>
-
-        {/* --- COURSES SECTION --- */}
-        <Animated.View entering={FadeInDown.duration(600).delay(500)}>
-          <View style={[styles.sectionHeader, { marginTop: 30 }]}>
-            <Text style={styles.sectionTitle}>Active Courses</Text>
-            <TouchableOpacity onPress={() => router.push("/(tabs)/courses")}>
-              <Text style={styles.link}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          <AnimatedTabCard href="/(tabs)/courses/c1">
-            <View style={styles.cardWrapper}>
-              <CourseCard />
-            </View>
-          </AnimatedTabCard>
-
-          <View style={styles.smallCoursesRow}>
-            <View style={{ width: "48%" }}>
-              <AnimatedTabCard href="/(tabs)/courses/c3">
-                <SmallCourseCard
-                  title="Intro to Derivatives"
-                  subtitle="Beginner"
-                  progressLabel="25% complete"
-                  image={require("../../assets/images/smallCourses/1.png")}
-                />
-              </AnimatedTabCard>
-            </View>
-
-            <View style={{ width: "48%" }}>
-              <AnimatedTabCard href="/(tabs)/courses/c5">
-                <SmallCourseCard
-                  title="Fundamental Analysis"
-                  subtitle="Intermediate"
-                  progressLabel="0% complete"
-                  image={require("../../assets/images/smallCourses/2.png")}
-                />
-              </AnimatedTabCard>
-            </View>
-          </View>
-        </Animated.View>
-
-        {/* --- PAPER TRADING SECTION --- */}
-        <Animated.View entering={FadeInDown.duration(600).delay(550)}>
-          <View style={[styles.sectionHeader, { marginTop: 30 }]}>
-            <Text style={styles.sectionTitle}>Paper Trading</Text>
-          </View>
-
-          <AnimatedTabCard href="/(tabs)/trading">
-            <View style={styles.cardWrapper}>
-              <PaperTradingCard />
-            </View>
-          </AnimatedTabCard>
+          <RecommendedStockCarousel />
         </Animated.View>
 
         {/* --- UPCOMING IPOS SECTION --- */}

@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTheme } from "../../../context/ThemeContext";
+import { recordCourseCompleted } from "../../../src/services/progressService";
 
 /* -------------------- types -------------------- */
 type Chapter = { id: string; title: string; duration: string };
@@ -184,6 +185,9 @@ export default function CourseDetails() {
       try {
         const arr = Object.keys(map).filter((k) => map[k]);
         await AsyncStorage.setItem(STORAGE_KEY_PREFIX + courseId, JSON.stringify(arr));
+        if (arr.length > 0) {
+          recordCourseCompleted(courseId).catch(() => {});
+        }
       } catch (e) {
         console.warn("save failed", e);
       }

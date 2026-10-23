@@ -137,6 +137,9 @@ module.exports.login = (req, res) => {
       email: req.user.email,
       balance: req.user.balance,
       xp: req.user.xp || 0,
+      streak: req.user.streak || 1,
+      puzzlesCompleted: req.user.puzzlesCompleted || 0,
+      coursesCompleted: req.user.coursesCompleted || [],
     },
   });
 };
@@ -173,6 +176,9 @@ module.exports.getCurrentUser = async (req, res) => {
       email: user.email,
       balance: user.balance,
       xp: user.xp || 0,
+      streak: user.streak || 1,
+      puzzlesCompleted: user.puzzlesCompleted || 0,
+      coursesCompleted: user.coursesCompleted || [],
       friendsCount: user.friends ? user.friends.length : 0,
     },
   });

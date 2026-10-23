@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { recordPuzzleSolved } from '../src/services/progressService';
 import { useGamification } from '../context/GamificationContext';
 
 const PUZZLES = [
@@ -71,10 +72,7 @@ export default function PlayPuzzleScreen() {
     if (guess === currentPuzzle.correctAnswer) {
       addXp(50); 
       setScore(prev => prev + 1);
-      AsyncStorage.getItem('paper_puzzles_completed').then(v => {
-        const count = v ? parseInt(v) : 0;
-        AsyncStorage.setItem('paper_puzzles_completed', (count + 1).toString());
-      }).catch(() => {});
+      recordPuzzleSolved().catch(() => {});
     } else {
       setHearts(prev => Math.max(0, prev - 1));
     }

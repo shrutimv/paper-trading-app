@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { QUIZ_DATA } from '../constants/Questions';
+import { recordCourseCompleted, recordPuzzleSolved } from '../src/services/progressService';
 import { useGamification } from '../context/GamificationContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -122,6 +122,8 @@ export default function QuizScreen() {
   const saveProgress = async (finalScore: number) => {
     if (finalScore >= Math.ceil(activeQuestions.length * 0.7)) {
       await AsyncStorage.setItem(`module_completed_${moduleId}`, 'true');
+      recordCourseCompleted(`module_${moduleId}`).catch(() => {});
+      recordPuzzleSolved().catch(() => {});
     }
   };
 
