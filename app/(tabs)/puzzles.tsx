@@ -180,7 +180,7 @@ export default function PuzzlesScreen() {
 
   return (
     <PageTransition>
-      <View style={[styles.screen, { paddingTop: insets.top }]}>
+      <View style={styles.screen}>
         
         {/* PREMIUM HEADER WITH RANK & PROGRESS */}
         <View style={styles.header}>
@@ -499,20 +499,20 @@ const getStyles = (colors: any) => StyleSheet.create({
 
   header: {
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 14,
+    paddingTop: 6,
+    paddingBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   greeting: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.textSecondary,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
-  title: { fontSize: 24, fontWeight: "900", color: colors.text, marginTop: 2 },
+  title: { fontSize: 22, fontWeight: "900", color: colors.text, marginTop: 1 },
   rankBadge: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -650,7 +650,7 @@ export default function TradingDashboard() {
 
   return (
     <PageTransition>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView edges={['left', 'right']} style={styles.safe}>
         
         <Toast 
           visible={toast.visible} 
@@ -1705,26 +1705,26 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   
   headerRow: {
-    marginTop: Platform.OS === 'ios' ? 10 : 20,
-    marginBottom: 12,
+    marginTop: 6,
+    marginBottom: 8,
   },
   greeting: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.textSecondary,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   username: {
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: "900",
     color: colors.text,
-    marginTop: 2,
+    marginTop: 1,
   },
   quickActionsToolbar: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 10,
     width: '100%',
   },
   quickActionBtnStudio: {
@@ -1733,8 +1733,8 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#dc2626',
-    paddingVertical: 9,
-    borderRadius: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
   quickActionBtnStudioText: {
     color: '#ffffff',
@@ -1749,8 +1749,8 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : '#eff6ff',
     borderWidth: 1,
     borderColor: isDark ? 'rgba(37,99,235,0.3)' : '#bfdbfe',
-    paddingVertical: 9,
-    borderRadius: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
   quickActionBtnRecapText: {
     color: '#2563eb',
@@ -1917,16 +1917,16 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   logDateText: { fontSize: 11, color: colors.textSecondary, fontWeight: '500' },
 
   walletCard: {
-    padding: 18,
-    borderRadius: 20,
+    padding: 14,
+    borderRadius: 16,
     backgroundColor: colors.card,
-    marginBottom: 16,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: colors.shadowColor,
     shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
   walletHeader: {
@@ -1935,7 +1935,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center',
   },
   walletLabel: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: colors.textSecondary,
     letterSpacing: 0.5,
@@ -1945,15 +1945,15 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(34, 197, 94, 0.12)',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: '#22c55e',
-    marginRight: 6,
+    marginRight: 5,
   },
   statusText: {
     fontSize: 10,
@@ -1961,27 +1961,27 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     fontWeight: '800',
   },
   walletAmount: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '900',
     color: colors.text,
-    marginTop: 6,
+    marginTop: 4,
   },
   walletDivider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: 14,
+    marginVertical: 10,
   },
   walletGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   gridLabel: {
-    fontSize: 11,
+    fontSize: 10,
     color: colors.textSecondary,
     fontWeight: '600',
   },
   gridValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: colors.text,
     marginTop: 2,
@@ -1991,24 +1991,24 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.card,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    height: 48,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 40,
     borderWidth: 1,
     borderColor: colors.border,
-    marginBottom: 14,
+    marginBottom: 10,
   },
   searchInput: {
     flex: 1,
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
   },
   resultsDropdown: {
     backgroundColor: colors.card,
-    borderRadius: 14,
-    padding: 8,
-    marginBottom: 14,
+    borderRadius: 12,
+    padding: 6,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: colors.border,
     elevation: 4,
@@ -2017,22 +2017,22 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
+    padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  resultSymbol: { fontSize: 14, fontWeight: '800', color: colors.text },
-  resultName: { fontSize: 12, color: colors.textSecondary, maxWidth: 180 },
-  rowBuyBtn: { backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
-  rowBuyBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+  resultSymbol: { fontSize: 13, fontWeight: '800', color: colors.text },
+  resultName: { fontSize: 11, color: colors.textSecondary, maxWidth: 180 },
+  rowBuyBtn: { backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
+  rowBuyBtnText: { color: '#fff', fontWeight: '800', fontSize: 11 },
 
   // Unified Top Segment Switcher
   mainSegmentNav: {
     flexDirection: 'row',
     backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 3,
-    marginBottom: 16,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
   },
@@ -2041,9 +2041,9 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 9,
+    paddingVertical: 7,
     paddingHorizontal: 2,
-    borderRadius: 10,
+    borderRadius: 9,
   },
   mainSegmentBtnActive: {
     backgroundColor: colors.accent,

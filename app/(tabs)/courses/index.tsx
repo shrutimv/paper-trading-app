@@ -70,7 +70,7 @@ export default function CoursesScreen() {
 
   return (
     <PageTransition>
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={['left', 'right']} style={styles.safe}>
       
       {/* PREMIUM HEADER */}
       <View style={styles.topNav}>
@@ -113,7 +113,7 @@ export default function CoursesScreen() {
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={{ paddingHorizontal: H_GUTTER, paddingBottom: 100, paddingTop: 10 }}
+        contentContainerStyle={{ paddingHorizontal: H_GUTTER, paddingBottom: 100, paddingTop: 4 }}
         renderItem={renderCourse}
         showsVerticalScrollIndicator={false}
       />
@@ -128,8 +128,8 @@ const getStyles = (colors: any) => StyleSheet.create({
 
   topNav: {
     paddingHorizontal: 20,
-    marginTop: Platform.OS === 'ios' ? 10 : 30,
-    marginBottom: 20,
+    marginTop: 6,
+    marginBottom: 8,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -138,19 +138,19 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: 'column',
   },
   greeting: {
-    fontSize: 12,
+    fontSize: 10,
     color: colors.textSecondary,
     fontWeight: "700",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
-  title: { fontSize: 26, fontWeight: "900", color: colors.text, marginTop: 2 },
+  title: { fontSize: 22, fontWeight: "900", color: colors.text, marginTop: 1 },
   
   notificationBtn: {
     backgroundColor: colors.card,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -159,25 +159,25 @@ const getStyles = (colors: any) => StyleSheet.create({
 
   searchWrap: {
     marginHorizontal: 20,
-    marginBottom: 15,
+    marginBottom: 10,
     backgroundColor: colors.card,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 40,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: colors.shadowColor,
     shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
     elevation: 1,
   },
   searchInput: {
-    marginLeft: 12,
+    marginLeft: 10,
     flex: 1,
-    fontSize: 15,
+    fontSize: 13,
     color: colors.text,
     fontWeight: '500',
   },

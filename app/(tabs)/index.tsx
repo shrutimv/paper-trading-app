@@ -451,7 +451,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     maxWidth: 1100,
     alignSelf: "center",
     paddingHorizontal: Platform.OS === "web" ? 32 : 0,
-    paddingTop: 12,
+    paddingTop: 4,
   },
   
   /* --- HEADERS --- */
@@ -460,21 +460,21 @@ const getStyles = (colors: any) => StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    paddingTop: 10,
-    marginBottom: 25,
+    paddingTop: 6,
+    marginBottom: 14,
   },
   greeting: {
     color: colors.textSecondary, // Slate secondary
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   username: {
     color: colors.text, // Pure white
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "900",
-    marginTop: 2,
+    marginTop: 1,
   },
 
   /* --- STATS DASHBOARD --- */
@@ -482,7 +482,7 @@ const getStyles = (colors: any) => StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    marginBottom: 25,
+    marginBottom: 16,
     gap: 10,
   },
   statTile: {
