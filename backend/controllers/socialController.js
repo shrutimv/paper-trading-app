@@ -26,6 +26,8 @@ module.exports.getLeaderboard = async (req, res) => {
 
     let friendsLeaderboard = [];
     let currentUserRank = null;
+    let friendUsernames = [];
+    let requestedUsernames = [];
 
     if (req.user) {
       // Find current user's global rank
@@ -43,6 +45,11 @@ module.exports.getLeaderboard = async (req, res) => {
         .lean();
 
       if (currentUserDoc) {
+        friendUsernames = (currentUserDoc.friends || []).map((f) => (f.username || "").toLowerCase());
+
+        const usersWithOurReq = await User.find({ "friendRequests.from": req.user._id }).select("username").lean();
+        requestedUsernames = usersWithOurReq.map((u) => (u.username || "").toLowerCase());
+
         const circle = [
           {
             id: currentUserDoc._id,
@@ -77,6 +84,8 @@ module.exports.getLeaderboard = async (req, res) => {
       global: formattedGlobal,
       friends: friendsLeaderboard,
       currentUserRank,
+      friendUsernames,
+      requestedUsernames,
     });
   } catch (err) {
     console.error("getLeaderboard error:", err);
@@ -110,6 +119,8 @@ module.exports.getFriends = async (req, res) => {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
+    const friendIdSet = new Set((user.friends || []).map((f) => String(f._id || f)));
+
     res.status(200).json({
       success: true,
       myUsername: user.username,
@@ -122,7 +133,7 @@ module.exports.getFriends = async (req, res) => {
         bio: f.bio || "",
       })),
       incomingRequests: (user.friendRequests || [])
-        .filter((r) => r.from)
+        .filter((r) => r.from && !friendIdSet.has(String(r.from._id || r.from)))
         .map((r) => ({
           requestId: r._id,
           fromUser: {
@@ -245,15 +256,19 @@ module.exports.sendFriendRequest = async (req, res) => {
 
     // Check if already friends
     const currentUser = await User.findById(req.user._id);
-    if (currentUser.friends && currentUser.friends.includes(targetUser._id)) {
+    const isAlreadyFriend =
+      (currentUser.friends || []).some((f) => String(f) === String(targetUser._id)) ||
+      (targetUser.friends || []).some((f) => String(f) === String(currentUser._id));
+
+    if (isAlreadyFriend) {
       return res.status(400).json({
         success: false,
         message: `You and @${targetUser.username} are already friends!`,
       });
     }
 
-    // Check if request already pending
-    const existingReq = targetUser.friendRequests.find(
+    // Check if request already sent by us
+    const existingReq = (targetUser.friendRequests || []).find(
       (r) => String(r.from) === String(req.user._id)
     );
     if (existingReq) {
@@ -263,7 +278,36 @@ module.exports.sendFriendRequest = async (req, res) => {
       });
     }
 
-    // Push request
+    // Check if targetUser already sent US a request (mutual connect: auto-accept!)
+    const mutualIncomingReq = (currentUser.friendRequests || []).find(
+      (r) => String(r.from) === String(targetUser._id)
+    );
+    if (mutualIncomingReq) {
+      currentUser.friendRequests = (currentUser.friendRequests || []).filter(
+        (r) => String(r.from) !== String(targetUser._id)
+      );
+      targetUser.friendRequests = (targetUser.friendRequests || []).filter(
+        (r) => String(r.from) !== String(currentUser._id)
+      );
+
+      if (!currentUser.friends.some((f) => String(f) === String(targetUser._id))) {
+        currentUser.friends.push(targetUser._id);
+      }
+      if (!targetUser.friends.some((f) => String(f) === String(currentUser._id))) {
+        targetUser.friends.push(currentUser._id);
+      }
+
+      await currentUser.save();
+      await targetUser.save();
+
+      return res.status(200).json({
+        success: true,
+        message: `@${targetUser.username} already sent you a request! You are now friends! 🎉`,
+        isFriend: true,
+      });
+    }
+
+    // Push request to target user
     targetUser.friendRequests.push({ from: req.user._id });
     await targetUser.save();
 
@@ -299,14 +343,29 @@ module.exports.respondFriendRequest = async (req, res) => {
       return res.status(404).json({ success: false, message: "Requester not found." });
     }
 
-    // Remove from friendRequests
-    user.friendRequests = user.friendRequests.filter(
+    // Remove from both users' friendRequests
+    user.friendRequests = (user.friendRequests || []).filter(
       (r) => String(r.from) !== String(requesterId)
+    );
+    requester.friendRequests = (requester.friendRequests || []).filter(
+      (r) => String(r.from) !== String(user._id)
     );
 
     if (action === "ACCEPT") {
-      if (!user.friends.includes(requesterId)) user.friends.push(requesterId);
-      if (!requester.friends.includes(user._id)) requester.friends.push(user._id);
+      const userHasFriend = (user.friends || []).some(
+        (f) => String(f) === String(requester._id)
+      );
+      if (!userHasFriend) {
+        user.friends.push(requester._id);
+      }
+
+      const requesterHasFriend = (requester.friends || []).some(
+        (f) => String(f) === String(user._id)
+      );
+      if (!requesterHasFriend) {
+        requester.friends.push(user._id);
+      }
+
       await requester.save();
     }
 

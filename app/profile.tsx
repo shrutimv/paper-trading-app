@@ -10,7 +10,8 @@ import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
 import { RANKS, useGamification } from '../context/GamificationContext';
 import { useTrading } from '../context/TradingContext';
-import { BASE_URL } from '../src/config/api';
+import { BASE_URL, getAuthHeaders } from '../src/config/api';
+import { APP_VERSION } from '../constants/version';
 
 const formatCurrency = (val: number) => "₹" + (val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -56,6 +57,7 @@ export default function ProfileScreen() {
   const [userPosts, setUserPosts] = useState<UserActivityPost[]>([]);
   const [userComments, setUserComments] = useState<UserActivityComment[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
+  const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
 
   useEffect(() => { loadUser(); }, []);
 
@@ -83,6 +85,22 @@ export default function ProfileScreen() {
     }
   };
 
+  const loadFriendsRequests = async () => {
+    try {
+      const authHeaders = await getAuthHeaders();
+      const res = await axios.get(`${BASE_URL}/api/social/friends`, {
+        headers: authHeaders,
+        withCredentials: true,
+        timeout: 8000,
+      });
+      if (res.data?.success && Array.isArray(res.data.incomingRequests)) {
+        setPendingRequestsCount(res.data.incomingRequests.length);
+      }
+    } catch {
+      // non-blocking
+    }
+  };
+
   const loadUser = async () => {
     try {
       const session = await AsyncStorage.getItem('userSession');
@@ -92,6 +110,7 @@ export default function ProfileScreen() {
         setLocalUser(parsedUser);
       }
       loadCommunityActivity(authUser || parsedUser);
+      loadFriendsRequests();
     } catch (e) {
       console.error("Failed to load user", e);
     } finally {
@@ -262,20 +281,49 @@ export default function ProfileScreen() {
                 padding: 16,
                 borderRadius: 18,
                 borderWidth: 1,
-                borderColor: colors.accent + '50',
+                borderColor: pendingRequestsCount > 0 ? '#ef444490' : colors.accent + '50',
+                position: 'relative',
               }}
               onPress={() => router.push('/friends' as any)}
               activeOpacity={0.8}
             >
+              {pendingRequestsCount > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 10,
+                    right: 10,
+                    backgroundColor: '#ef4444',
+                    borderRadius: 10,
+                    minWidth: 18,
+                    height: 18,
+                    paddingHorizontal: 4,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 2,
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>
+                    {pendingRequestsCount}
+                  </Text>
+                </View>
+              )}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: colors.accent + '15', alignItems: 'center', justifyContent: 'center' }}>
-                  <Ionicons name="people" size={20} color={colors.accent} />
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: pendingRequestsCount > 0 ? '#ef444420' : colors.accent + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ionicons name="people" size={20} color={pendingRequestsCount > 0 ? '#ef4444' : colors.accent} />
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
               </View>
               <Text style={{ fontSize: 16, fontWeight: '900', color: colors.text }}>Friends</Text>
-              <Text style={{ fontSize: 12, color: colors.accent, fontWeight: '800', marginTop: 2 }}>
-                Search @username
+              <Text
+                style={{
+                  fontSize: 12,
+                  color: pendingRequestsCount > 0 ? '#ef4444' : colors.accent,
+                  fontWeight: '800',
+                  marginTop: 2,
+                }}
+              >
+                {pendingRequestsCount > 0 ? `${pendingRequestsCount} new request${pendingRequestsCount > 1 ? 's' : ''}` : 'Search @username'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -445,6 +493,13 @@ export default function ProfileScreen() {
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <Text style={styles.logoutText}>Log Out & Reset Session</Text>
         </TouchableOpacity>
+
+        {/* APP VERSION INDICATOR */}
+        <View style={{ alignItems: 'center', marginTop: 16, marginBottom: 32 }}>
+          <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', letterSpacing: 0.5 }}>
+            PaperTrade App • {APP_VERSION} (OTA Release)
+          </Text>
+        </View>
 
         {/* THE RANK JOURNEY MODAL (ROAD TO DIAMOND) */}
         <Modal visible={isRankModalOpen} transparent={true} animationType="slide">

@@ -87,6 +87,24 @@ passport.use(new LocalStrategy(User.authenticate()));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
+// Mobile App Authentication Fallback: If session cookie is missing, resolve req.user via x-user-id header
+app.use(async (req, res, next) => {
+    if (!req.user) {
+        const userId = req.headers["x-user-id"];
+        if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+            try {
+                const foundUser = await User.findById(userId);
+                if (foundUser) {
+                    req.user = foundUser;
+                }
+            } catch (e) {
+                // Ignore fallback error
+            }
+        }
+    }
+    next();
+});
+
 
 //auth
 app.use("/api/auth", authRoutes);

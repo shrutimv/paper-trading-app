@@ -19,6 +19,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useGamification } from "../context/GamificationContext";
 import { useAuth } from "../context/AuthContext";
 import { BASE_URL } from "../src/config/api";
+import { APP_VERSION } from "../constants/version";
 
 export default function AuthScreen() {
   const router = useRouter();
@@ -384,6 +385,13 @@ export default function AuthScreen() {
               thumbColor={proMode ? "#fff" : "#f4f3f4"}
             />
           </View>
+        </View>
+
+        {/* APP VERSION SUBTLE FOOTER */}
+        <View style={{ alignItems: "center", marginTop: 22, marginBottom: 8 }}>
+          <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: "600", opacity: 0.6 }}>
+            PaperTrade App • {APP_VERSION}
+          </Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

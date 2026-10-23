@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   RefreshControl,
   ScrollView,
@@ -15,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import PageTransition from "@/components/PageTransition";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { BASE_URL } from "../src/config/api";
+import { BASE_URL, getAuthHeaders } from "../src/config/api";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -42,25 +43,60 @@ export default function LeaderboardScreen() {
   const [currentUserRank, setCurrentUserRank] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [friendUsernames, setFriendUsernames] = useState<Set<string>>(new Set());
+  const [requestedUsernames, setRequestedUsernames] = useState<Set<string>>(new Set());
+  const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
+  const [sendingMap, setSendingMap] = useState<Record<string, boolean>>({});
 
   const fetchLeaderboard = useCallback(async () => {
     try {
-      const res = await fetch(`${BASE_URL}/api/social/leaderboard`, {
-        credentials: "include",
-      });
+      const authHeaders = await getAuthHeaders();
+      const [leaderboardRes, friendsRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/social/leaderboard`, {
+          headers: authHeaders,
+          credentials: "include",
+        }),
+        fetch(`${BASE_URL}/api/social/friends`, {
+          headers: authHeaders,
+          credentials: "include",
+        }),
+      ]);
 
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        console.warn("[Leaderboard] Backend returned non-JSON response:", res.status);
-        return;
+      if (leaderboardRes.ok) {
+        const contentType = leaderboardRes.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const data = await leaderboardRes.json();
+          if (data.success) {
+            setGlobalList(data.global || []);
+            setFriendsList(data.friends || []);
+            setCurrentUserRank(data.currentUserRank || null);
+            if (Array.isArray(data.friendUsernames)) {
+              setFriendUsernames(new Set(data.friendUsernames.map((u: string) => u.toLowerCase())));
+            }
+            if (Array.isArray(data.requestedUsernames)) {
+              setRequestedUsernames(new Set(data.requestedUsernames.map((u: string) => u.toLowerCase())));
+            }
+          }
+        }
       }
 
-      const data = await res.json();
-
-      if (data.success) {
-        setGlobalList(data.global || []);
-        setFriendsList(data.friends || []);
-        setCurrentUserRank(data.currentUserRank || null);
+      if (friendsRes.ok) {
+        const friendsType = friendsRes.headers.get("content-type");
+        if (friendsType && friendsType.includes("application/json")) {
+          const friendsData = await friendsRes.json();
+          if (friendsData.success) {
+            if (Array.isArray(friendsData.incomingRequests)) {
+              setPendingRequestsCount(friendsData.incomingRequests.length);
+            }
+            if (Array.isArray(friendsData.friends)) {
+              setFriendUsernames((prev) => {
+                const next = new Set(prev);
+                friendsData.friends.forEach((f: any) => next.add((f.username || "").toLowerCase()));
+                return next;
+              });
+            }
+          }
+        }
       }
     } catch (err) {
       console.error("fetchLeaderboard error:", err);
@@ -69,6 +105,124 @@ export default function LeaderboardScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  const handleSendFriendRequest = async (targetUsername: string) => {
+    if (!user || user.isGuest) {
+      Alert.alert("Log In Required", "Please log in with your account to send friend requests.");
+      return;
+    }
+    const clean = targetUsername.trim().replace(/^@/, "");
+    if (user.username && clean.toLowerCase() === user.username.toLowerCase()) {
+      return;
+    }
+    if (friendUsernames.has(clean.toLowerCase())) {
+      Alert.alert("Already Friends", `You and @${clean} are already friends!`);
+      return;
+    }
+    if (requestedUsernames.has(clean.toLowerCase())) {
+      Alert.alert("Request Pending", `Friend request already sent to @${clean}. Awaiting approval.`);
+      return;
+    }
+
+    try {
+      setSendingMap((prev) => ({ ...prev, [clean.toLowerCase()]: true }));
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/social/friends/request`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
+        credentials: "include",
+        body: JSON.stringify({ username: clean }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        Alert.alert("Request Sent", data.message || `Friend request sent to @${clean}!`);
+        setRequestedUsernames((prev) => new Set([...prev, clean.toLowerCase()]));
+        if (data.autoAccepted) {
+          setFriendUsernames((prev) => new Set([...prev, clean.toLowerCase()]));
+        }
+      } else {
+        Alert.alert("Friend Request", data.message || "Failed to send request.");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Network error. Please try again.");
+    } finally {
+      setSendingMap((prev) => ({ ...prev, [clean.toLowerCase()]: false }));
+    }
+  };
+
+  const handleTraderClick = (targetUsername: string) => {
+    if (!targetUsername) return;
+    const clean = targetUsername.trim().replace(/^@/, "");
+    if (user && user.username && clean.toLowerCase() === user.username.toLowerCase()) {
+      return;
+    }
+    if (friendUsernames.has(clean.toLowerCase())) {
+      Alert.alert("Friends", `You and @${clean} are already connected as friends!`);
+      return;
+    }
+    if (requestedUsernames.has(clean.toLowerCase())) {
+      Alert.alert("Request Pending", `Friend request already sent to @${clean}. Awaiting approval.`);
+      return;
+    }
+    Alert.alert(
+      "Connect on PaperTrade",
+      `Would you like to send a friend request to @${clean}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Send Request", onPress: () => handleSendFriendRequest(clean) },
+      ]
+    );
+  };
+
+  const renderFriendStatusButton = (targetUsername: string) => {
+    if (!targetUsername) return null;
+    const clean = targetUsername.toLowerCase();
+    const isMe = user && (user.username || "").toLowerCase() === clean;
+    if (isMe) return null;
+
+    const isFriend = friendUsernames.has(clean);
+    const isRequested = requestedUsernames.has(clean);
+    const isSending = !!sendingMap[clean];
+
+    if (isFriend) {
+      return (
+        <View style={[styles.friendStatusPill, { backgroundColor: '#10b98120', borderColor: '#10b98150' }]}>
+          <Ionicons name="checkmark-circle" size={13} color="#10b981" />
+          <Text style={[styles.friendStatusText, { color: '#10b981' }]}>Friends</Text>
+        </View>
+      );
+    }
+
+    if (isRequested) {
+      return (
+        <View style={[styles.friendStatusPill, { backgroundColor: colors.border, borderColor: colors.border }]}>
+          <Ionicons name="time-outline" size={13} color={colors.textSecondary} />
+          <Text style={[styles.friendStatusText, { color: colors.textSecondary }]}>Requested</Text>
+        </View>
+      );
+    }
+
+    return (
+      <TouchableOpacity
+        style={[styles.addFriendActionBtn, { backgroundColor: colors.accent }]}
+        onPress={() => handleSendFriendRequest(targetUsername)}
+        disabled={isSending}
+        activeOpacity={0.7}
+      >
+        {isSending ? (
+          <ActivityIndicator size="small" color="#fff" />
+        ) : (
+          <>
+            <Ionicons name="person-add" size={12} color="#fff" />
+            <Text style={styles.addFriendActionBtnText}>Add</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   useEffect(() => {
     fetchLeaderboard();
@@ -98,11 +252,39 @@ export default function LeaderboardScreen() {
             <Text style={styles.headerTitle}>Leaderboard</Text>
           </View>
           <TouchableOpacity
-            style={[styles.friendsNavBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            style={[
+              styles.friendsNavBtn,
+              {
+                backgroundColor: colors.card,
+                borderColor: pendingRequestsCount > 0 ? "#ef4444" : colors.border,
+                position: "relative",
+              },
+            ]}
             onPress={() => router.push("/friends" as any)}
             activeOpacity={0.8}
           >
-            <Ionicons name="people" size={18} color={colors.accent} />
+            {pendingRequestsCount > 0 && (
+              <View
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  backgroundColor: "#ef4444",
+                  borderRadius: 8,
+                  minWidth: 16,
+                  height: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingHorizontal: 3,
+                  borderWidth: 1.5,
+                  borderColor: colors.card,
+                  zIndex: 2,
+                }}
+              >
+                <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{pendingRequestsCount}</Text>
+              </View>
+            )}
+            <Ionicons name="people" size={18} color={pendingRequestsCount > 0 ? "#ef4444" : colors.accent} />
           </TouchableOpacity>
         </View>
 
@@ -174,7 +356,11 @@ export default function LeaderboardScreen() {
             {displayList.length > 0 ? (
               <View style={[styles.podiumContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 {/* 2ND PLACE */}
-                <View style={[styles.podiumColumn, { marginTop: 28 }]}>
+                <TouchableOpacity
+                  style={[styles.podiumColumn, { marginTop: 28 }]}
+                  onPress={() => top2 && handleTraderClick(top2.username)}
+                  activeOpacity={0.8}
+                >
                   <View style={[styles.podiumAvatarBox, { borderColor: "#94a3b8" }]}>
                     <Text style={styles.podiumAvatarText}>
                       {top2 ? top2.username.charAt(0).toUpperCase() : "-"}
@@ -189,13 +375,22 @@ export default function LeaderboardScreen() {
                   <Text style={[styles.podiumXp, { color: colors.textSecondary }]}>
                     {top2 ? `${top2.xp.toLocaleString()} XP` : "-"}
                   </Text>
+                  {top2 && (
+                    <View style={{ marginBottom: 6 }}>
+                      {renderFriendStatusButton(top2.username)}
+                    </View>
+                  )}
                   <View style={[styles.podiumPillar, { height: 60, backgroundColor: "#94a3b830" }]}>
                     <Ionicons name="medal" size={24} color="#94a3b8" />
                   </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* 1ST PLACE (CROWN) */}
-                <View style={styles.podiumColumn}>
+                <TouchableOpacity
+                  style={styles.podiumColumn}
+                  onPress={() => top1 && handleTraderClick(top1.username)}
+                  activeOpacity={0.8}
+                >
                   <Ionicons name="ribbon" size={26} color="#eab308" style={{ marginBottom: 2 }} />
                   <View style={[styles.podiumAvatarBox, { borderColor: "#eab308", transform: [{ scale: 1.1 }] }]}>
                     <Text style={[styles.podiumAvatarText, { fontSize: 20 }]}>
@@ -214,13 +409,22 @@ export default function LeaderboardScreen() {
                   <Text style={[styles.podiumXp, { color: "#eab308", fontWeight: "800" }]}>
                     {top1 ? `${top1.xp.toLocaleString()} XP` : "-"}
                   </Text>
+                  {top1 && (
+                    <View style={{ marginBottom: 6 }}>
+                      {renderFriendStatusButton(top1.username)}
+                    </View>
+                  )}
                   <View style={[styles.podiumPillar, { height: 86, backgroundColor: "#eab30830" }]}>
                     <Ionicons name="trophy" size={28} color="#eab308" />
                   </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* 3RD PLACE */}
-                <View style={[styles.podiumColumn, { marginTop: 38 }]}>
+                <TouchableOpacity
+                  style={[styles.podiumColumn, { marginTop: 38 }]}
+                  onPress={() => top3 && handleTraderClick(top3.username)}
+                  activeOpacity={0.8}
+                >
                   <View style={[styles.podiumAvatarBox, { borderColor: "#d97706" }]}>
                     <Text style={styles.podiumAvatarText}>
                       {top3 ? top3.username.charAt(0).toUpperCase() : "-"}
@@ -235,10 +439,15 @@ export default function LeaderboardScreen() {
                   <Text style={[styles.podiumXp, { color: colors.textSecondary }]}>
                     {top3 ? `${top3.xp.toLocaleString()} XP` : "-"}
                   </Text>
+                  {top3 && (
+                    <View style={{ marginBottom: 6 }}>
+                      {renderFriendStatusButton(top3.username)}
+                    </View>
+                  )}
                   <View style={[styles.podiumPillar, { height: 50, backgroundColor: "#d9770630" }]}>
                     <Ionicons name="medal" size={22} color="#d97706" />
                   </View>
-                </View>
+                </TouchableOpacity>
               </View>
             ) : (
               <View style={[styles.emptyBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -269,7 +478,7 @@ export default function LeaderboardScreen() {
                   const isMe = user && trader.username === user.username;
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={trader.id}
                       style={[
                         styles.traderRow,
@@ -278,6 +487,8 @@ export default function LeaderboardScreen() {
                           borderColor: isMe ? colors.accent : colors.border,
                         },
                       ]}
+                      onPress={() => handleTraderClick(trader.username)}
+                      activeOpacity={0.8}
                     >
                       <View style={styles.rankNumBox}>
                         <Text style={[styles.rankNum, { color: isMe ? colors.accent : colors.textSecondary }]}>
@@ -312,6 +523,8 @@ export default function LeaderboardScreen() {
                         </Text>
                       </View>
 
+                      {renderFriendStatusButton(trader.username)}
+
                       <View style={{ alignItems: "flex-end" }}>
                         <Text style={[styles.traderXp, { color: colors.accent }]}>
                           {trader.xp.toLocaleString()} XP
@@ -320,7 +533,7 @@ export default function LeaderboardScreen() {
                           ₹{trader.balance.toLocaleString()}
                         </Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -638,6 +851,32 @@ const getStyles = (colors: any) =>
     },
     pinnedShareText: {
       fontSize: 13,
+      fontWeight: "800",
+    },
+    friendStatusPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+      borderWidth: 1,
+    },
+    friendStatusText: {
+      fontSize: 10,
+      fontWeight: "800",
+    },
+    addFriendActionBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+    addFriendActionBtnText: {
+      color: "#fff",
+      fontSize: 11,
       fontWeight: "800",
     },
   });

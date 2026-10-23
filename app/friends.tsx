@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import PageTransition from "@/components/PageTransition";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
-import { BASE_URL } from "../src/config/api";
+import { BASE_URL, getAuthHeaders } from "../src/config/api";
 
 interface Friend {
   id: string;
@@ -68,7 +68,11 @@ export default function FriendsScreen() {
 
   const fetchFriendsData = useCallback(async () => {
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/social/friends`, {
+        headers: {
+          ...authHeaders,
+        },
         credentials: "include",
       });
 
@@ -81,8 +85,16 @@ export default function FriendsScreen() {
       const data = await res.json();
 
       if (data.success) {
-        setFriends(data.friends || []);
-        setRequests(data.incomingRequests || []);
+        const friendList: Friend[] = data.friends || [];
+        const friendIdSet = new Set(friendList.map((f) => String(f.id)));
+
+        // Mutual exclusion: exclude any incoming request whose sender is already a friend!
+        const cleanRequests = (data.incomingRequests || []).filter(
+          (r: FriendRequest) => r.fromUser && !friendIdSet.has(String(r.fromUser.id))
+        );
+
+        setFriends(friendList);
+        setRequests(cleanRequests);
       }
     } catch (err) {
       console.error("fetchFriendsData error:", err);
@@ -131,8 +143,12 @@ export default function FriendsScreen() {
     setIsSearching(true);
     searchDebounceRef.current = setTimeout(async () => {
       try {
+        const authHeaders = await getAuthHeaders();
         const excludeParam = user?.username ? `&excludeUser=${encodeURIComponent(user.username)}` : "";
         const res = await fetch(`${BASE_URL}/api/social/users/search?q=${encodeURIComponent(cleanQuery)}${excludeParam}`, {
+          headers: {
+            ...authHeaders,
+          },
           credentials: "include",
         });
 
@@ -165,9 +181,13 @@ export default function FriendsScreen() {
     setSendingUsernames((prev) => [...prev, targetUsername]);
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/social/friends/request`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
         credentials: "include",
         body: JSON.stringify({ username: targetUsername }),
       });
@@ -185,11 +205,11 @@ export default function FriendsScreen() {
         return;
       }
 
-      Alert.alert("Request Sent! 🚀", `Friend request sent to @${targetUsername}!`);
+      Alert.alert(data.isFriend ? "Connected! 🎉" : "Request Sent! 🚀", data.message);
 
-      // Update suggestion item in list to reflect requested state
+      // Update suggestion item in list to reflect requested or friend state
       setSuggestions((prev) =>
-        prev.map((s) => (s.username === targetUsername ? { ...s, isRequested: true } : s))
+        prev.map((s) => (s.username === targetUsername ? { ...s, isRequested: !data.isFriend, isFriend: !!data.isFriend } : s))
       );
 
       fetchFriendsData();
@@ -204,9 +224,13 @@ export default function FriendsScreen() {
   // --- ACCEPT / REJECT INCOMING REQUEST ---
   const handleRespondRequest = async (requesterId: string, action: "ACCEPT" | "REJECT") => {
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/social/friends/respond`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders,
+        },
         credentials: "include",
         body: JSON.stringify({ requesterId, action }),
       });
@@ -238,9 +262,13 @@ export default function FriendsScreen() {
         style: "destructive",
         onPress: async () => {
           try {
+            const authHeaders = await getAuthHeaders();
             await fetch(`${BASE_URL}/api/social/friends/remove`, {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                ...authHeaders,
+              },
               credentials: "include",
               body: JSON.stringify({ friendId }),
             });
@@ -396,28 +424,38 @@ export default function FriendsScreen() {
                 <Ionicons
                   name={requests.length > 0 ? "mail-unread" : "mail-outline"}
                   size={18}
-                  color={requests.length > 0 ? "#f59e0b" : colors.textSecondary}
+                  color={requests.length > 0 ? "#ef4444" : colors.textSecondary}
                 />
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Friend Requests
                 </Text>
+                {requests.length > 0 && (
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
+                      backgroundColor: "#ef4444",
+                    }}
+                  />
+                )}
                 <View
                   style={[
                     styles.badgePill,
-                    { backgroundColor: requests.length > 0 ? "rgba(245, 158, 11, 0.15)" : colors.border },
+                    { backgroundColor: requests.length > 0 ? "rgba(239, 68, 68, 0.15)" : colors.border },
                   ]}
                 >
                   <Text
                     style={[
                       styles.badgePillText,
-                      { color: requests.length > 0 ? "#f59e0b" : colors.textSecondary },
+                      { color: requests.length > 0 ? "#ef4444" : colors.textSecondary },
                     ]}
                   >
                     {requests.length}
                   </Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: "600" }}>
+              <Text style={{ fontSize: 11, color: requests.length > 0 ? "#ef4444" : colors.textSecondary, fontWeight: "700" }}>
                 {requests.length > 0 ? "Action Needed" : "All Caught Up"}
               </Text>
             </View>
