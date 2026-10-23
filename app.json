@@ -8,6 +8,12 @@
     "scheme": "papertradeapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "updates": {
+      "url": "https://u.expo.dev/561029e7-757a-4a4f-b48f-550fcd69e0ca"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "supportsTablet": true
     },
