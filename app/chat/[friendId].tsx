@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { BASE_URL, getAuthHeaders } from '../../src/config/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -103,12 +104,28 @@ export default function ChatScreen() {
     };
   }, []);
 
+  // Load cached messages from AsyncStorage immediately on open
+  useEffect(() => {
+    if (!friendId) return;
+    AsyncStorage.getItem(`@chat_cache_${friendId}`).then((cached) => {
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+            setLoading(false);
+          }
+        } catch (e) {}
+      }
+    });
+  }, [friendId]);
+
   // Fetch chat history
   const fetchMessages = useCallback(async (isInitial = false) => {
     if (!friendId || isGuest || !isLoggedIn) return;
 
     try {
-      if (isInitial) setLoading(true);
+      if (isInitial && messages.length === 0) setLoading(true);
       const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/chat/messages/${friendId}`, {
         headers: {
@@ -116,6 +133,12 @@ export default function ChatScreen() {
         },
         credentials: 'include',
       });
+
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        console.log(`[Chat] Non-JSON response received (status ${res.status})`);
+        return;
+      }
 
       const data = await res.json();
 
@@ -131,10 +154,16 @@ export default function ChatScreen() {
       if (data.success) {
         if (data.friend) setFriend(data.friend);
 
+        const serverMsgs: ChatMessage[] = data.messages || [];
+
+        // Save server messages to local AsyncStorage cache
+        if (serverMsgs.length > 0) {
+          AsyncStorage.setItem(`@chat_cache_${friendId}`, JSON.stringify(serverMsgs)).catch(() => {});
+        }
+
         setMessages((prev) => {
           // Keep optimistic pending messages that have not yet been confirmed
           const pending = prev.filter((m) => m.isPending);
-          const serverMsgs = data.messages || [];
 
           // Deduplicate by text/timestamp or ID
           const combined = [...serverMsgs];
@@ -157,7 +186,7 @@ export default function ChatScreen() {
     } finally {
       if (isInitial) setLoading(false);
     }
-  }, [friendId, isGuest, isLoggedIn, router]);
+  }, [friendId, isGuest, isLoggedIn, router, messages.length]);
 
   // Initial load and polling every 3.5 seconds
   useEffect(() => {
@@ -211,20 +240,48 @@ export default function ChatScreen() {
         body: JSON.stringify({ text }),
       });
 
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        if (res.status === 404) {
+          Alert.alert(
+            'Chat Service Deploying',
+            'The chat feature on Render is currently building or deploying. If Auto-Deploy is disabled on Render, please click "Manual Deploy" -> "Deploy latest commit" in your Render dashboard.',
+            [{ text: 'OK' }]
+          );
+        } else if (res.status === 502 || res.status === 503) {
+          Alert.alert(
+            'Server Waking Up',
+            'Render free tier is spinning up the server. Please try sending again in 10-15 seconds.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert('Notice', `Server returned status code ${res.status}. Please try again shortly.`);
+        }
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        return;
+      }
+
       const data = await res.json();
 
-      if (data.success && data.message) {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tempId ? { ...data.message, isPending: false } : m))
-        );
+      if (res.ok && data.success && data.message) {
+        setMessages((prev) => {
+          const updated = prev.map((m) => (m.id === tempId ? { ...data.message, isPending: false } : m));
+          AsyncStorage.setItem(`@chat_cache_${friendId}`, JSON.stringify(updated.filter((m) => !m.isPending))).catch(() => {});
+          return updated;
+        });
       } else {
-        // Remove or flag error
-        Alert.alert('Send Failed', data.message || 'Could not send message.');
+        Alert.alert('Send Failed', data.message || `Could not send message (${res.status}).`);
         setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.log('handleSendMessage error:', err);
-      Alert.alert('Network Error', 'Please check your connection.');
+      const isConnectionErr = err?.message?.toLowerCase()?.includes('network') || err?.message?.toLowerCase()?.includes('failed to fetch');
+      Alert.alert(
+        isConnectionErr ? 'Connection Error' : 'Send Error',
+        isConnectionErr
+          ? 'Could not connect to backend server. Please check your internet or retry once Render wakes up.'
+          : (err?.message || 'Could not send message.')
+      );
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
     } finally {
       setSending(false);

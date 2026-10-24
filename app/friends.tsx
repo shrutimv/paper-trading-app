@@ -114,6 +114,10 @@ export default function FriendsScreen() {
         },
         credentials: "include",
       });
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setConversations(data.conversations || []);
@@ -529,14 +533,16 @@ export default function FriendsScreen() {
                       </Text>
                     </View>
 
-                    <View style={{ flex: 1, marginHorizontal: 12 }}>
+                    <View style={{ flex: 1, marginHorizontal: 12, minWidth: 0 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                        <Text style={[styles.userName, { color: colors.text }]}>@{c.friend.username}</Text>
+                        <Text style={[styles.userName, { color: colors.text, flex: 1, marginRight: 6 }]} numberOfLines={1} ellipsizeMode="tail">
+                          @{c.friend.username}
+                        </Text>
                         <Text style={{ fontSize: 10.5, color: colors.textSecondary }}>
                           {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                         </Text>
                       </View>
-                      <Text style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                      <Text style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1} ellipsizeMode="tail">
                         {c.lastMessage || "Start chatting..."}
                       </Text>
                     </View>
@@ -619,9 +625,11 @@ export default function FriendsScreen() {
                         </Text>
                       </View>
 
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.userName, { color: colors.text }]}>@{item.username}</Text>
-                        <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
+                          @{item.username}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1} ellipsizeMode="tail">
                           {item.xp.toLocaleString()} XP • Tap to view profile
                         </Text>
                       </View>
@@ -734,9 +742,11 @@ export default function FriendsScreen() {
                     </Text>
                   </View>
 
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.userName, { color: colors.text }]}>@{req.fromUser.username}</Text>
-                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[styles.userName, { color: colors.text }]} numberOfLines={1} ellipsizeMode="tail">
+                      @{req.fromUser.username}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={1} ellipsizeMode="tail">
                       {req.fromUser.xp.toLocaleString()} XP • Wants to connect
                     </Text>
                   </View>
@@ -799,44 +809,52 @@ export default function FriendsScreen() {
                     </Text>
                   </View>
 
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.userName, { color: colors.text }]}>@{friend.username}</Text>
-                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                      {friend.xp.toLocaleString()} XP • Tap for details
+                  <View style={{ flex: 1, minWidth: 0, justifyContent: "center" }}>
+                    <Text
+                      style={[styles.userName, { color: colors.text }]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      @{friend.username}
                     </Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 3 }}>
+                      <Text style={{ fontSize: 11.5, color: colors.textSecondary }} numberOfLines={1}>
+                        {friend.xp.toLocaleString()} XP
+                      </Text>
+                      <Text style={{ fontSize: 10, color: colors.textSecondary, opacity: 0.6 }}>•</Text>
+                      <Text style={{ fontSize: 11.5, fontWeight: "700", color: "#10b981" }} numberOfLines={1}>
+                        ₹{friend.balance.toLocaleString("en-IN")}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={{ alignItems: "flex-end", marginRight: 8 }}>
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>
-                      ₹{friend.balance.toLocaleString()}
-                    </Text>
-                    <Text style={{ fontSize: 11, color: "#10b981", fontWeight: "700" }}>Portfolio Active</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <TouchableOpacity
+                      style={[styles.chatBtnPill, { backgroundColor: colors.accent }]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        router.push({
+                          pathname: '/chat/[friendId]',
+                          params: { friendId: friend.id, username: friend.username },
+                        });
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
+                      <Text style={styles.chatBtnPillText}>Chat</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleRemoveFriend(friend.id, friend.username);
+                      }}
+                      style={{ padding: 6 }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                    </TouchableOpacity>
                   </View>
-
-                  <TouchableOpacity
-                    style={[styles.chatBtnPill, { backgroundColor: colors.accent }]}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      router.push({
-                        pathname: '/chat/[friendId]',
-                        params: { friendId: friend.id, username: friend.username },
-                      });
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
-                    <Text style={styles.chatBtnPillText}>Chat</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleRemoveFriend(friend.id, friend.username);
-                    }}
-                    style={{ padding: 4 }}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#ef4444" />
-                  </TouchableOpacity>
                 </TouchableOpacity>
               ))
             )}
