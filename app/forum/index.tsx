@@ -505,7 +505,7 @@ export default function ForumScreen() {
       <Modal visible={isCreateOpen} animationType="slide" transparent>
         <SafeAreaView style={styles.modalBackdrop}>
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
             style={{ width: '100%', maxHeight: '90%', justifyContent: 'flex-end' }}
           >

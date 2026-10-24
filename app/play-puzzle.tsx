@@ -6,6 +6,7 @@ import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { recordPuzzleSolved } from '../src/services/progressService';
 import { useGamification } from '../context/GamificationContext';
+import { useTheme } from '../context/ThemeContext';
 
 const PUZZLES = [
   {
@@ -54,6 +55,7 @@ export default function PlayPuzzleScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { addXp } = useGamification();
+  const { colors, isDark } = useTheme();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedGuess, setSelectedGuess] = useState<'UP' | 'DOWN' | null>(null);
@@ -93,26 +95,26 @@ export default function PlayPuzzleScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="close" size={24} color="#64748B" />
+          <Ionicons name="close" size={24} color={colors.textSecondary} />
         </TouchableOpacity>
-        <View style={styles.progressBarBg}>
+        <View style={[styles.progressBarBg, { backgroundColor: colors.border }]}>
            <View style={[styles.progressBarFill, { width: `${((currentIndex + 1) / PUZZLES.length) * 100}%` }]} />
         </View>
         <View style={{ flexDirection: 'row', gap: 2 }}>
           {[1, 2, 3].map(h => (
-            <Ionicons key={h} name="heart" size={20} color={h <= hearts ? "#EF4444" : "#CBD5E1"} />
+            <Ionicons key={h} name="heart" size={20} color={h <= hearts ? "#EF4444" : (isDark ? "#475569" : "#CBD5E1")} />
           ))}
         </View>
       </View>
 
       <View style={styles.content}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <Text style={{ fontSize: 12, fontWeight: '800', color: '#64748B', letterSpacing: 1 }}>
+          <Text style={{ fontSize: 12, fontWeight: '800', color: colors.textSecondary, letterSpacing: 1 }}>
             STAGE {currentIndex + 1} OF {PUZZLES.length}
           </Text>
           <Text style={{ fontSize: 12, fontWeight: '800', color: '#10B981' }}>
@@ -120,19 +122,19 @@ export default function PlayPuzzleScreen() {
           </Text>
         </View>
 
-        <Text style={styles.puzzleTitle}>{currentPuzzle.title}</Text>
-        <Text style={styles.puzzleDesc}>{currentPuzzle.description}</Text>
+        <Text style={[styles.puzzleTitle, { color: colors.text }]}>{currentPuzzle.title}</Text>
+        <Text style={[styles.puzzleDesc, { color: colors.textSecondary }]}>{currentPuzzle.description}</Text>
 
-        <View style={styles.chartContainer}>
-          <View style={styles.patternBadge}>
-            <Text style={styles.patternBadgeText}>{currentPuzzle.pattern}</Text>
+        <View style={[styles.chartContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[styles.patternBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff' }]}>
+            <Text style={[styles.patternBadgeText, { color: isDark ? '#60a5fa' : '#2563eb' }]}>{currentPuzzle.pattern}</Text>
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12, marginVertical: 14 }}>
             <Ionicons name="stats-chart" size={90} color={currentPuzzle.correctAnswer === 'UP' ? '#10B981' : '#EF4444'} />
           </View>
 
-          <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 13 }}>
+          <Text style={{ color: colors.textSecondary, fontWeight: '700', fontSize: 13 }}>
             Identify technical pattern direction
           </Text>
         </View>
@@ -143,6 +145,7 @@ export default function PlayPuzzleScreen() {
             style={[
               styles.guessBtn, 
               styles.guessUpBtn, 
+              { backgroundColor: colors.card },
               selectedGuess === 'UP' && styles.selectedUp, 
               (showResult && selectedGuess !== 'UP') && styles.dimmed
             ]} 
@@ -157,6 +160,7 @@ export default function PlayPuzzleScreen() {
             style={[
               styles.guessBtn, 
               styles.guessDownBtn, 
+              { backgroundColor: colors.card },
               selectedGuess === 'DOWN' && styles.selectedDown, 
               (showResult && selectedGuess !== 'DOWN') && styles.dimmed
             ]} 
@@ -172,18 +176,30 @@ export default function PlayPuzzleScreen() {
       {/* RESULT SLIDE UP SHEET */}
       {showResult && (
         <Animated.View style={[styles.resultCard, { 
-            backgroundColor: selectedGuess === currentPuzzle.correctAnswer ? '#ECFDF5' : '#FEF2F2',
+            backgroundColor: selectedGuess === currentPuzzle.correctAnswer 
+              ? (isDark ? '#064e3b' : '#ECFDF5') 
+              : (isDark ? '#7f1d1d' : '#FEF2F2'),
+            borderColor: selectedGuess === currentPuzzle.correctAnswer ? '#10b981' : '#ef4444',
+            borderWidth: 1,
             transform: [{ translateY: popAnim.interpolate({ inputRange: [0, 1], outputRange: [300, 0] }) }] 
           }]}>
           
           <View style={styles.resultHeader}>
-            <Ionicons name={selectedGuess === currentPuzzle.correctAnswer ? "checkmark-circle" : "close-circle"} size={28} color={selectedGuess === currentPuzzle.correctAnswer ? "#059669" : "#DC2626"} />
-            <Text style={[styles.resultTitle, { color: selectedGuess === currentPuzzle.correctAnswer ? "#059669" : "#DC2626" }]}>
-              {selectedGuess === currentPuzzle.correctAnswer ? "Correct! +100 XP" : "Not quite!"}
+            <Ionicons 
+              name={selectedGuess === currentPuzzle.correctAnswer ? "checkmark-circle" : "close-circle"} 
+              size={28} 
+              color={selectedGuess === currentPuzzle.correctAnswer ? (isDark ? "#34d399" : "#059669") : (isDark ? "#f87171" : "#DC2626")} 
+            />
+            <Text style={[styles.resultTitle, { 
+              color: selectedGuess === currentPuzzle.correctAnswer ? (isDark ? "#34d399" : "#059669") : (isDark ? "#f87171" : "#DC2626") 
+            }]}>
+              {selectedGuess === currentPuzzle.correctAnswer ? "Correct! +50 XP" : "Not quite!"}
             </Text>
           </View>
           
-          <Text style={[styles.explanation, { color: selectedGuess === currentPuzzle.correctAnswer ? "#047857" : "#991B1B" }]}>
+          <Text style={[styles.explanation, { 
+            color: selectedGuess === currentPuzzle.correctAnswer ? (isDark ? "#a7f3d0" : "#047857") : (isDark ? "#fca5a5" : "#991B1B") 
+          }]}>
             {currentPuzzle.explanation}
           </Text>
           

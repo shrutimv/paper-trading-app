@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -50,6 +51,11 @@ export default function LeaderboardScreen() {
 
   const fetchLeaderboard = useCallback(async () => {
     try {
+      const cached = await AsyncStorage.getItem('@pending_friend_requests_count');
+      if (cached !== null) {
+        setPendingRequestsCount(parseInt(cached, 10) || 0);
+      }
+
       const authHeaders = await getAuthHeaders();
       const [leaderboardRes, friendsRes] = await Promise.all([
         fetch(`${BASE_URL}/api/social/leaderboard`, {
@@ -87,6 +93,7 @@ export default function LeaderboardScreen() {
           if (friendsData.success) {
             if (Array.isArray(friendsData.incomingRequests)) {
               setPendingRequestsCount(friendsData.incomingRequests.length);
+              AsyncStorage.setItem('@pending_friend_requests_count', String(friendsData.incomingRequests.length)).catch(() => {});
             }
             if (Array.isArray(friendsData.friends)) {
               setFriendUsernames((prev) => {
@@ -105,6 +112,12 @@ export default function LeaderboardScreen() {
       setRefreshing(false);
     }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchLeaderboard();
+    }, [fetchLeaderboard])
+  );
 
   const handleSendFriendRequest = async (targetUsername: string) => {
     if (!user || user.isGuest) {

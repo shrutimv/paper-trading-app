@@ -31,28 +31,48 @@ export default function LearnScreen() {
   const insets = useSafeAreaInsets();
   const { moduleId, level } = useLocalSearchParams();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const idKey = String(moduleId);
   const lesson = LEARNING_DATA[idKey];
 
-  // --- THEME ACCENTS BASED ON LEVEL ---
-  const getTheme = (lvl: string) => {
+  // --- THEME ACCENTS BASED ON LEVEL (DARK & LIGHT MODE COMPLIANT) ---
+  const getTheme = (lvl: string, dark: boolean) => {
     switch (lvl) {
       case 'Beginner':
-        return { dark: '#059669', light: '#ecfdf5', border: '#a7f3d0' };
+        return {
+          dark: dark ? '#34d399' : '#059669',
+          light: dark ? 'rgba(5, 150, 105, 0.18)' : '#ecfdf5',
+          border: dark ? 'rgba(52, 211, 153, 0.4)' : '#a7f3d0',
+        };
       case 'Intermediate':
-        return { dark: '#d97706', light: '#fffbeb', border: '#fde68a' };
+        return {
+          dark: dark ? '#fbbf24' : '#d97706',
+          light: dark ? 'rgba(217, 119, 6, 0.18)' : '#fffbeb',
+          border: dark ? 'rgba(251, 191, 36, 0.4)' : '#fde68a',
+        };
       case 'Advanced':
-        return { dark: '#dc2626', light: '#fef2f2', border: '#fecaca' };
+        return {
+          dark: dark ? '#f87171' : '#dc2626',
+          light: dark ? 'rgba(220, 38, 38, 0.18)' : '#fef2f2',
+          border: dark ? 'rgba(248, 113, 113, 0.4)' : '#fecaca',
+        };
       case 'Expert':
-        return { dark: '#7c3aed', light: '#f3e8ff', border: '#e9d5ff' };
+        return {
+          dark: dark ? '#a78bfa' : '#7c3aed',
+          light: dark ? 'rgba(124, 58, 237, 0.18)' : '#f3e8ff',
+          border: dark ? 'rgba(167, 139, 250, 0.4)' : '#e9d5ff',
+        };
       default:
-        return { dark: '#2563eb', light: '#eff6ff', border: '#bfdbfe' };
+        return {
+          dark: dark ? '#60a5fa' : '#2563eb',
+          light: dark ? 'rgba(37, 99, 235, 0.18)' : '#eff6ff',
+          border: dark ? 'rgba(96, 165, 250, 0.4)' : '#bfdbfe',
+        };
     }
   };
 
-  const theme = getTheme(String(level));
+  const theme = getTheme(String(level), isDark);
 
   if (!lesson) {
     return (
@@ -121,7 +141,7 @@ export default function LearnScreen() {
                   <Ionicons name="bulb-outline" size={16} color={theme.dark} />
                   <Text style={[styles.proTipTitle, { color: theme.dark }]}>PRO INSIGHT</Text>
                 </View>
-                <Text style={[styles.proTipText, { color: colors.text }]}>{section.proTip}</Text>
+                <Text style={[styles.proTipText, { color: isDark ? '#F1F5F9' : '#1E293B' }]}>{section.proTip}</Text>
               </View>
             )}
           </View>
@@ -129,7 +149,7 @@ export default function LearnScreen() {
 
         {/* KEY TAKEAWAYS CARD */}
         {lesson.takeaway && (
-          <View style={[styles.takeawayCard, { borderColor: theme.dark }]}>
+          <View style={[styles.takeawayCard, { borderColor: theme.dark, backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <Ionicons name="checkmark-circle" size={22} color={theme.dark} />
               <Text style={[styles.takeawayTitle, { color: theme.dark }]}>KEY TAKEAWAY</Text>

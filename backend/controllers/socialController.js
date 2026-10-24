@@ -111,8 +111,8 @@ module.exports.getFriends = async (req, res) => {
     }
 
     const user = await User.findById(req.user._id)
-      .populate("friends", "username xp balance avatarUrl bio badges")
-      .populate("friendRequests.from", "username xp avatarUrl bio")
+      .populate("friends", "username xp balance avatarUrl bio badges portfolioReturn puzzlesCompleted riskProfile")
+      .populate("friendRequests.from", "username xp balance avatarUrl bio badges portfolioReturn puzzlesCompleted riskProfile")
       .lean();
 
     if (!user) {
@@ -130,7 +130,12 @@ module.exports.getFriends = async (req, res) => {
         xp: f.xp || 0,
         balance: f.balance || 100000,
         avatarUrl: f.avatarUrl || "",
-        bio: f.bio || "",
+        bio: f.bio || "Trading enthusiast & market learner",
+        portfolioReturn: f.portfolioReturn || 0,
+        puzzlesCompleted: f.puzzlesCompleted || 0,
+        riskProfile: f.riskProfile || "MODERATE",
+        badgesCount: f.badges ? f.badges.length : 0,
+        isFriend: true,
       })),
       incomingRequests: (user.friendRequests || [])
         .filter((r) => r.from && !friendIdSet.has(String(r.from._id || r.from)))
@@ -140,7 +145,13 @@ module.exports.getFriends = async (req, res) => {
             id: r.from._id,
             username: r.from.username,
             xp: r.from.xp || 0,
+            balance: r.from.balance || 100000,
             avatarUrl: r.from.avatarUrl || "",
+            bio: r.from.bio || "Trading enthusiast & market learner",
+            portfolioReturn: r.from.portfolioReturn || 0,
+            puzzlesCompleted: r.from.puzzlesCompleted || 0,
+            riskProfile: r.from.riskProfile || "MODERATE",
+            badgesCount: r.from.badges ? r.from.badges.length : 0,
           },
           createdAt: r.createdAt,
         })),
@@ -181,7 +192,7 @@ module.exports.searchUsers = async (req, res) => {
     }
 
     const matchedUsers = await User.find(queryFilter)
-      .select("username xp avatarUrl friendRequests")
+      .select("username xp avatarUrl friendRequests bio balance badges portfolioReturn puzzlesCompleted riskProfile")
       .limit(10)
       .lean();
 
@@ -204,6 +215,12 @@ module.exports.searchUsers = async (req, res) => {
         username: u.username,
         xp: u.xp || 0,
         avatarUrl: u.avatarUrl || "",
+        bio: u.bio || "Trading enthusiast & market learner",
+        balance: u.balance || 100000,
+        portfolioReturn: u.portfolioReturn || 0,
+        puzzlesCompleted: u.puzzlesCompleted || 0,
+        riskProfile: u.riskProfile || "MODERATE",
+        badgesCount: u.badges ? u.badges.length : 0,
         isFriend,
         isRequested: hasSentRequest,
       };

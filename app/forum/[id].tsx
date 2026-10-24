@@ -12,7 +12,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { BASE_URL } from '../../src/config/api';
+import { BASE_URL, getAuthHeaders } from '../../src/config/api';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -52,6 +52,7 @@ interface FullPost {
 }
 
 export default function PostDetailScreen() {
+  const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { colors, isDark } = useTheme();
@@ -64,7 +65,12 @@ export default function PostDetailScreen() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [guestId, setGuestId] = useState<string>('');
 
+  // Replying & Tagging States
+  const [replyingTo, setReplyingTo] = useState<{ username: string; commentId: string } | null>(null);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+
   const scrollViewRef = useRef<ScrollView>(null);
+  const commentInputRef = useRef<TextInput>(null);
 
   // Load guest ID
   useEffect(() => {
@@ -142,6 +148,91 @@ export default function PostDetailScreen() {
     }
   };
 
+  const handleToggleCommentLike = async (commentId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    setComments(prev =>
+      prev.map(c => {
+        if (c._id === commentId) {
+          const willBeLiked = !c.isLiked;
+          return {
+            ...c,
+            isLiked: willBeLiked,
+            likesCount: willBeLiked ? (c.likesCount || 0) + 1 : Math.max(0, (c.likesCount || 0) - 1),
+          };
+        }
+        return c;
+      })
+    );
+
+    try {
+      const authHeaders = await getAuthHeaders();
+      await axios.post(
+        `${BASE_URL}/api/forum/comments/${commentId}/like`,
+        { guestId },
+        { headers: authHeaders, withCredentials: true, timeout: 6000 }
+      );
+    } catch {
+      // Revert if error
+    }
+  };
+
+  const handleReplyToComment = (targetUsername: string, commentId: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setReplyingTo({ username: targetUsername, commentId });
+    setNewCommentText(prev => {
+      const tag = `@${targetUsername} `;
+      if (prev.includes(tag)) return prev;
+      return `${tag}${prev}`;
+    });
+    setTimeout(() => {
+      commentInputRef.current?.focus();
+    }, 150);
+  };
+
+  const handleCommentTextChange = (text: string) => {
+    setNewCommentText(text);
+
+    const atMatch = text.match(/@([a-zA-Z0-9_]*)$/);
+    if (atMatch) {
+      const query = atMatch[1].toLowerCase();
+      const userSet = new Set<string>();
+      if (post?.authorUsername) userSet.add(post.authorUsername);
+      comments.forEach(c => {
+        if (c.authorUsername) userSet.add(c.authorUsername);
+      });
+      const myName = (user?.username || '').toLowerCase();
+      const filtered = Array.from(userSet).filter(
+        u => u.toLowerCase().startsWith(query) && u.toLowerCase() !== myName
+      );
+      setTagSuggestions(filtered.slice(0, 5));
+    } else {
+      setTagSuggestions([]);
+    }
+  };
+
+  const handleSelectTagSuggestion = (selectedUsername: string) => {
+    const updated = newCommentText.replace(/@([a-zA-Z0-9_]*)$/, `@${selectedUsername} `);
+    setNewCommentText(updated);
+    setTagSuggestions([]);
+    commentInputRef.current?.focus();
+  };
+
+  const renderCommentTextWithTags = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(/(@[A-Za-z0-9_]+)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('@')) {
+        return (
+          <Text key={i} style={{ color: colors.accent, fontWeight: '800' }}>
+            {part}
+          </Text>
+        );
+      }
+      return part;
+    });
+  };
+
   const handleAddComment = async () => {
     if (!newCommentText.trim() || !post) return;
 
@@ -152,6 +243,7 @@ export default function PostDetailScreen() {
     const authorName = user?.username || (await AsyncStorage.getItem('guestTraderName')) || 'Guest Trader';
 
     try {
+      const authHeaders = await getAuthHeaders();
       const res = await axios.post(
         `${BASE_URL}/api/forum/posts/${post._id}/comment`,
         {
@@ -159,13 +251,15 @@ export default function PostDetailScreen() {
           authorUsername: authorName,
           guestId,
         },
-        { withCredentials: true, timeout: 10000 }
+        { headers: authHeaders, withCredentials: true, timeout: 10000 }
       );
 
       if (res.data?.success && res.data.comment) {
         setComments(prev => [...prev, res.data.comment]);
         setPost(prev => (prev ? { ...prev, commentsCount: (prev.commentsCount || 0) + 1 } : null));
         setNewCommentText('');
+        setReplyingTo(null);
+        setTagSuggestions([]);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setTimeout(() => {
           scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -255,8 +349,8 @@ export default function PostDetailScreen() {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={0}
         style={{ flex: 1 }}
       >
         <ScrollView
@@ -391,7 +485,7 @@ export default function PostDetailScreen() {
                   const isAuthor = isCommentFromPostAuthor(item);
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={item._id || index.toString()}
                       style={[
                         styles.commentCard,
@@ -400,6 +494,8 @@ export default function PostDetailScreen() {
                           borderColor: isMine ? (isDark ? 'rgba(37,99,235,0.35)' : '#bfdbfe') : colors.border,
                         },
                       ]}
+                      onPress={() => handleReplyToComment(item.authorUsername, item._id)}
+                      activeOpacity={0.85}
                     >
                       <View style={styles.commentHeader}>
                         <View style={[styles.commentAvatar, { backgroundColor: isMine ? (isDark ? '#1e3a8a' : '#bfdbfe') : (isDark ? 'rgba(16,185,129,0.2)' : '#dcfce7') }]}>
@@ -432,9 +528,43 @@ export default function PostDetailScreen() {
                       </View>
 
                       <Text style={[styles.commentText, { color: isDark ? '#e2e8f0' : '#1e293b' }]}>
-                        {item.text}
+                        {renderCommentTextWithTags(item.text)}
                       </Text>
-                    </View>
+
+                      {/* Comment Actions: Like & Reply */}
+                      <View style={styles.commentActionsRow}>
+                        <TouchableOpacity
+                          style={styles.commentActionBtn}
+                          onPress={() => handleToggleCommentLike(item._id)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={item.isLiked ? 'heart' : 'heart-outline'}
+                            size={16}
+                            color={item.isLiked ? '#ef4444' : colors.textSecondary}
+                          />
+                          <Text
+                            style={[
+                              styles.commentActionText,
+                              { color: item.isLiked ? '#ef4444' : colors.textSecondary },
+                            ]}
+                          >
+                            {item.likesCount || 0}
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.commentActionBtn}
+                          onPress={() => handleReplyToComment(item.authorUsername, item._id)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="arrow-undo-outline" size={15} color={colors.textSecondary} />
+                          <Text style={[styles.commentActionText, { color: colors.textSecondary }]}>
+                            Reply
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
                   );
                 })
               )}
@@ -464,47 +594,93 @@ export default function PostDetailScreen() {
           )}
         </ScrollView>
 
-        {/* Sticky Comment Input Bar at the Bottom */}
+        {/* Sticky Comment Input Bar with Tag Suggestions and Replying Banner */}
         {post && (
-          <View
-            style={[
-              styles.bottomInputBar,
-              {
-                backgroundColor: colors.card,
-                borderTopColor: colors.border,
-              },
-            ]}
-          >
-            <TextInput
+          <View>
+            {/* Autocomplete Tag Suggestions Popup */}
+            {tagSuggestions.length > 0 && (
+              <View style={[styles.tagSuggestionsPopup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.tagSuggestionsHeader}>
+                  <Ionicons name="at" size={14} color={colors.accent} />
+                  <Text style={[styles.tagSuggestionsTitle, { color: colors.textSecondary }]}>Mention a trader</Text>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: 10, paddingBottom: 6 }}>
+                  {tagSuggestions.map((uname) => (
+                    <TouchableOpacity
+                      key={uname}
+                      style={[
+                        styles.tagSuggestionChip,
+                        {
+                          backgroundColor: isDark ? 'rgba(59,130,246,0.18)' : '#eff6ff',
+                          borderColor: colors.accent + '40',
+                        },
+                      ]}
+                      onPress={() => handleSelectTagSuggestion(uname)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.tagSuggestionChipText, { color: colors.accent }]}>@{uname}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Replying Banner */}
+            {replyingTo && (
+              <View style={[styles.replyingBanner, { backgroundColor: colors.card, borderTopColor: colors.border }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <Ionicons name="arrow-undo" size={14} color={colors.accent} />
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Replying to </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: colors.accent }}>@{replyingTo.username}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View
               style={[
-                styles.commentInput,
+                styles.bottomInputBar,
                 {
-                  backgroundColor: isDark ? '#0f172a' : '#f8fafc',
-                  color: colors.text,
-                  borderColor: colors.border,
+                  backgroundColor: colors.card,
+                  borderTopColor: colors.border,
+                  paddingBottom: Math.max(insets.bottom, 10),
                 },
               ]}
-              placeholder="Write a constructive response..."
-              placeholderTextColor={colors.textSecondary}
-              value={newCommentText}
-              onChangeText={setNewCommentText}
-              multiline
-              maxLength={600}
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendBtn,
-                { backgroundColor: newCommentText.trim() ? colors.accent : (isDark ? '#334155' : '#cbd5e1') },
-              ]}
-              disabled={!newCommentText.trim() || submittingComment}
-              onPress={handleAddComment}
             >
-              {submittingComment ? (
-                <ActivityIndicator size="small" color="#ffffff" />
-              ) : (
-                <Ionicons name="send" size={17} color="#ffffff" />
-              )}
-            </TouchableOpacity>
+              <TextInput
+                ref={commentInputRef}
+                style={[
+                  styles.commentInput,
+                  {
+                    backgroundColor: isDark ? '#0f172a' : '#f8fafc',
+                    color: colors.text,
+                    borderColor: colors.border,
+                  },
+                ]}
+                placeholder={replyingTo ? `Reply to @${replyingTo.username}...` : 'Write a constructive response (type @ to tag)...'}
+                placeholderTextColor={colors.textSecondary}
+                value={newCommentText}
+                onChangeText={handleCommentTextChange}
+                multiline
+                maxLength={600}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendBtn,
+                  { backgroundColor: newCommentText.trim() ? colors.accent : (isDark ? '#334155' : '#cbd5e1') },
+                ]}
+                disabled={!newCommentText.trim() || submittingComment}
+                onPress={handleAddComment}
+              >
+                {submittingComment ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Ionicons name="send" size={17} color="#ffffff" />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -730,11 +906,67 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  commentActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(150, 150, 150, 0.2)',
+  },
+  commentActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 2,
+    paddingHorizontal: 4,
+  },
+  commentActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tagSuggestionsPopup: {
+    borderTopWidth: 1,
+    paddingTop: 6,
+  },
+  tagSuggestionsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+  },
+  tagSuggestionsTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  tagSuggestionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginRight: 6,
+  },
+  tagSuggestionChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  replyingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderTopWidth: 1,
+  },
   bottomInputBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingTop: 8,
     borderTopWidth: 1,
     gap: 10,
   },

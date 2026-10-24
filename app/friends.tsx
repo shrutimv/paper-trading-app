@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,9 +16,19 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import PageTransition from "@/components/PageTransition";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { BASE_URL, getAuthHeaders } from "../src/config/api";
+
+const getRankName = (xp: number) => {
+  if (xp >= 10000) return 'Diamond';
+  if (xp >= 6000) return 'Platinum';
+  if (xp >= 3000) return 'Gold';
+  if (xp >= 1500) return 'Silver';
+  if (xp >= 500) return 'Bronze';
+  return 'Novice';
+};
 
 interface Friend {
   id: string;
@@ -25,6 +36,11 @@ interface Friend {
   xp: number;
   balance: number;
   avatarUrl: string;
+  bio?: string;
+  portfolioReturn?: number;
+  puzzlesCompleted?: number;
+  riskProfile?: string;
+  badgesCount?: number;
 }
 
 interface FriendRequest {
@@ -33,7 +49,13 @@ interface FriendRequest {
     id: string;
     username: string;
     xp: number;
+    balance?: number;
     avatarUrl: string;
+    bio?: string;
+    portfolioReturn?: number;
+    puzzlesCompleted?: number;
+    riskProfile?: string;
+    badgesCount?: number;
   };
   createdAt: string;
 }
@@ -45,6 +67,12 @@ interface UserSuggestion {
   avatarUrl: string;
   isFriend: boolean;
   isRequested: boolean;
+  bio?: string;
+  balance?: number;
+  portfolioReturn?: number;
+  puzzlesCompleted?: number;
+  riskProfile?: string;
+  badgesCount?: number;
 }
 
 export default function FriendsScreen() {
@@ -61,8 +89,8 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sendingUsernames, setSendingUsernames] = useState<string[]>([]);
-
   const [isSearchingSelf, setIsSearchingSelf] = useState(false);
+  const [selectedUserPreview, setSelectedUserPreview] = useState<any | null>(null);
 
   const searchDebounceRef = useRef<any>(null);
 
@@ -95,6 +123,7 @@ export default function FriendsScreen() {
 
         setFriends(friendList);
         setRequests(cleanRequests);
+        AsyncStorage.setItem('@pending_friend_requests_count', String(cleanRequests.length)).catch(() => {});
       }
     } catch (err) {
       console.error("fetchFriendsData error:", err);
@@ -236,15 +265,18 @@ export default function FriendsScreen() {
       });
 
       const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        return;
-      }
-
       const data = await res.json();
       if (!res.ok) {
         Alert.alert("Error", data.message || "Failed to process request.");
         return;
       }
+
+      // Optimistically remove from incoming requests list and update badge storage instantly
+      setRequests((prev) => {
+        const remaining = prev.filter((r) => r.fromUser?.id !== requesterId);
+        AsyncStorage.setItem('@pending_friend_requests_count', String(remaining.length)).catch(() => {});
+        return remaining;
+      });
 
       Alert.alert(action === "ACCEPT" ? "Friend Added! 🎉" : "Request Declined", data.message);
       fetchFriendsData();
@@ -362,9 +394,11 @@ export default function FriendsScreen() {
                   const isSending = sendingUsernames.includes(item.username);
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={item.id}
                       style={[styles.suggestionRow, { borderBottomColor: colors.border }]}
+                      onPress={() => setSelectedUserPreview(item)}
+                      activeOpacity={0.7}
                     >
                       <View style={[styles.userAvatar, { backgroundColor: colors.accent }]}>
                         <Text style={[styles.userAvatarText, { color: "#fff" }]}>
@@ -375,7 +409,7 @@ export default function FriendsScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.userName, { color: colors.text }]}>@{item.username}</Text>
                         <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                          {item.xp.toLocaleString()} XP • Active Trader
+                          {item.xp.toLocaleString()} XP • Tap to view profile
                         </Text>
                       </View>
 
@@ -410,7 +444,7 @@ export default function FriendsScreen() {
                           )}
                         </TouchableOpacity>
                       )}
-                    </View>
+                    </TouchableOpacity>
                   );
                 })
               )}
@@ -540,9 +574,11 @@ export default function FriendsScreen() {
               </View>
             ) : (
               friends.map((friend) => (
-                <View
+                <TouchableOpacity
                   key={friend.id}
                   style={[styles.friendCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => setSelectedUserPreview({ ...friend, isFriend: true })}
+                  activeOpacity={0.7}
                 >
                   <View style={[styles.userAvatar, { backgroundColor: colors.accent }]}>
                     <Text style={[styles.userAvatarText, { color: "#fff" }]}>
@@ -553,7 +589,7 @@ export default function FriendsScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.userName, { color: colors.text }]}>@{friend.username}</Text>
                     <Text style={{ fontSize: 11, color: colors.textSecondary }}>
-                      {friend.xp.toLocaleString()} XP • Connected Friend
+                      {friend.xp.toLocaleString()} XP • Tap for details
                     </Text>
                   </View>
 
@@ -565,18 +601,135 @@ export default function FriendsScreen() {
                   </View>
 
                   <TouchableOpacity
-                    onPress={() => handleRemoveFriend(friend.id, friend.username)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleRemoveFriend(friend.id, friend.username);
+                    }}
                     style={{ padding: 4 }}
                   >
                     <Ionicons name="trash-outline" size={18} color="#ef4444" />
                   </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               ))
             )}
           </View>
 
           <View style={{ height: 100 }} />
         </ScrollView>
+
+        {/* USER PROFILE INFO MODAL */}
+        <Modal
+          visible={!!selectedUserPreview}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setSelectedUserPreview(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {/* Header with Close Button */}
+              <View style={styles.modalCardHeader}>
+                <Text style={[styles.modalCardCategory, { color: colors.textSecondary }]}>TRADER DOSSIER</Text>
+                <TouchableOpacity onPress={() => setSelectedUserPreview(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                  <Ionicons name="close-circle" size={26} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Avatar & Username */}
+              <View style={{ alignItems: "center", marginVertical: 12 }}>
+                <View style={[styles.previewAvatarBox, { backgroundColor: colors.accent }]}>
+                  <Text style={styles.previewAvatarText}>
+                    {selectedUserPreview?.username ? selectedUserPreview.username.charAt(0).toUpperCase() : "?"}
+                  </Text>
+                </View>
+                <Text style={[styles.previewUsername, { color: colors.text }]}>
+                  @{selectedUserPreview?.username}
+                </Text>
+                <View style={[styles.rankTag, { backgroundColor: colors.accent + "20" }]}>
+                  <Ionicons name="shield-checkmark" size={13} color={colors.accent} />
+                  <Text style={[styles.rankTagText, { color: colors.accent }]}>
+                    {getRankName(selectedUserPreview?.xp || 0)} Trader
+                  </Text>
+                </View>
+                <Text style={[styles.previewBio, { color: colors.textSecondary }]} numberOfLines={2}>
+                  "{selectedUserPreview?.bio || "Trading enthusiast & market learner"}"
+                </Text>
+              </View>
+
+              {/* Stats Grid */}
+              <View style={[styles.previewStatsGrid, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                <View style={styles.previewStatCol}>
+                  <Text style={[styles.previewStatLabel, { color: colors.textSecondary }]}>TOTAL XP</Text>
+                  <Text style={[styles.previewStatVal, { color: colors.accent }]}>
+                    {(selectedUserPreview?.xp || 0).toLocaleString()}
+                  </Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.previewStatCol}>
+                  <Text style={[styles.previewStatLabel, { color: colors.textSecondary }]}>PORTFOLIO</Text>
+                  <Text style={[styles.previewStatVal, { color: "#10b981" }]}>
+                    ₹{(selectedUserPreview?.balance || 100000).toLocaleString("en-IN")}
+                  </Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.previewStatCol}>
+                  <Text style={[styles.previewStatLabel, { color: colors.textSecondary }]}>PUZZLES</Text>
+                  <Text style={[styles.previewStatVal, { color: colors.text }]}>
+                    {selectedUserPreview?.puzzlesCompleted || 0}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Trading Style Pill */}
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginBottom: 18 }}>
+                <Ionicons name="pulse" size={14} color={colors.accent} />
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.textSecondary }}>
+                  Style: <Text style={{ color: colors.text, fontWeight: "800" }}>{selectedUserPreview?.riskProfile || "MODERATE"} RISK</Text>
+                </Text>
+              </View>
+
+              {/* Action Buttons */}
+              {selectedUserPreview?.isFriend ? (
+                <View style={{ gap: 10 }}>
+                  <View style={[styles.previewFriendStatus, { backgroundColor: "rgba(16, 185, 129, 0.15)", borderColor: "#10b981" }]}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: "#10b981" }}>In Your Friends Circle</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.chatBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => {
+                      Alert.alert(
+                        "Direct Messaging (v1.4)",
+                        `Direct encrypted chat with @${selectedUserPreview.username} will be available in the upcoming v1.4 release! Stay tuned.`
+                      );
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="chatbubbles" size={18} color="#fff" />
+                    <Text style={styles.chatBtnText}>Direct Message @{selectedUserPreview.username}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : selectedUserPreview?.isRequested ? (
+                <View style={[styles.previewFriendStatus, { backgroundColor: "rgba(245, 158, 11, 0.15)", borderColor: "#f59e0b" }]}>
+                  <Ionicons name="time" size={16} color="#f59e0b" />
+                  <Text style={{ fontSize: 13, fontWeight: "800", color: "#f59e0b" }}>Friend Request Pending</Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.chatBtn, { backgroundColor: colors.accent }]}
+                  onPress={() => {
+                    const uname = selectedUserPreview.username;
+                    setSelectedUserPreview(null);
+                    handleSendRequest(uname);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="person-add" size={18} color="#fff" />
+                  <Text style={styles.chatBtnText}>Send Friend Request</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </PageTransition>
   );
@@ -839,5 +992,124 @@ const getStyles = (colors: any) =>
       textAlign: "center",
       lineHeight: 18,
       marginTop: 4,
+    },
+
+    /* USER PROFILE INFO MODAL STYLES */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 24,
+    },
+    modalCard: {
+      width: "100%",
+      maxWidth: 380,
+      borderRadius: 24,
+      borderWidth: 1.5,
+      padding: 20,
+      elevation: 10,
+      shadowColor: "#000",
+      shadowOpacity: 0.15,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+    },
+    modalCardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    modalCardCategory: {
+      fontSize: 10.5,
+      fontWeight: "900",
+      letterSpacing: 1.2,
+    },
+    previewAvatarBox: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    previewAvatarText: {
+      fontSize: 26,
+      fontWeight: "900",
+      color: "#fff",
+    },
+    previewUsername: {
+      fontSize: 18,
+      fontWeight: "900",
+    },
+    rankTag: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 10,
+      marginTop: 4,
+      marginBottom: 6,
+    },
+    rankTagText: {
+      fontSize: 11,
+      fontWeight: "800",
+    },
+    previewBio: {
+      fontSize: 12.5,
+      fontStyle: "italic",
+      textAlign: "center",
+      marginTop: 2,
+      paddingHorizontal: 12,
+    },
+    previewStatsGrid: {
+      flexDirection: "row",
+      borderRadius: 16,
+      borderWidth: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 8,
+      marginBottom: 14,
+      justifyContent: "space-around",
+      alignItems: "center",
+    },
+    previewStatCol: {
+      alignItems: "center",
+      flex: 1,
+    },
+    previewStatLabel: {
+      fontSize: 9.5,
+      fontWeight: "900",
+      letterSpacing: 0.5,
+      marginBottom: 2,
+    },
+    previewStatVal: {
+      fontSize: 13.5,
+      fontWeight: "900",
+    },
+    statDivider: {
+      width: 1,
+      height: 24,
+    },
+    previewFriendStatus: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 14,
+      borderWidth: 1,
+    },
+    chatBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 13,
+      borderRadius: 14,
+    },
+    chatBtnText: {
+      color: "#fff",
+      fontSize: 13.5,
+      fontWeight: "800",
     },
   });

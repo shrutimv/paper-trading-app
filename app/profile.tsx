@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Stack, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../context/ThemeContext';
@@ -87,6 +87,13 @@ export default function ProfileScreen() {
 
   const loadFriendsRequests = async () => {
     try {
+      // 1. Immediately read cached count from AsyncStorage for INSTANT 0ms rendering
+      const cached = await AsyncStorage.getItem('@pending_friend_requests_count');
+      if (cached !== null) {
+        setPendingRequestsCount(parseInt(cached, 10) || 0);
+      }
+
+      // 2. Fetch fresh count from network and sync
       const authHeaders = await getAuthHeaders();
       const res = await axios.get(`${BASE_URL}/api/social/friends`, {
         headers: authHeaders,
@@ -95,11 +102,18 @@ export default function ProfileScreen() {
       });
       if (res.data?.success && Array.isArray(res.data.incomingRequests)) {
         setPendingRequestsCount(res.data.incomingRequests.length);
+        await AsyncStorage.setItem('@pending_friend_requests_count', String(res.data.incomingRequests.length));
       }
     } catch {
       // non-blocking
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFriendsRequests();
+    }, [])
+  );
 
   const loadUser = async () => {
     try {

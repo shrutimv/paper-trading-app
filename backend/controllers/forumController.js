@@ -370,3 +370,64 @@ module.exports.deletePost = async (req, res) => {
     res.status(500).json({ success: false, message: "Failed to delete post." });
   }
 };
+
+// POST /api/forum/comments/:commentId/like
+// Toggle like on a comment (supports registered users & guests)
+module.exports.toggleCommentLike = async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const { guestId } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(commentId)) {
+      return res.status(404).json({ success: false, message: "Invalid comment ID." });
+    }
+
+    const comment = await Comment.findById(commentId);
+    if (!comment) {
+      return res.status(404).json({ success: false, message: "Comment not found." });
+    }
+
+    const isRegistered = !!req.user;
+    let isLiked = false;
+
+    if (isRegistered) {
+      const uId = req.user._id;
+      const index = (comment.likes || []).findIndex((id) => id.toString() === uId.toString());
+      if (index > -1) {
+        comment.likes.splice(index, 1);
+        isLiked = false;
+      } else {
+        comment.likes.push(uId);
+        isLiked = true;
+      }
+    } else {
+      const finalGuestId = guestId || req.headers["x-guest-id"] || "";
+      if (!finalGuestId) {
+        return res.status(400).json({ success: false, message: "Guest identifier required." });
+      }
+      const index = (comment.guestLikes || []).indexOf(finalGuestId);
+      if (index > -1) {
+        comment.guestLikes.splice(index, 1);
+        isLiked = false;
+      } else {
+        comment.guestLikes.push(finalGuestId);
+        isLiked = true;
+      }
+    }
+
+    await comment.save();
+
+    const regLikes = comment.likes ? comment.likes.length : 0;
+    const guestLikes = comment.guestLikes ? comment.guestLikes.length : 0;
+
+    res.status(200).json({
+      success: true,
+      message: isLiked ? "Liked comment" : "Unliked comment",
+      likesCount: regLikes + guestLikes,
+      isLiked,
+    });
+  } catch (err) {
+    console.error("toggleCommentLike error:", err);
+    res.status(500).json({ success: false, message: "Failed to update comment like." });
+  }
+};

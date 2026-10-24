@@ -13,6 +13,7 @@ router.get("/posts/:id", forumController.getPostById);
 router.post("/posts", forumController.createPost);
 router.post("/posts/:id/like", forumController.toggleLike);
 router.post("/posts/:id/comment", forumController.addComment);
+router.post("/comments/:commentId/like", forumController.toggleCommentLike);
 router.delete("/posts/:id", forumController.deletePost);
 
 module.exports = router;
