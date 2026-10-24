@@ -11,6 +11,9 @@ import {
   Platform,
   Dimensions,
   Alert,
+  Keyboard,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -68,9 +71,42 @@ export default function PostDetailScreen() {
   // Replying & Tagging States
   const [replyingTo, setReplyingTo] = useState<{ username: string; commentId: string } | null>(null);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const commentInputRef = useRef<TextInput>(null);
+
+  // Enable LayoutAnimation for Android
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      if (Platform.OS === 'android') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(e.endCoordinates.height);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      if (Platform.OS === 'android') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Load guest ID
   useEffect(() => {
@@ -596,7 +632,20 @@ export default function PostDetailScreen() {
 
         {/* Sticky Comment Input Bar with Tag Suggestions and Replying Banner */}
         {post && (
-          <View>
+          <View
+            style={[
+              styles.bottomStickyWrapper,
+              {
+                backgroundColor: colors.card,
+                borderTopColor: colors.border,
+                // On Android: when typing, lift the entire bar by keyboardHeight so it floats right on top of the keyboard.
+                // When keyboard is closed, keep a tight 8px padding to eliminate the gap above the home buttons!
+                paddingBottom: Platform.OS === 'android'
+                  ? (keyboardHeight > 0 ? keyboardHeight : 8)
+                  : (keyboardHeight > 0 ? 6 : Math.max(insets.bottom, 10)),
+              },
+            ]}
+          >
             {/* Autocomplete Tag Suggestions Popup */}
             {tagSuggestions.length > 0 && (
               <View style={[styles.tagSuggestionsPopup, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -639,16 +688,7 @@ export default function PostDetailScreen() {
               </View>
             )}
 
-            <View
-              style={[
-                styles.bottomInputBar,
-                {
-                  backgroundColor: colors.card,
-                  borderTopColor: colors.border,
-                  paddingBottom: Math.max(insets.bottom, 10),
-                },
-              ]}
-            >
+            <View style={styles.bottomInputBar}>
               <TextInput
                 ref={commentInputRef}
                 style={[
@@ -663,6 +703,11 @@ export default function PostDetailScreen() {
                 placeholderTextColor={colors.textSecondary}
                 value={newCommentText}
                 onChangeText={handleCommentTextChange}
+                onFocus={() => {
+                  setTimeout(() => {
+                    scrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 150);
+                }}
                 multiline
                 maxLength={600}
               />
@@ -962,12 +1007,15 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderTopWidth: 1,
   },
+  bottomStickyWrapper: {
+    borderTopWidth: 1,
+  },
   bottomInputBar: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingTop: 8,
-    borderTopWidth: 1,
+    paddingBottom: 6,
     gap: 10,
   },
   commentInput: {

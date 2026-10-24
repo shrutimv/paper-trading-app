@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,8 +14,11 @@ import {
   Dimensions,
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, Stack } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -25,7 +28,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { BASE_URL } from '../../src/config/api';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export interface ForumPost {
   _id: string;
@@ -59,6 +62,7 @@ export default function ForumScreen() {
   const { colors, isDark } = useTheme();
   const { user } = useAuth();
   const styles = getStyles(colors, isDark);
+  const insets = useSafeAreaInsets();
 
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +79,38 @@ export default function ForumScreen() {
   const [newCategory, setNewCategory] = useState<ForumPost['category']>('GENERAL');
   const [newStockTag, setNewStockTag] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const modalScrollRef = useRef<ScrollView>(null);
+
+  // Enable LayoutAnimation for Android keyboard transition
+  useEffect(() => {
+    if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+      UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      if (Platform.OS === 'android') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      if (Platform.OS === 'android') {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      }
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // Load or generate persistent guest ID
   useEffect(() => {
@@ -502,21 +538,54 @@ export default function ForumScreen() {
       )}
 
       {/* Create Post Modal */}
-      <Modal visible={isCreateOpen} animationType="slide" transparent>
-        <SafeAreaView style={styles.modalBackdrop}>
+      <Modal visible={isCreateOpen} animationType="slide" transparent onRequestClose={() => setIsCreateOpen(false)}>
+        <View style={styles.modalBackdrop}>
+          {/* Tapping outside card dismisses keyboard if open, or closes modal if keyboard is closed */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => {
+              if (keyboardHeight > 0) {
+                Keyboard.dismiss();
+              } else {
+                setIsCreateOpen(false);
+              }
+            }}
+          />
+
           <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-            style={{ width: '100%', maxHeight: '90%', justifyContent: 'flex-end' }}
+            style={[
+              {
+                width: '100%',
+                justifyContent: 'flex-end',
+              },
+              Platform.OS === 'android' && keyboardHeight > 0 && {
+                paddingBottom: keyboardHeight,
+              },
+            ]}
           >
-            <View style={styles.modalCard}>
+            <View
+              style={[
+                styles.modalCard,
+                {
+                  maxHeight: keyboardHeight > 0
+                    ? Math.max(SCREEN_HEIGHT - keyboardHeight - (insets.top || 30) - 20, 320)
+                    : SCREEN_HEIGHT * 0.88,
+                },
+              ]}
+            >
               <View style={styles.modalHeader}>
                 <View>
                   <Text style={styles.modalTitle}>New Discussion</Text>
                   <Text style={styles.modalSub}>Share insights with the community</Text>
                 </View>
                 <TouchableOpacity
-                  onPress={() => setIsCreateOpen(false)}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setIsCreateOpen(false);
+                  }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons name="close" size={24} color={colors.text} />
@@ -524,9 +593,11 @@ export default function ForumScreen() {
               </View>
 
               <ScrollView 
+                ref={modalScrollRef}
                 showsVerticalScrollIndicator={false} 
                 keyboardShouldPersistTaps="handled"
-                contentContainerStyle={{ paddingBottom: 24 }}
+                keyboardDismissMode="on-drag"
+                contentContainerStyle={{ paddingBottom: 36 }}
               >
               {/* Category Picker */}
               <Text style={styles.inputLabel}>CATEGORY</Text>
@@ -575,6 +646,11 @@ export default function ForumScreen() {
                 value={newTitle}
                 onChangeText={setNewTitle}
                 maxLength={140}
+                onFocus={() => {
+                  setTimeout(() => {
+                    modalScrollRef.current?.scrollTo({ y: 120, animated: true });
+                  }, 150);
+                }}
               />
 
               {/* Content Body */}
@@ -588,6 +664,11 @@ export default function ForumScreen() {
                 multiline
                 numberOfLines={6}
                 textAlignVertical="top"
+                onFocus={() => {
+                  setTimeout(() => {
+                    modalScrollRef.current?.scrollToEnd({ animated: true });
+                  }, 150);
+                }}
               />
 
               {/* Submit CTA */}
@@ -608,7 +689,7 @@ export default function ForumScreen() {
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     </Modal>
   </SafeAreaView>
 );
