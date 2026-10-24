@@ -11,15 +11,16 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
     const sessionStr = await AsyncStorage.getItem("userSession");
     if (sessionStr) {
       const user = JSON.parse(sessionStr);
-      if (user && (user.id || user._id)) {
+      if (user && !user.isGuest && (user.id || user._id)) {
         return {
           "x-user-id": String(user.id || user._id),
           "x-user-username": String(user.username || ""),
+          "x-is-guest": "false",
         };
       }
     }
   } catch (e) {
     // ignore
   }
-  return {};
+  return { "x-is-guest": "true" };
 }

@@ -78,7 +78,7 @@ interface UserSuggestion {
 export default function FriendsScreen() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest, isLoggedIn } = useAuth();
   const styles = getStyles(colors);
 
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -92,9 +92,47 @@ export default function FriendsScreen() {
   const [isSearchingSelf, setIsSearchingSelf] = useState(false);
   const [selectedUserPreview, setSelectedUserPreview] = useState<any | null>(null);
 
+  // Tab state: Friends Network vs Active Chats
+  const [activeTab, setActiveTab] = useState<'network' | 'chats'>('network');
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [loadingChats, setLoadingChats] = useState(false);
+
   const searchDebounceRef = useRef<any>(null);
 
+  const fetchConversations = useCallback(async () => {
+    if (isGuest || !isLoggedIn || !user || user.isGuest) {
+      setConversations([]);
+      setLoadingChats(false);
+      return;
+    }
+    try {
+      setLoadingChats(true);
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch(`${BASE_URL}/api/chat/conversations`, {
+        headers: {
+          ...authHeaders,
+        },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setConversations(data.conversations || []);
+      }
+    } catch (e) {
+      console.log("fetchConversations error:", e);
+    } finally {
+      setLoadingChats(false);
+    }
+  }, [isGuest, isLoggedIn, user]);
+
   const fetchFriendsData = useCallback(async () => {
+    if (isGuest || !isLoggedIn || !user || user.isGuest) {
+      setFriends([]);
+      setRequests([]);
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
     try {
       const authHeaders = await getAuthHeaders();
       const res = await fetch(`${BASE_URL}/api/social/friends`, {
@@ -134,12 +172,20 @@ export default function FriendsScreen() {
   }, []);
 
   useEffect(() => {
-    fetchFriendsData();
-  }, [fetchFriendsData]);
+    if (!isGuest && isLoggedIn && user && !user.isGuest) {
+      fetchFriendsData();
+      fetchConversations();
+    } else {
+      setLoading(false);
+      setFriends([]);
+      setRequests([]);
+    }
+  }, [fetchFriendsData, fetchConversations, isGuest, isLoggedIn, user]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchFriendsData();
+    fetchConversations();
   };
 
   // --- LIVE AUTOCOMPLETE SEARCH AS USER TYPES ---
@@ -313,6 +359,48 @@ export default function FriendsScreen() {
     ]);
   };
 
+  // GUEST PROFILE RESTRICTION SCREEN
+  if (isGuest || !isLoggedIn || !user || user.isGuest) {
+    return (
+      <PageTransition>
+        <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+              <Ionicons name="arrow-back" size={24} color={colors.text} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.headerSubtitle}>TRADING NETWORK</Text>
+              <Text style={styles.headerTitle}>Friends & Rivals</Text>
+            </View>
+          </View>
+
+          <View style={styles.guestLockedContainer}>
+            <View style={[styles.guestLockedIconBox, { backgroundColor: colors.accent + '18' }]}>
+              <Ionicons name="people" size={46} color={colors.accent} />
+            </View>
+            <Text style={[styles.guestLockedTitle, { color: colors.text }]}>
+              Social Network & Chat Locked
+            </Text>
+            <Text style={[styles.guestLockedDesc, { color: colors.textSecondary }]}>
+              Guest profiles cannot add friends, view friend requests, or chat 1-on-1.
+              {"\n\n"}
+              Log in or register a free account to build your trader circle, challenge rivals to portfolio battles, and message confirmed friends!
+            </Text>
+
+            <TouchableOpacity
+              style={[styles.guestLoginBtn, { backgroundColor: colors.accent }]}
+              onPress={() => router.push('/auth' as any)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="log-in-outline" size={20} color="#ffffff" />
+              <Text style={styles.guestLoginBtnText}>Log In / Create Account</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </PageTransition>
+    );
+  }
+
   return (
     <PageTransition>
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
@@ -334,14 +422,139 @@ export default function FriendsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* TAB SWITCHER: FRIENDS NETWORK VS ACTIVE CHATS */}
+        <View style={[styles.tabBarContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={[
+              styles.tabBarItem,
+              activeTab === 'network' && { backgroundColor: colors.accent },
+            ]}
+            onPress={() => setActiveTab('network')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="people"
+              size={16}
+              color={activeTab === 'network' ? '#ffffff' : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.tabBarText,
+                { color: activeTab === 'network' ? '#ffffff' : colors.textSecondary },
+              ]}
+            >
+              Friends ({friends.length})
+            </Text>
+            {requests.length > 0 && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>{requests.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabBarItem,
+              activeTab === 'chats' && { backgroundColor: colors.accent },
+            ]}
+            onPress={() => {
+              setActiveTab('chats');
+              fetchConversations();
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="chatbubble-ellipses"
+              size={16}
+              color={activeTab === 'chats' ? '#ffffff' : colors.textSecondary}
+            />
+            <Text
+              style={[
+                styles.tabBarText,
+                { color: activeTab === 'chats' ? '#ffffff' : colors.textSecondary },
+              ]}
+            >
+              Active Chats
+            </Text>
+            {conversations.some((c) => c.unreadCount > 0) && (
+              <View style={styles.tabBadge}>
+                <Text style={styles.tabBadgeText}>
+                  {conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0)}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         >
-          {/* SEARCH BOX FOR UNIQUE USERNAME */}
-          <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {activeTab === 'chats' ? (
+            /* ACTIVE CHATS LIST */
+            <View style={styles.section}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Direct Conversations</Text>
+                <Text style={{ fontSize: 12, color: colors.textSecondary }}>1-on-1 Confirmed Friends</Text>
+              </View>
+
+              {loadingChats ? (
+                <ActivityIndicator size="small" color={colors.accent} style={{ marginTop: 24 }} />
+              ) : conversations.length === 0 ? (
+                <View style={[styles.emptyFriendsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Ionicons name="chatbubbles-outline" size={44} color={colors.textSecondary} />
+                  <Text style={[styles.emptyFriendsTitle, { color: colors.text }]}>No Conversations Yet</Text>
+                  <Text style={[styles.emptyFriendsDesc, { color: colors.textSecondary }]}>
+                    Tap the "Chat" button next to any of your friends to discuss market trends, trade setups, and portfolio strategy!
+                  </Text>
+                </View>
+              ) : (
+                conversations.map((c) => (
+                  <TouchableOpacity
+                    key={c.conversationId}
+                    style={[styles.conversationCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    onPress={() => {
+                      router.push({
+                        pathname: '/chat/[friendId]',
+                        params: { friendId: c.friend.id, username: c.friend.username },
+                      });
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.userAvatar, { backgroundColor: colors.accent }]}>
+                      <Text style={[styles.userAvatarText, { color: "#fff" }]}>
+                        {c.friend.username.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+
+                    <View style={{ flex: 1, marginHorizontal: 12 }}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                        <Text style={[styles.userName, { color: colors.text }]}>@{c.friend.username}</Text>
+                        <Text style={{ fontSize: 10.5, color: colors.textSecondary }}>
+                          {c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12.5, color: colors.textSecondary, marginTop: 2 }} numberOfLines={1}>
+                        {c.lastMessage || "Start chatting..."}
+                      </Text>
+                    </View>
+
+                    {c.unreadCount > 0 && (
+                      <View style={styles.unreadCountPill}>
+                        <Text style={styles.unreadCountText}>{c.unreadCount}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          ) : (
+            /* FRIENDS NETWORK TAB */
+            <>
+              {/* SEARCH BOX FOR UNIQUE USERNAME */}
+              <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Ionicons name="search" size={20} color={colors.textSecondary} />
             <TextInput
               style={[styles.searchInput, { color: colors.text }]}
@@ -593,12 +806,27 @@ export default function FriendsScreen() {
                     </Text>
                   </View>
 
-                  <View style={{ alignItems: "flex-end", marginRight: 10 }}>
+                  <View style={{ alignItems: "flex-end", marginRight: 8 }}>
                     <Text style={{ fontSize: 13, fontWeight: "800", color: colors.text }}>
                       ₹{friend.balance.toLocaleString()}
                     </Text>
                     <Text style={{ fontSize: 11, color: "#10b981", fontWeight: "700" }}>Portfolio Active</Text>
                   </View>
+
+                  <TouchableOpacity
+                    style={[styles.chatBtnPill, { backgroundColor: colors.accent }]}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push({
+                        pathname: '/chat/[friendId]',
+                        params: { friendId: friend.id, username: friend.username },
+                      });
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="chatbubble-ellipses" size={13} color="#fff" />
+                    <Text style={styles.chatBtnPillText}>Chat</Text>
+                  </TouchableOpacity>
 
                   <TouchableOpacity
                     onPress={(e) => {
@@ -613,6 +841,8 @@ export default function FriendsScreen() {
               ))
             )}
           </View>
+          </>
+          )}
 
           <View style={{ height: 100 }} />
         </ScrollView>
@@ -697,12 +927,15 @@ export default function FriendsScreen() {
                   <TouchableOpacity
                     style={[styles.chatBtn, { backgroundColor: colors.accent }]}
                     onPress={() => {
-                      Alert.alert(
-                        "Direct Messaging (v1.4)",
-                        `Direct encrypted chat with @${selectedUserPreview.username} will be available in the upcoming v1.4 release! Stay tuned.`
-                      );
+                      const friendId = selectedUserPreview.id;
+                      const username = selectedUserPreview.username;
+                      setSelectedUserPreview(null);
+                      router.push({
+                        pathname: '/chat/[friendId]',
+                        params: { friendId, username },
+                      });
                     }}
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
                   >
                     <Ionicons name="chatbubbles" size={18} color="#fff" />
                     <Text style={styles.chatBtnText}>Direct Message @{selectedUserPreview.username}</Text>
@@ -1110,6 +1343,115 @@ const getStyles = (colors: any) =>
     chatBtnText: {
       color: "#fff",
       fontSize: 13.5,
+      fontWeight: "800",
+    },
+    tabBarContainer: {
+      flexDirection: "row",
+      borderRadius: 14,
+      borderWidth: 1,
+      padding: 4,
+      marginHorizontal: 20,
+      marginBottom: 16,
+      gap: 6,
+    },
+    tabBarItem: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 9,
+      borderRadius: 10,
+      gap: 6,
+    },
+    tabBarText: {
+      fontSize: 12.5,
+      fontWeight: "800",
+    },
+    tabBadge: {
+      backgroundColor: "#ef4444",
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 10,
+    },
+    tabBadgeText: {
+      color: "#ffffff",
+      fontSize: 10,
+      fontWeight: "900",
+    },
+    chatBtnPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 16,
+      marginRight: 6,
+    },
+    chatBtnPillText: {
+      color: "#ffffff",
+      fontSize: 11.5,
+      fontWeight: "800",
+    },
+    conversationCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 14,
+      borderRadius: 18,
+      borderWidth: 1,
+      marginBottom: 10,
+    },
+    unreadCountPill: {
+      backgroundColor: "#ef4444",
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 6,
+    },
+    unreadCountText: {
+      color: "#ffffff",
+      fontSize: 10,
+      fontWeight: "900",
+    },
+    guestLockedContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 32,
+      paddingTop: 60,
+    },
+    guestLockedIconBox: {
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      alignItems: "center",
+      justifyContent: "center",
+      marginBottom: 20,
+    },
+    guestLockedTitle: {
+      fontSize: 20,
+      fontWeight: "900",
+      marginBottom: 10,
+      textAlign: "center",
+    },
+    guestLockedDesc: {
+      fontSize: 13.5,
+      lineHeight: 22,
+      textAlign: "center",
+      marginBottom: 28,
+    },
+    guestLoginBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 28,
+      paddingVertical: 13,
+      borderRadius: 24,
+    },
+    guestLoginBtnText: {
+      color: "#ffffff",
+      fontSize: 14,
       fontWeight: "800",
     },
   });

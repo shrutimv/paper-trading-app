@@ -104,6 +104,14 @@ export const AuthProvider = ({
     };
 
     const continueAsGuest = async () => {
+        try {
+            await fetch(`${BASE_URL}/api/auth/logout`, {
+                method: "POST",
+                credentials: "include",
+            });
+        } catch (e) {
+            // ignore network error
+        }
 
         const guestUser: User = {
             username: "Guest User",
@@ -115,16 +123,11 @@ export const AuthProvider = ({
             "userSession",
             JSON.stringify(guestUser)
         );
+        await AsyncStorage.removeItem("@pending_friend_requests_count");
 
         setUser(guestUser);
-
         setIsGuest(true);
         setIsLoggedIn(false);
-        // setUser({
-        //     username: "Guest User",
-        //     balance: 100000,
-        //     isGuest: true,
-        // });
     };
 
     const login = async (user: User) => {
@@ -134,18 +137,26 @@ export const AuthProvider = ({
         );
 
         setUser(user);
-
         setIsGuest(false);
         setIsLoggedIn(true);
     };
+
     const logout = async () => {
+        try {
+            await fetch(`${BASE_URL}/api/auth/logout`, {
+                method: "POST",
+                credentials: "include",
+            });
+        } catch (e) {
+            // ignore network error
+        }
 
         await AsyncStorage.removeItem("userSession");
+        await AsyncStorage.removeItem("@pending_friend_requests_count");
 
         setIsGuest(false);
         setIsLoggedIn(false);
         setUser(null);
-
     };
 
     const refreshUser = async () => {

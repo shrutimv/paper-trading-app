@@ -89,6 +89,12 @@ passport.deserializeUser(User.deserializeUser());
 
 // Mobile App Authentication Fallback: If session cookie is missing, resolve req.user via x-user-id header
 app.use(async (req, res, next) => {
+    // Strict Guest Isolation: If client explicitly declares it is a guest, wipe any req.user from stale session cookies
+    if (req.headers["x-is-guest"] === "true") {
+        req.user = null;
+        return next();
+    }
+
     if (!req.user) {
         const userId = req.headers["x-user-id"];
         if (userId && mongoose.Types.ObjectId.isValid(userId)) {
@@ -121,6 +127,10 @@ app.use("/api/forum", forumRoutes);
 //social & leaderboard
 const socialRoutes = require("./routes/socialRoutes");
 app.use("/api/social", socialRoutes);
+
+//direct 1-on-1 chat
+const chatRoutes = require("./routes/chatRoutes");
+app.use("/api/chat", chatRoutes);
 
 
 app.get("/",(req,res)=>{
