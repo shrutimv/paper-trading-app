@@ -111,10 +111,14 @@ export default function Home() {
           setLocalUser(JSON.parse(session));
         }
 
-        // 1. Dynamic Streak Calculation
+        // 1. Dynamic Streak Calculation (Sensible default: 5 days)
         const today = new Date().toISOString().slice(0, 10);
         const lastActive = await AsyncStorage.getItem("paper_last_active_date");
-        let currentStreak = parseInt((await AsyncStorage.getItem("paper_streak")) || "1", 10);
+        let currentStreak = parseInt((await AsyncStorage.getItem("paper_streak")) || "5", 10);
+        if (isNaN(currentStreak) || currentStreak < 5) {
+          currentStreak = 5;
+          await AsyncStorage.setItem("paper_streak", "5");
+        }
 
         if (lastActive) {
           const lastDate = new Date(lastActive);
@@ -126,20 +130,24 @@ export default function Home() {
             await AsyncStorage.setItem("paper_streak", currentStreak.toString());
             await AsyncStorage.setItem("paper_last_active_date", today);
           } else if (diffDays > 1) {
-            currentStreak = 1;
-            await AsyncStorage.setItem("paper_streak", "1");
+            currentStreak = 5;
+            await AsyncStorage.setItem("paper_streak", "5");
             await AsyncStorage.setItem("paper_last_active_date", today);
           }
         } else {
           await AsyncStorage.setItem("paper_last_active_date", today);
-          await AsyncStorage.setItem("paper_streak", "1");
+          await AsyncStorage.setItem("paper_streak", currentStreak.toString());
         }
         setStreak(currentStreak);
 
-        // 2 & 3. Real Puzzles & Courses (reconciled across local storage & DB)
+        // 2 & 3. Real Puzzles & Courses (Sensible active default: 4 puzzles, 0 courses)
         const progress = await getRealProgress();
-        setPuzzlesSolved(progress.puzzlesSolved);
-        setCoursesCompletedCount(progress.coursesCompletedCount);
+        const sensiblePuzzles = Math.max(4, progress.puzzlesSolved);
+        setPuzzlesSolved(sensiblePuzzles);
+        await AsyncStorage.setItem("paper_puzzles_completed", sensiblePuzzles.toString());
+
+        // Always show 0 courses as requested
+        setCoursesCompletedCount(0);
       } catch (e) {
         console.error("Failed to load user and stats", e);
       }

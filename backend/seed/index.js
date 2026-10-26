@@ -31,8 +31,8 @@ async function seedDatabase() {
         email: u.email,
         balance: 100000,
         xp: 0,
-        streak: 1,
-        puzzlesCompleted: 0,
+        streak: 5,
+        puzzlesCompleted: 4,
         coursesCompleted: [],
         watchlist: [
           { symbol: "RELIANCE.NS", shortname: "Reliance Industries", exchange: "NSE" },

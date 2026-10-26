@@ -6,6 +6,9 @@ from cachetools import TTLCache, cached
 from typing import List, Dict, Tuple, Any
 from datetime import datetime, timezone, timedelta
 
+import time
+from concurrent.futures import ThreadPoolExecutor
+
 # Cache for search & chart responses
 cache = TTLCache(maxsize=1024, ttl=120)  # 2 minutes cache
 
@@ -16,6 +19,9 @@ SYMBOL_ALIASES = {
     "TATAMOTORS": "TMCV.NS",
     "TATAMTRDVR.NS": "TMCV.NS",
     "TATAMTRDVR.BO": "TMCV.BO",
+    "ZOMATO.NS": "ETERNAL.NS",
+    "ZOMATO.BO": "543320.BO",
+    "ZOMATO": "ETERNAL.NS",
 }
 
 
@@ -61,9 +67,33 @@ def yahoo_search(name: str) -> List[dict]:
         results = []
 
     out = []
+    lower_name = name.strip().lower()
+    if "zomato" in lower_name:
+        out.append({
+            "symbol": "ETERNAL.NS",
+            "shortname": "Zomato Ltd (Eternal)",
+            "exchange": "NSE",
+            "quoteType": "EQUITY",
+        })
+    if "tata motor" in lower_name:
+        out.append({
+            "symbol": "TMCV.NS",
+            "shortname": "Tata Motors Ltd (Commercial)",
+            "exchange": "NSE",
+            "quoteType": "EQUITY",
+        })
+        out.append({
+            "symbol": "TMPV.NS",
+            "shortname": "Tata Motors Pass Veh Ltd",
+            "exchange": "NSE",
+            "quoteType": "EQUITY",
+        })
+
     for item in results:
         sym = item.get("symbol")
         if not sym:
+            continue
+        if any(x.get("symbol") == sym for x in out):
             continue
         out.append(_normalize_item(item))
     return out
@@ -162,13 +192,25 @@ def fetch_chart_data(symbol: str, period: str = "5d", interval: str = "15m") -> 
 
 
 KNOWN_BENCHMARK_PRICES = {
-    "ZOMATO.NS": {"price": 249.00, "name": "Zomato Limited", "prevClose": 244.20, "high": 252.00, "low": 243.50, "vol": 38450000},
-    "ZOMATO.BO": {"price": 249.00, "name": "Zomato Limited", "prevClose": 244.20, "high": 252.00, "low": 243.50, "vol": 38450000},
-    "ZOMATO": {"price": 249.00, "name": "Zomato Limited", "prevClose": 244.20, "high": 252.00, "low": 243.50, "vol": 38450000},
-    "543320.BO": {"price": 249.00, "name": "Zomato Limited", "prevClose": 244.20, "high": 252.00, "low": 243.50, "vol": 38450000},
-    "TATAMOTORS.NS": {"price": 410.30, "name": "Tata Motors Ltd", "prevClose": 405.00, "high": 416.00, "low": 403.00, "vol": 14500000},
-    "TATAMOTORS": {"price": 410.30, "name": "Tata Motors Ltd", "prevClose": 405.00, "high": 416.00, "low": 403.00, "vol": 14500000},
-    "TMCV.NS": {"price": 410.30, "name": "Tata Motors Ltd", "prevClose": 405.00, "high": 416.00, "low": 403.00, "vol": 14500000},
+    "ZOMATO.NS": {"price": 327.35, "name": "Zomato Limited (Eternal)", "prevClose": 317.40, "high": 331.00, "low": 315.00, "vol": 38450000},
+    "ZOMATO.BO": {"price": 327.35, "name": "Zomato Limited (Eternal)", "prevClose": 317.40, "high": 331.00, "low": 315.00, "vol": 38450000},
+    "ZOMATO": {"price": 327.35, "name": "Zomato Limited (Eternal)", "prevClose": 317.40, "high": 331.00, "low": 315.00, "vol": 38450000},
+    "ETERNAL.NS": {"price": 327.35, "name": "Zomato Limited (Eternal)", "prevClose": 317.40, "high": 331.00, "low": 315.00, "vol": 38450000},
+    "ETERNAL": {"price": 327.35, "name": "Zomato Limited (Eternal)", "prevClose": 317.40, "high": 331.00, "low": 315.00, "vol": 38450000},
+    "543320.BO": {"price": 327.35, "name": "Zomato Limited (Eternal)", "prevClose": 317.40, "high": 331.00, "low": 315.00, "vol": 38450000},
+    "TATAMOTORS.NS": {"price": 389.10, "name": "Tata Motors Ltd", "prevClose": 396.00, "high": 398.00, "low": 385.00, "vol": 14500000},
+    "TATAMOTORS": {"price": 389.10, "name": "Tata Motors Ltd", "prevClose": 396.00, "high": 398.00, "low": 385.00, "vol": 14500000},
+    "TMCV.NS": {"price": 389.10, "name": "Tata Motors Ltd", "prevClose": 396.00, "high": 398.00, "low": 385.00, "vol": 14500000},
+    "RELIANCE.NS": {"price": 1202.30, "name": "Reliance Industries Ltd", "prevClose": 1190.00, "high": 1215.00, "low": 1188.00, "vol": 12500000},
+    "RELIANCE": {"price": 1202.30, "name": "Reliance Industries Ltd", "prevClose": 1190.00, "high": 1215.00, "low": 1188.00, "vol": 12500000},
+    "INFY.NS": {"price": 1150.65, "name": "Infosys Ltd", "prevClose": 1153.80, "high": 1165.00, "low": 1145.00, "vol": 8500000},
+    "SBIN.NS": {"price": 960.75, "name": "State Bank of India", "prevClose": 958.60, "high": 968.00, "low": 952.00, "vol": 16500000},
+    "TCS.NS": {"price": 2530.00, "name": "Tata Consultancy Services", "prevClose": 2530.00, "high": 2555.00, "low": 2515.00, "vol": 4200000},
+    "WIPRO.NS": {"price": 189.25, "name": "Wipro Ltd", "prevClose": 189.84, "high": 192.00, "low": 187.50, "vol": 9200000},
+    "BHARTIARTL.NS": {"price": 1905.70, "name": "Bharti Airtel Ltd", "prevClose": 1892.10, "high": 1920.00, "low": 1885.00, "vol": 7800000},
+    "ITC.NS": {"price": 259.75, "name": "ITC Ltd", "prevClose": 257.90, "high": 262.00, "low": 256.00, "vol": 22000000},
+    "HDFCBANK.NS": {"price": 687.40, "name": "HDFC Bank Ltd", "prevClose": 692.80, "high": 695.00, "low": 682.00, "vol": 19500000},
+    "ICICIBANK.NS": {"price": 1395.90, "name": "ICICI Bank Ltd", "prevClose": 1394.20, "high": 1408.00, "low": 1385.00, "vol": 15500000},
     "JIOFIN.NS": {"price": 314.50, "name": "Jio Financial Services", "prevClose": 305.20, "high": 320.00, "low": 302.00, "vol": 18200000},
     "JIOFIN": {"price": 314.50, "name": "Jio Financial Services", "prevClose": 305.20, "high": 320.00, "low": 302.00, "vol": 18200000},
     "SWIGGY": {"price": 390.00, "name": "Swiggy Limited", "prevClose": 371.00, "high": 395.00, "low": 370.00, "vol": 12500000},
@@ -585,56 +627,86 @@ def get_live_ipos() -> List[dict]:
     ]
 
 
+_screener_cache = {"data": None, "timestamp": 0}
+
+
+def fetch_screener_quote(symbol: str) -> dict | None:
+    """Fetch live quote for a single symbol from Yahoo Finance."""
+    query_sym = SYMBOL_ALIASES.get(symbol.strip().upper(), symbol.strip().upper())
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{quote(query_sym)}?range=1d&interval=5m"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    try:
+        r = requests.get(url, headers=headers, timeout=4)
+        data = r.json()
+        result = data.get("chart", {}).get("result")
+        if result and len(result) > 0:
+            meta = result[0].get("meta", {})
+            price = meta.get("regularMarketPrice")
+            if price and price > 0:
+                prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
+                change = round(float(price) - float(prev), 2)
+                pct = round((change / float(prev)) * 100, 2) if prev else 0.0
+                return {"price": round(float(price), 2), "change": change, "changePercent": pct}
+    except Exception:
+        pass
+    return None
+
+
 def get_market_screener_data() -> dict:
-    """Returns categorized high-momentum stock scanners with actionable trade setups."""
-    return {
+    """Returns categorized high-momentum stock scanners with actionable trade setups and live market prices."""
+    global _screener_cache
+    now = time.time()
+    if _screener_cache["data"] and (now - _screener_cache["timestamp"] < 60):
+        return _screener_cache["data"]
+
+    base_data = {
         "volume_shockers": [
             {
                 "symbol": "TATAMOTORS.NS",
                 "shortname": "Tata Motors Ltd",
-                "price": 410.30,
-                "change": 14.80,
-                "changePercent": 3.74,
+                "price": 389.10,
+                "change": -6.90,
+                "changePercent": -1.74,
                 "volumeMultiplier": "4.8x Volume Surge",
                 "catalyst": "Commercial Vehicle Fleet Surge & EV Division Growth",
                 "signal": "BULLISH BREAKOUT",
                 "score": 92,
-                "entryZone": "₹405 - ₹415",
-                "target1": 435.00,
-                "target2": 455.00,
-                "stopLoss": 395.00,
+                "entryZone": "₹385 - ₹393",
+                "target1": 410.00,
+                "target2": 430.00,
+                "stopLoss": 375.00,
                 "riskReward": "1:2.8",
             },
             {
                 "symbol": "ZOMATO.NS",
-                "shortname": "Zomato Ltd",
-                "price": 249.00,
-                "change": 4.80,
-                "changePercent": 1.97,
+                "shortname": "Zomato Ltd (Eternal)",
+                "price": 327.35,
+                "change": 10.15,
+                "changePercent": 3.20,
                 "volumeMultiplier": "6.2x Volume Surge",
                 "catalyst": "Blinkit Quick-Commerce EBITDA Positive Run-Rate",
                 "signal": "STRONG BUY",
                 "score": 95,
-                "entryZone": "₹245 - ₹252",
-                "target1": 275.00,
-                "target2": 295.00,
-                "stopLoss": 238.00,
+                "entryZone": "₹320 - ₹332",
+                "target1": 355.00,
+                "target2": 380.00,
+                "stopLoss": 312.00,
                 "riskReward": "1:3.2",
             },
             {
                 "symbol": "ICICIBANK.NS",
                 "shortname": "ICICI Bank Ltd",
-                "price": 980.10,
-                "change": 42.50,
-                "changePercent": 4.53,
+                "price": 1395.90,
+                "change": 1.70,
+                "changePercent": 0.12,
                 "volumeMultiplier": "3.9x Volume Surge",
                 "catalyst": "Q2 NIM Expansion & Record Low Net NPA (0.42%)",
                 "signal": "BULLISH",
                 "score": 88,
-                "entryZone": "₹970 - ₹982",
-                "target1": 1030.00,
-                "target2": 1065.00,
-                "stopLoss": 955.00,
+                "entryZone": "₹1,385 - ₹1,405",
+                "target1": 1465.00,
+                "target2": 1520.00,
+                "stopLoss": 1345.00,
                 "riskReward": "1:2.6",
             },
         ],
@@ -642,33 +714,33 @@ def get_market_screener_data() -> dict:
             {
                 "symbol": "RELIANCE.NS",
                 "shortname": "Reliance Industries",
-                "price": 2540.20,
-                "change": 18.5,
-                "changePercent": 0.73,
+                "price": 1202.30,
+                "change": 12.30,
+                "changePercent": 1.03,
                 "volumeMultiplier": "52W High Breakout",
-                "catalyst": "Breaking 52-Week Multi-Year Resistance at ₹2,500",
+                "catalyst": "Strong retail & telecom EBITDA growth post-bonus issue",
                 "signal": "MOMENTUM BUY",
                 "score": 89,
-                "entryZone": "₹2,520 - ₹2,545",
-                "target1": 2680.00,
-                "target2": 2800.00,
-                "stopLoss": 2460.00,
+                "entryZone": "₹1,190 - ₹1,210",
+                "target1": 1265.00,
+                "target2": 1320.00,
+                "stopLoss": 1155.00,
                 "riskReward": "1:3.0",
             },
             {
                 "symbol": "INFY.NS",
                 "shortname": "Infosys Ltd",
-                "price": 1420.30,
-                "change": 22.1,
-                "changePercent": 1.58,
+                "price": 1150.65,
+                "change": -3.15,
+                "changePercent": -0.27,
                 "volumeMultiplier": "52W High Breakout",
                 "catalyst": "$1.5B Mega AI Cloud Deal Signed with Global Retailer",
                 "signal": "BULLISH",
                 "score": 86,
-                "entryZone": "₹1,405 - ₹1,425",
-                "target1": 1510.00,
-                "target2": 1580.00,
-                "stopLoss": 1375.00,
+                "entryZone": "₹1,140 - ₹1,160",
+                "target1": 1210.00,
+                "target2": 1265.00,
+                "stopLoss": 1105.00,
                 "riskReward": "1:2.7",
             },
         ],
@@ -676,33 +748,33 @@ def get_market_screener_data() -> dict:
             {
                 "symbol": "SBIN.NS",
                 "shortname": "State Bank of India",
-                "price": 590.20,
-                "change": 18.40,
-                "changePercent": 3.22,
+                "price": 960.75,
+                "change": 2.15,
+                "changePercent": 0.22,
                 "volumeMultiplier": "Golden Crossover (50/200 EMA)",
                 "catalyst": "50 EMA Crossed Above 200 EMA (Trend Confirmation)",
                 "signal": "SWING BUY",
                 "score": 84,
-                "entryZone": "₹582 - ₹592",
-                "target1": 630.00,
-                "target2": 660.00,
-                "stopLoss": 568.00,
+                "entryZone": "₹950 - ₹965",
+                "target1": 1010.00,
+                "target2": 1050.00,
+                "stopLoss": 925.00,
                 "riskReward": "1:2.5",
             },
             {
                 "symbol": "TCS.NS",
                 "shortname": "Tata Consultancy Services",
-                "price": 3410.50,
-                "change": 45.2,
-                "changePercent": 1.34,
+                "price": 2530.00,
+                "change": 0.00,
+                "changePercent": 0.00,
                 "volumeMultiplier": "Golden Crossover (50/200 EMA)",
                 "catalyst": "Trend Reversal Confirmed on Daily & Weekly Charts",
                 "signal": "ACCUMULATE",
                 "score": 81,
-                "entryZone": "₹3,380 - ₹3,415",
-                "target1": 3620.00,
-                "target2": 3750.00,
-                "stopLoss": 3290.00,
+                "entryZone": "₹2,510 - ₹2,545",
+                "target1": 2680.00,
+                "target2": 2780.00,
+                "stopLoss": 2435.00,
                 "riskReward": "1:2.8",
             },
         ],
@@ -710,33 +782,33 @@ def get_market_screener_data() -> dict:
             {
                 "symbol": "WIPRO.NS",
                 "shortname": "Wipro Ltd",
-                "price": 395.20,
-                "change": -14.80,
-                "changePercent": -3.61,
+                "price": 189.25,
+                "change": -0.60,
+                "changePercent": -0.32,
                 "volumeMultiplier": "RSI Oversold (26)",
-                "catalyst": "RSI at 26 (Deeply Oversold Support Zone at ₹390)",
+                "catalyst": "RSI at 26 (Deeply Oversold Support Zone)",
                 "signal": "REBOUND BUY",
                 "score": 78,
-                "entryZone": "₹390 - ₹398",
-                "target1": 428.00,
-                "target2": 445.00,
-                "stopLoss": 378.00,
+                "entryZone": "₹185 - ₹192",
+                "target1": 205.00,
+                "target2": 218.00,
+                "stopLoss": 180.00,
                 "riskReward": "1:2.4",
             },
             {
                 "symbol": "BHARTIARTL.NS",
                 "shortname": "Bharti Airtel Ltd",
-                "price": 865.00,
-                "change": -22.40,
-                "changePercent": -2.52,
+                "price": 1905.70,
+                "change": 13.60,
+                "changePercent": 0.72,
                 "volumeMultiplier": "RSI Oversold (31)",
                 "catalyst": "14-Day RSI near 31 with ARPU Growth Catalyst",
                 "signal": "BUY ON DIP",
                 "score": 85,
-                "entryZone": "₹855 - ₹868",
-                "target1": 920.00,
-                "target2": 960.00,
-                "stopLoss": 835.00,
+                "entryZone": "₹1,885 - ₹1,915",
+                "target1": 2020.00,
+                "target2": 2100.00,
+                "stopLoss": 1835.00,
                 "riskReward": "1:2.7",
             },
         ],
@@ -744,17 +816,17 @@ def get_market_screener_data() -> dict:
             {
                 "symbol": "ITC.NS",
                 "shortname": "ITC Ltd",
-                "price": 440.60,
-                "change": 12.20,
-                "changePercent": 2.84,
+                "price": 259.75,
+                "change": 1.85,
+                "changePercent": 0.72,
                 "volumeMultiplier": "High ROCE Value Pick",
                 "catalyst": "ROCE 36% • 4.2% Dividend Yield • Hotels Demerger Value Unlock",
                 "signal": "VALUE BUY",
                 "score": 90,
-                "entryZone": "₹435 - ₹442",
-                "target1": 485.00,
-                "target2": 510.00,
-                "stopLoss": 418.00,
+                "entryZone": "₹255 - ₹262",
+                "target1": 285.00,
+                "target2": 305.00,
+                "stopLoss": 248.00,
                 "riskReward": "1:3.1",
             },
             {
@@ -775,3 +847,33 @@ def get_market_screener_data() -> dict:
             },
         ],
     }
+
+    # Fetch fresh live prices across all unique screener stocks concurrently
+    all_symbols = list({
+        stock["symbol"]
+        for group in base_data.values()
+        for stock in group
+    })
+
+    try:
+        with ThreadPoolExecutor(max_workers=min(len(all_symbols), 12)) as executor:
+            live_quotes = dict(zip(all_symbols, executor.map(fetch_screener_quote, all_symbols)))
+
+        for group in base_data.values():
+            for stock in group:
+                q = live_quotes.get(stock["symbol"])
+                if q and q.get("price"):
+                    lp = q["price"]
+                    stock["price"] = lp
+                    stock["change"] = q["change"]
+                    stock["changePercent"] = q["changePercent"]
+                    stock["entryZone"] = f"₹{round(lp * 0.99, 1)} - ₹{round(lp * 1.01, 1)}"
+                    stock["target1"] = round(lp * 1.05, 1)
+                    stock["target2"] = round(lp * 1.10, 1)
+                    stock["stopLoss"] = round(lp * 0.96, 1)
+    except Exception:
+        pass
+
+    _screener_cache["data"] = base_data
+    _screener_cache["timestamp"] = now
+    return base_data

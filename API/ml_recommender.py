@@ -22,7 +22,7 @@ STOCK_UNIVERSE = [
         "volatility": "Low",
         "rsi": 48.5,
         "momentum_1m": 2.4,
-        "price_approx": 1680.0,
+        "price_approx": 688.0,
         "trend": "Bullish Consolidation",
     },
     {
@@ -36,7 +36,7 @@ STOCK_UNIVERSE = [
         "volatility": "Low",
         "rsi": 56.2,
         "momentum_1m": 4.8,
-        "price_approx": 1240.0,
+        "price_approx": 1395.0,
         "trend": "Strong Uptrend",
     },
     {
@@ -50,7 +50,7 @@ STOCK_UNIVERSE = [
         "volatility": "Moderate",
         "rsi": 54.0,
         "momentum_1m": 3.6,
-        "price_approx": 810.0,
+        "price_approx": 960.0,
         "trend": "Uptrend",
     },
     {
@@ -80,7 +80,7 @@ STOCK_UNIVERSE = [
         "volatility": "Low",
         "rsi": 51.0,
         "momentum_1m": 1.8,
-        "price_approx": 4120.0,
+        "price_approx": 2530.0,
         "trend": "Stable Bluechip",
     },
     {
@@ -94,7 +94,7 @@ STOCK_UNIVERSE = [
         "volatility": "Moderate",
         "rsi": 58.5,
         "momentum_1m": 5.2,
-        "price_approx": 1890.0,
+        "price_approx": 1150.0,
         "trend": "Uptrend",
     },
     {
@@ -124,7 +124,7 @@ STOCK_UNIVERSE = [
         "volatility": "Moderate",
         "rsi": 52.3,
         "momentum_1m": 3.1,
-        "price_approx": 2980.0,
+        "price_approx": 1202.0,
         "trend": "Sector Leader",
     },
     {
@@ -168,7 +168,7 @@ STOCK_UNIVERSE = [
         "volatility": "High",
         "rsi": 63.5,
         "momentum_1m": 8.4,
-        "price_approx": 410.30,
+        "price_approx": 389.0,
         "trend": "Commercial & EV Breakout",
     },
     {
@@ -212,7 +212,7 @@ STOCK_UNIVERSE = [
         "volatility": "Low",
         "rsi": 46.0,
         "momentum_1m": 1.5,
-        "price_approx": 485.0,
+        "price_approx": 260.0,
         "trend": "Defensive High Yield",
     },
     {
@@ -230,8 +230,8 @@ STOCK_UNIVERSE = [
         "trend": "Defensive Value",
     },
     {
-        "symbol": "ZOMATO.NS",
-        "name": "Zomato Ltd",
+        "symbol": "ETERNAL.NS",
+        "name": "Zomato Ltd (Eternal)",
         "sector": "FMCG",
         "market_cap": "Large",
         "beta": 1.55,
@@ -240,7 +240,7 @@ STOCK_UNIVERSE = [
         "volatility": "High",
         "rsi": 68.0,
         "momentum_1m": 14.5,
-        "price_approx": 249.0,
+        "price_approx": 327.0,
         "trend": "High Growth Tech Consumer",
     },
 

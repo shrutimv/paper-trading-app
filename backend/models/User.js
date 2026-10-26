@@ -20,11 +20,11 @@ const userSchema = new mongoose.Schema(
     },
     streak: {
       type: Number,
-      default: 1,
+      default: 5,
     },
     puzzlesCompleted: {
       type: Number,
-      default: 0,
+      default: 4,
     },
     coursesCompleted: [
       {

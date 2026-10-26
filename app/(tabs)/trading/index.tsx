@@ -274,7 +274,25 @@ export default function TradingDashboard() {
     try {
       const response = await fetch(`${API_BASE_URL}/search?q=${text}&exchange=NSE&limit=5`);
       const data = await response.json();
-      const stockResults = (data.results || []).map((s: any) => ({ ...s, isIpo: false }));
+      const rawResults = data.results || [];
+      const stockResults = await Promise.all(
+        rawResults.map(async (s: any) => {
+          try {
+            const detailRes = await fetch(`${API_BASE_URL}/stock?symbol=${s.symbol}`);
+            const detail = await detailRes.json();
+            const livePrice = detail?.meta?.regularMarketPrice || detail?.meta?.previousClose || 0;
+            return {
+              ...s,
+              price: livePrice,
+              change: detail?.meta?.change || 0,
+              changePercent: detail?.meta?.changePercent || 0,
+              isIpo: false,
+            };
+          } catch {
+            return { ...s, isIpo: false };
+          }
+        })
+      );
       setSearchResults([...matchingIpos, ...stockResults]);
     } catch (error) { 
       console.error("Search failed:", error);
@@ -755,11 +773,15 @@ export default function TradingDashboard() {
                   <View style={{ flex: 1 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={styles.resultSymbol}>{item.symbol.replace('.NS', '')}</Text>
-                      {item.isIpo && (
+                      {item.isIpo ? (
                         <View style={{ backgroundColor: 'rgba(37, 99, 235, 0.12)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                           <Text style={{ fontSize: 10, fontWeight: '800', color: '#2563eb' }}>IPO</Text>
                         </View>
-                      )}
+                      ) : item.price && item.price > 0 ? (
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>
+                          {formatCurrency(item.price)}
+                        </Text>
+                      ) : null}
                     </View>
                     <Text style={styles.resultName} numberOfLines={1}>
                       {item.isIpo ? `${item.shortname} • ${item.ipoData.priceBand}` : item.shortname}

@@ -93,14 +93,11 @@ export async function getRealProgress(): Promise<{
       puzzles = parseInt(localPuzzles, 10);
     }
 
-    // Read all keys to accurately count completed modules & courses
-    const allKeys = await AsyncStorage.getAllKeys();
-    const completedModuleKeys = allKeys.filter(
-      (k) => k.startsWith("module_completed_") || k.startsWith("@papertrade:courseCompleted:")
-    );
+    // Only count genuine full completed courses, never individual reading modules
     const rawCourseList = await AsyncStorage.getItem(COURSES_KEY);
     const courseList: string[] = rawCourseList ? JSON.parse(rawCourseList) : [];
-    coursesCount = Math.max(completedModuleKeys.length, courseList.length);
+    const validFullCourses = courseList.filter((id) => !id.startsWith("module_"));
+    coursesCount = validFullCourses.length;
 
     // If logged in, fetch from DB and take the higher value (or DB value)
     const session = await AsyncStorage.getItem("userSession");

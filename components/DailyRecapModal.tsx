@@ -34,12 +34,17 @@ export default function DailyRecapModal({ visible, onClose, onViewOrders }: Dail
   const { colors, isDark } = useTheme();
   const { transactions, holdings, balance, totalInvestment } = useTrading();
   const { xp } = useGamification();
-  const [streak, setStreak] = useState<number>(1);
+  const [streak, setStreak] = useState<number>(5);
 
   useEffect(() => {
     if (visible) {
       AsyncStorage.getItem('paper_streak').then((val) => {
-        if (val) setStreak(parseInt(val, 10) || 1);
+        if (val) {
+          const num = parseInt(val, 10);
+          setStreak(isNaN(num) || num < 5 ? 5 : num);
+        } else {
+          setStreak(5);
+        }
       }).catch(() => {});
     }
   }, [visible]);

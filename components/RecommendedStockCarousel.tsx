@@ -44,11 +44,11 @@ const TIMEFRAMES = [
 
 // Fallback high-conviction companies if ML backend is warming up or user has zero trades
 const DEFAULT_RECOMMENDATIONS: StockItem[] = [
-  { symbol: "TATAMOTORS.NS", name: "Tata Motors Limited", price: 410.3, change: 5.3, changePct: 1.31, matchScore: 96, action: "Strong Buy", rationale: "EV leadership & turnaround momentum" },
-  { symbol: "ZOMATO.NS", name: "Zomato Limited", price: 249.0, change: 4.8, changePct: 1.96, matchScore: 93, action: "Buy", rationale: "High quick-commerce Blinkit expansion" },
-  { symbol: "RELIANCE.NS", name: "Reliance Industries", price: 1280.5, change: 12.4, changePct: 0.98, matchScore: 91, action: "Accumulate", rationale: "Diversified retail & telecom cash flow" },
-  { symbol: "INFY.NS", name: "Infosys Limited", price: 1845.0, change: -8.2, changePct: -0.44, matchScore: 89, action: "Hold", rationale: "Large digital deal pipeline" },
-  { symbol: "HDFCBANK.NS", name: "HDFC Bank Limited", price: 1680.0, change: 9.5, changePct: 0.57, matchScore: 88, action: "Buy", rationale: "Credit growth & post-merger synergy" },
+  { symbol: "TATAMOTORS.NS", name: "Tata Motors Limited", price: 389.1, change: -6.9, changePct: -1.74, matchScore: 96, action: "Strong Buy", rationale: "EV leadership & turnaround momentum" },
+  { symbol: "ETERNAL.NS", name: "Zomato Limited (Eternal)", price: 327.35, change: 10.15, changePct: 3.20, matchScore: 93, action: "Buy", rationale: "High quick-commerce Blinkit expansion" },
+  { symbol: "RELIANCE.NS", name: "Reliance Industries", price: 1202.3, change: 12.3, changePct: 1.03, matchScore: 91, action: "Accumulate", rationale: "Diversified retail & telecom cash flow" },
+  { symbol: "INFY.NS", name: "Infosys Limited", price: 1150.65, change: -3.15, changePct: -0.27, matchScore: 89, action: "Hold", rationale: "Large digital deal pipeline" },
+  { symbol: "HDFCBANK.NS", name: "HDFC Bank Limited", price: 687.4, change: -5.4, changePct: -0.78, matchScore: 88, action: "Buy", rationale: "Credit growth & post-merger synergy" },
 ];
 
 export default function RecommendedStockCarousel() {
