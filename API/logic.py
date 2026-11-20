@@ -317,10 +317,15 @@ def get_stock_data_by_symbol(yf_symbol: str, period: str = "5d", interval: str =
     raw = chart_res.get("result")
     resolved_symbol = chart_res.get("symbol", yf_symbol)
 
+    try:
+        mp = int(max_points)
+    except Exception:
+        mp = 0
+
     if not raw:
         history, meta, selected = _generate_fallback_history(yf_symbol, base_price=245.80 if "ZOMATO" in yf_symbol.upper() else 150.0)
-        if max_points and max_points > 0:
-            history = _downsample_history(history, max_points)
+        if mp > 0:
+            history = _downsample_history(history, mp)
         if compact:
             history = [{"date": h["date"], "close": h["close"]} for h in history]
         return {
@@ -396,8 +401,8 @@ def get_stock_data_by_symbol(yf_symbol: str, period: str = "5d", interval: str =
         "statusMessage": market_status["statusMessage"],
     }
 
-    if max_points and max_points > 0:
-        history = _downsample_history(history, max_points)
+    if mp > 0:
+        history = _downsample_history(history, mp)
     if compact:
         history = [{"date": h["date"], "close": h["close"]} for h in history]
 

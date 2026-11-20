@@ -15,7 +15,8 @@ from API.logic import (
     get_stock_data_by_symbol,
     yahoo_search,
     get_live_ipos,
-    get_market_screener_data
+    get_market_screener_data,
+    SYMBOL_ALIASES
 )
 from API.news_cache import news_cache
 from API.news_service import fetch_news
