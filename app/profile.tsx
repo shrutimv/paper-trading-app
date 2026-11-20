@@ -554,6 +554,9 @@ export default function ProfileScreen() {
           <Text style={{ fontSize: 10, color: colors.accent, fontWeight: '700', marginTop: 4 }}>
             {isCheckingUpdate ? 'Checking for updates...' : 'Tap to check for updates'}
           </Text>
+          <Text style={{ fontSize: 9.5, color: colors.textSecondary, fontWeight: '600', marginTop: 3 }}>
+            added puzzle sync
+          </Text>
         </TouchableOpacity>
 
         {/* THE RANK JOURNEY MODAL (ROAD TO DIAMOND) */}

@@ -2,34 +2,55 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BASE_URL } from "@/src/config/api";
 
-const PUZZLES_KEY = "paper_puzzles_completed";
-const COURSES_KEY = "paper_courses_completed_list";
+export async function getScopedKeys(): Promise<{
+  puzzlesKey: string;
+  coursesKey: string;
+  streakKey: string;
+  lastActiveKey: string;
+  userId: string | null;
+}> {
+  let userId: string | null = null;
+  try {
+    const session = await AsyncStorage.getItem("userSession");
+    if (session) {
+      const u = JSON.parse(session);
+      if (u && !u.isGuest && (u.id || u._id)) {
+        userId = String(u.id || u._id);
+      }
+    }
+  } catch (_) {}
+
+  const prefix = userId ? `user_${userId}` : "guest";
+  return {
+    puzzlesKey: `@paper_puzzles_${prefix}`,
+    coursesKey: `@paper_courses_${prefix}`,
+    streakKey: `@paper_streak_${prefix}`,
+    lastActiveKey: `@paper_last_active_${prefix}`,
+    userId,
+  };
+}
 
 /**
  * Record a puzzle as solved.
- * Guest users: saved directly in AsyncStorage.
- * Logged-in users: saved in AsyncStorage AND synchronized to MongoDB Atlas via PUT /api/user/gamification.
+ * Guest users: saved in user-scoped AsyncStorage.
+ * Logged-in users: saved in user-scoped AsyncStorage AND synchronized to MongoDB Atlas.
  */
 export async function recordPuzzleSolved(): Promise<number> {
   try {
-    const currentStr = await AsyncStorage.getItem(PUZZLES_KEY);
+    const { puzzlesKey, userId } = await getScopedKeys();
+    const currentStr = await AsyncStorage.getItem(puzzlesKey);
     const count = currentStr ? parseInt(currentStr, 10) : 0;
-    const newCount = count + 1;
-    await AsyncStorage.setItem(PUZZLES_KEY, newCount.toString());
+    const newCount = (isNaN(count) ? 0 : count) + 1;
+    await AsyncStorage.setItem(puzzlesKey, newCount.toString());
 
     // Check if logged in
-    const session = await AsyncStorage.getItem("userSession");
-    if (session) {
-      const user = JSON.parse(session);
-      if (!user.isGuest) {
-        // Sync to MongoDB Atlas
-        fetch(`${BASE_URL}/api/user/gamification`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ puzzlesCompleted: newCount }),
-        }).catch((err) => console.log("[progressService] DB puzzle sync error:", err));
-      }
+    if (userId) {
+      fetch(`${BASE_URL}/api/user/gamification`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ puzzlesCompleted: newCount }),
+      }).catch((err) => console.log("[progressService] DB puzzle sync error:", err));
     }
 
     return newCount;
@@ -41,31 +62,27 @@ export async function recordPuzzleSolved(): Promise<number> {
 
 /**
  * Record a course or academy module as completed.
- * Guest users: saved in AsyncStorage.
- * Logged-in users: saved in AsyncStorage AND synchronized to MongoDB Atlas.
+ * Guest users: saved in user-scoped AsyncStorage.
+ * Logged-in users: saved in user-scoped AsyncStorage AND synchronized to MongoDB Atlas.
  */
 export async function recordCourseCompleted(courseOrModuleId: string): Promise<string[]> {
   try {
-    const raw = await AsyncStorage.getItem(COURSES_KEY);
+    const { coursesKey, userId } = await getScopedKeys();
+    const raw = await AsyncStorage.getItem(coursesKey);
     const list: string[] = raw ? JSON.parse(raw) : [];
 
     if (!list.includes(courseOrModuleId)) {
       list.push(courseOrModuleId);
-      await AsyncStorage.setItem(COURSES_KEY, JSON.stringify(list));
+      await AsyncStorage.setItem(coursesKey, JSON.stringify(list));
     }
 
-    // Check if logged in
-    const session = await AsyncStorage.getItem("userSession");
-    if (session) {
-      const user = JSON.parse(session);
-      if (!user.isGuest) {
-        fetch(`${BASE_URL}/api/user/gamification`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ coursesCompleted: list }),
-        }).catch((err) => console.log("[progressService] DB course sync error:", err));
-      }
+    if (userId) {
+      fetch(`${BASE_URL}/api/user/gamification`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ coursesCompleted: list }),
+      }).catch((err) => console.log("[progressService] DB course sync error:", err));
     }
 
     return list;
@@ -77,62 +94,59 @@ export async function recordCourseCompleted(courseOrModuleId: string): Promise<s
 
 /**
  * Get real progress counts (puzzles & courses).
- * If logged-in, reconciles with the database.
+ * For logged-in users, the database is the authoritative source of truth.
+ * For guests, user-scoped local storage is used.
  */
 export async function getRealProgress(): Promise<{
   puzzlesSolved: number;
   coursesCompletedCount: number;
 }> {
   try {
+    const { puzzlesKey, coursesKey, userId } = await getScopedKeys();
+
     let puzzles = 0;
     let coursesCount = 0;
 
-    // Check local storage first
-    const localPuzzles = await AsyncStorage.getItem(PUZZLES_KEY);
-    if (localPuzzles !== null) {
-      puzzles = parseInt(localPuzzles, 10);
+    // 1. If logged in, fetch authoritative stats from MongoDB Atlas
+    if (userId) {
+      try {
+        const res = await fetch(`${BASE_URL}/api/auth/me`, { credentials: "include" });
+        if (res.ok) {
+          const data = await res.json();
+          const dbUser = data.user;
+          if (dbUser) {
+            puzzles = typeof dbUser.puzzlesCompleted === "number" ? dbUser.puzzlesCompleted : 0;
+            const validCourses = Array.isArray(dbUser.coursesCompleted)
+              ? dbUser.coursesCompleted.filter((id: string) => !id.startsWith("module_"))
+              : [];
+            coursesCount = validCourses.length;
+
+            // Cache for this specific user
+            await AsyncStorage.setItem(puzzlesKey, puzzles.toString());
+            await AsyncStorage.setItem(coursesKey, JSON.stringify(dbUser.coursesCompleted || []));
+
+            return {
+              puzzlesSolved: puzzles,
+              coursesCompletedCount: coursesCount,
+            };
+          }
+        }
+      } catch (_) {
+        // Fallback to this user's local cache if network offline
+      }
     }
 
-    // Only count genuine full completed courses, never individual reading modules
-    const rawCourseList = await AsyncStorage.getItem(COURSES_KEY);
+    // 2. Guest or offline fallback for this specific user
+    const localPuzzles = await AsyncStorage.getItem(puzzlesKey);
+    if (localPuzzles !== null) {
+      puzzles = parseInt(localPuzzles, 10);
+      if (isNaN(puzzles) || puzzles < 0) puzzles = 0;
+    }
+
+    const rawCourseList = await AsyncStorage.getItem(coursesKey);
     const courseList: string[] = rawCourseList ? JSON.parse(rawCourseList) : [];
     const validFullCourses = courseList.filter((id) => !id.startsWith("module_"));
     coursesCount = validFullCourses.length;
-
-    // If logged in, fetch from DB and take the higher value (or DB value)
-    const session = await AsyncStorage.getItem("userSession");
-    if (session) {
-      const user = JSON.parse(session);
-      if (!user.isGuest) {
-        try {
-          const res = await fetch(`${BASE_URL}/api/auth/me`, { credentials: "include" });
-          if (res.ok) {
-            const data = await res.json();
-            const dbUser = data.user;
-            if (dbUser) {
-              if (typeof dbUser.puzzlesCompleted === "number" && dbUser.puzzlesCompleted > puzzles) {
-                puzzles = dbUser.puzzlesCompleted;
-                await AsyncStorage.setItem(PUZZLES_KEY, puzzles.toString());
-              } else if (puzzles > (dbUser.puzzlesCompleted || 0)) {
-                // Local is ahead, sync up to DB
-                fetch(`${BASE_URL}/api/user/gamification`, {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  credentials: "include",
-                  body: JSON.stringify({ puzzlesCompleted: puzzles }),
-                }).catch(() => {});
-              }
-
-              if (Array.isArray(dbUser.coursesCompleted)) {
-                const merged = Array.from(new Set([...courseList, ...dbUser.coursesCompleted]));
-                coursesCount = Math.max(coursesCount, merged.length);
-                await AsyncStorage.setItem(COURSES_KEY, JSON.stringify(merged));
-              }
-            }
-          }
-        } catch (_) {}
-      }
-    }
 
     return {
       puzzlesSolved: puzzles,

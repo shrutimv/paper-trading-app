@@ -21,7 +21,8 @@ import RecommendedStockCarousel from "../../components/RecommendedStockCarousel"
 import AIRecommendations from "../../components/AIRecommendations";
 import DailyRecapModal from "../../components/DailyRecapModal";
 import { useAuth } from "../../context/AuthContext";
-import { getRealProgress } from "../../src/services/progressService";
+import { getRealProgress, getScopedKeys } from "../../src/services/progressService";
+import { BASE_URL } from "../../src/config/api";
 
 // --- THE ANIMATED CARD WRAPPER ---
 const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: string }) => {
@@ -106,14 +107,23 @@ export default function Home() {
   const loadUserAndStats = useCallback(async () => {
     try {
       const session = await AsyncStorage.getItem('userSession');
+      let parsedUser = null;
       if (session) {
-        setLocalUser(JSON.parse(session));
+        parsedUser = JSON.parse(session);
+        setLocalUser(parsedUser);
       }
 
-      // 1. Dynamic Streak Calculation (100% Real - Consecutive Daily Activity)
+      const activeUser = authUser || parsedUser;
+
+      // 1. Dynamic Streak Calculation (User-Scoped & Synced)
+      const { streakKey, lastActiveKey, userId } = await getScopedKeys();
       const today = new Date().toISOString().slice(0, 10);
-      const lastActive = await AsyncStorage.getItem("paper_last_active_date");
-      let currentStreak = parseInt((await AsyncStorage.getItem("paper_streak")) || "1", 10);
+      const lastActive = await AsyncStorage.getItem(lastActiveKey);
+      let currentStreak = parseInt((await AsyncStorage.getItem(streakKey)) || "0", 10);
+
+      if (userId && activeUser && typeof activeUser.streak === "number") {
+        currentStreak = activeUser.streak;
+      }
       if (isNaN(currentStreak) || currentStreak < 1) {
         currentStreak = 1;
       }
@@ -125,20 +135,44 @@ export default function Home() {
 
         if (diffDays === 1) {
           currentStreak += 1;
-          await AsyncStorage.setItem("paper_streak", currentStreak.toString());
-          await AsyncStorage.setItem("paper_last_active_date", today);
+          await AsyncStorage.setItem(streakKey, currentStreak.toString());
+          await AsyncStorage.setItem(lastActiveKey, today);
+          if (userId) {
+            fetch(`${BASE_URL}/api/user/gamification`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ streak: currentStreak }),
+            }).catch(() => {});
+          }
         } else if (diffDays > 1) {
           currentStreak = 1; // Streak broken, reset to 1
-          await AsyncStorage.setItem("paper_streak", "1");
-          await AsyncStorage.setItem("paper_last_active_date", today);
+          await AsyncStorage.setItem(streakKey, "1");
+          await AsyncStorage.setItem(lastActiveKey, today);
+          if (userId) {
+            fetch(`${BASE_URL}/api/user/gamification`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ streak: 1 }),
+            }).catch(() => {});
+          }
         }
       } else {
-        await AsyncStorage.setItem("paper_last_active_date", today);
-        await AsyncStorage.setItem("paper_streak", currentStreak.toString());
+        await AsyncStorage.setItem(lastActiveKey, today);
+        await AsyncStorage.setItem(streakKey, currentStreak.toString());
+        if (userId) {
+          fetch(`${BASE_URL}/api/user/gamification`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ streak: currentStreak }),
+          }).catch(() => {});
+        }
       }
       setStreak(currentStreak);
 
-      // 2 & 3. Real Dynamic Puzzles & Courses (from genuine user activity)
+      // 2 & 3. Real Dynamic Puzzles & Courses (from authoritative progress)
       const progress = await getRealProgress();
       setPuzzlesSolved(progress.puzzlesSolved || 0);
       setCoursesCompletedCount(progress.coursesCompletedCount || 0);

@@ -153,6 +153,10 @@ export const AuthProvider = ({
 
         await AsyncStorage.removeItem("userSession");
         await AsyncStorage.removeItem("@pending_friend_requests_count");
+        await AsyncStorage.removeItem("paper_puzzles_completed");
+        await AsyncStorage.removeItem("paper_courses_completed_list");
+        await AsyncStorage.removeItem("paper_streak");
+        await AsyncStorage.removeItem("paper_last_active_date");
 
         setIsGuest(false);
         setIsLoggedIn(false);
