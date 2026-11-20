@@ -467,7 +467,7 @@ export default function CompareScreen() {
               {/* Trade action */}
               <TouchableOpacity 
                 style={[styles.tradeRowBtn, { backgroundColor: item.color }]}
-                onPress={() => router.push(`/stock/${item.symbol}`)}
+                onPress={() => router.push(`/stock/${encodeURIComponent(item.symbol)}` as any)}
               >
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>
                   Deep Dive & Trade {item.shortname} →

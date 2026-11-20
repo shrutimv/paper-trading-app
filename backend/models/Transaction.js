@@ -41,6 +41,18 @@ const transactionSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    costPrice: {
+      type: Number,
+      required: false,
+    },
+    pnl: {
+      type: Number,
+      required: false,
+    },
+    pnlPercent: {
+      type: Number,
+      required: false,
+    },
     stopLoss: {
       type: Number,
     },

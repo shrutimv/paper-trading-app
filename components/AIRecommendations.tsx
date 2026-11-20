@@ -186,7 +186,7 @@ export default function AIRecommendations() {
               <TouchableOpacity
                 key={stock.symbol}
                 activeOpacity={0.85}
-                onPress={() => router.push(`/stock/${stock.symbol}`)}
+                onPress={() => router.push(`/stock/${encodeURIComponent(stock.symbol)}` as any)}
                 style={styles.stockCard}
               >
                 {/* Top Card Bar: Sector & Match Badge */}

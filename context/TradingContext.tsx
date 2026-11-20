@@ -1,8 +1,22 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
-import { BASE_URL } from '@/src/config/api';
+import { BASE_URL, getAuthHeaders } from '@/src/config/api';
 import { useAuth } from './AuthContext';
+
+// Helper to ensure isolated guest devices never share state
+const getUniqueGuestId = async (): Promise<string> => {
+  try {
+    let gid = await AsyncStorage.getItem('paper_unique_device_guest_id');
+    if (!gid) {
+      gid = 'guest_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+      await AsyncStorage.setItem('paper_unique_device_guest_id', gid);
+    }
+    return gid;
+  } catch {
+    return 'guest_device_' + Date.now().toString(36);
+  }
+};
 
 // Types
 export type Holding = { 
@@ -25,10 +39,12 @@ export type Transaction = {
   quantity: number;
   price: number;
   totalAmount: number;
+  costPrice?: number;
+  pnl?: number;
+  pnlPercent?: number;
   stopLoss?: number;
   status?: string;
   createdAt: string;
-  pnl?: number;
 };
 
 type TradingContextType = {
@@ -74,12 +90,19 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
 
   const fetchTransactions = async () => {
     try {
-      if (user && !isGuest) {
-        const res = await axios.get(`${BASE_URL}/api/trade/history`, { withCredentials: true });
-        if (res.data && Array.isArray(res.data.transactions)) {
-          setTransactions(res.data.transactions);
-          return;
-        }
+      const headers = await getAuthHeaders();
+      const guestId = await getUniqueGuestId();
+
+      const res = await axios.get(`${BASE_URL}/api/trade/history`, {
+        params: { guestId },
+        headers,
+        withCredentials: true,
+        timeout: 10000,
+      });
+
+      if (res.data && Array.isArray(res.data.transactions)) {
+        setTransactions(res.data.transactions);
+        return;
       }
       const storageKey = user && !isGuest ? `paper_tx_${user.id || 'user'}` : 'paper_transactions';
       const savedTx = await AsyncStorage.getItem(storageKey);
@@ -95,12 +118,20 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
   useEffect(() => {
     const loadData = async () => {
       try {
+        const headers = await getAuthHeaders();
+        const guestId = await getUniqueGuestId();
+
         if (user && !isGuest) {
           if (typeof user.balance === 'number') {
             setBalance(user.balance);
           }
           try {
-            const res = await axios.get(`${BASE_URL}/api/trade/holdings`, { withCredentials: true });
+            const res = await axios.get(`${BASE_URL}/api/trade/holdings`, {
+              params: { guestId },
+              headers,
+              withCredentials: true,
+              timeout: 10000,
+            });
             if (res.data && Array.isArray(res.data.holdings) && res.data.holdings.length > 0) {
               setHoldings(res.data.holdings);
             } else {
@@ -195,11 +226,12 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     };
 
     try {
-      const guestId = (await AsyncStorage.getItem('@forum_guest_id')) || 'guest_default';
+      const headers = await getAuthHeaders();
+      const guestId = await getUniqueGuestId();
       const response = await axios.post(
         `${BASE_URL}/api/trade/buy`,
         { symbol, quantity, price, name, productType, stopLoss, guestId, currentBalance: balance },
-        { withCredentials: true, timeout: 10000 }
+        { headers, withCredentials: true, timeout: 10000 }
       );
       if (response.data?.balance !== undefined) {
         setBalance(response.data.balance);
@@ -281,11 +313,20 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
     };
 
     try {
-      const guestId = (await AsyncStorage.getItem('@forum_guest_id')) || 'guest_default';
+      const headers = await getAuthHeaders();
+      const guestId = await getUniqueGuestId();
       const response = await axios.post(
         `${BASE_URL}/api/trade/sell`,
-        { symbol, quantity, price: effectiveSellPrice, productType, guestId, currentBalance: balance },
-        { withCredentials: true, timeout: 10000 }
+        {
+          symbol,
+          quantity,
+          price: effectiveSellPrice,
+          averagePrice: existing.averagePrice,
+          productType,
+          guestId,
+          currentBalance: balance,
+        },
+        { headers, withCredentials: true, timeout: 10000 }
       );
       if (response.data?.balance !== undefined) {
         setBalance(response.data.balance);
@@ -298,7 +339,9 @@ export const TradingProvider = ({ children }: { children: React.ReactNode }) => 
           id: response.data.transaction._id || Date.now().toString(),
           createdAt: response.data.transaction.createdAt || new Date().toISOString(),
           status: reason || response.data.transaction.status || 'EXECUTED',
-          pnl: calculatedPnl,
+          costPrice: response.data.transaction.costPrice ?? existing.averagePrice,
+          pnl: response.data.transaction.pnl ?? calculatedPnl,
+          pnlPercent: response.data.transaction.pnlPercent ?? (existing.averagePrice > 0 ? ((effectiveSellPrice - existing.averagePrice) / existing.averagePrice) * 100 : 0),
         };
       }
       if (user && !isGuest && refreshUser) await refreshUser();

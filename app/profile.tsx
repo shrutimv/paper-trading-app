@@ -2,8 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Platform, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Updates from 'expo-updates';
 import { useTheme } from '../context/ThemeContext';
 
 import axios from 'axios';
@@ -58,6 +59,39 @@ export default function ProfileScreen() {
   const [userComments, setUserComments] = useState<UserActivityComment[]>([]);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
+
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+
+  const handleCheckUpdates = async () => {
+    if (Platform.OS === 'web' || __DEV__) {
+      Alert.alert(
+        'OTA Updates',
+        `Currently in development or web mode (${APP_VERSION}). EAS OTA updates apply automatically to native APK builds.`
+      );
+      return;
+    }
+    try {
+      setIsCheckingUpdate(true);
+      const update = await Updates.checkForUpdateAsync();
+      if (update.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        Alert.alert(
+          'Update Downloaded 🎉',
+          'A new update is ready! Restart the app now to apply it?',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Restart Now', onPress: () => Updates.reloadAsync() },
+          ]
+        );
+      } else {
+        Alert.alert('Up to Date ✨', `You are running the latest version (${APP_VERSION}).`);
+      }
+    } catch (e: any) {
+      Alert.alert('Update Check', e.message || 'Could not fetch updates. Please verify internet connectivity.');
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
 
   useEffect(() => { loadUser(); }, []);
 
@@ -508,12 +542,19 @@ export default function ProfileScreen() {
           <Text style={styles.logoutText}>Log Out & Reset Session</Text>
         </TouchableOpacity>
 
-        {/* APP VERSION INDICATOR */}
-        <View style={{ alignItems: 'center', marginTop: 16, marginBottom: 32 }}>
+        {/* APP VERSION INDICATOR & OTA CHECK */}
+        <TouchableOpacity
+          style={{ alignItems: 'center', marginTop: 16, marginBottom: 32 }}
+          activeOpacity={0.7}
+          onPress={handleCheckUpdates}
+        >
           <Text style={{ fontSize: 11, color: colors.textSecondary, fontWeight: '600', letterSpacing: 0.5 }}>
             PaperTrade App • {APP_VERSION} (OTA Release)
           </Text>
-        </View>
+          <Text style={{ fontSize: 10, color: colors.accent, fontWeight: '700', marginTop: 4 }}>
+            {isCheckingUpdate ? 'Checking for updates...' : 'Tap to check for updates'}
+          </Text>
+        </TouchableOpacity>
 
         {/* THE RANK JOURNEY MODAL (ROAD TO DIAMOND) */}
         <Modal visible={isRankModalOpen} transparent={true} animationType="slide">

@@ -91,8 +91,10 @@ export default function OrdersScreen() {
           </View>
 
           <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Total Amount</Text>
-            <Text style={styles.metricValue}>{fmtCurrency(item.totalAmount)}</Text>
+            <Text style={styles.metricLabel}>Cashflow Total</Text>
+            <Text style={[styles.metricValue, { color: isBuy ? "#EF4444" : "#10B981", fontWeight: "900" }]}>
+              {isBuy ? "-" : "+"} {fmtCurrency(item.totalAmount)}
+            </Text>
           </View>
         </View>
 
@@ -131,7 +133,8 @@ export default function OrdersScreen() {
                     color: item.pnl >= 0 ? "#10B981" : "#EF4444",
                   }}
                 >
-                  P&L: {item.pnl >= 0 ? "+" : ""}{fmtCurrency(item.pnl)}
+                  Realized P&L: {item.pnl >= 0 ? "+" : ""}{fmtCurrency(item.pnl)}
+                  {item.pnlPercent !== undefined ? ` (${item.pnlPercent >= 0 ? "+" : ""}${item.pnlPercent.toFixed(1)}%)` : ""}
                 </Text>
               </View>
             ) : null}

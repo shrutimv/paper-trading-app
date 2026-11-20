@@ -13,7 +13,7 @@ export default function QuizScreen() {
   const insets = useSafeAreaInsets();
   const { moduleId, level } = useLocalSearchParams();
   const router = useRouter();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
 
   const { addXp, currentRank, nextRank, progressPercent } = useGamification();
 
@@ -24,6 +24,7 @@ export default function QuizScreen() {
   const [answered, setAnswered] = useState(false);
   const [earnedXp, setEarnedXp] = useState(0);
   const [isPracticeMode, setIsPracticeMode] = useState(false);
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
 
   const fillAnim = useRef(new Animated.Value(0)).current;
   const popAnim = useRef(new Animated.Value(0)).current;
@@ -45,6 +46,9 @@ export default function QuizScreen() {
 
   const theme = getTheme(String(level));
   const activeQuestions = QUIZ_DATA[String(moduleId)] || [];
+
+  const PASSING_PERCENTAGE = 60;
+  const passingScore = Math.ceil((activeQuestions.length * PASSING_PERCENTAGE) / 100);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -95,6 +99,7 @@ export default function QuizScreen() {
     if (answered) return;
     setSelectedOption(index);
     setAnswered(true);
+    setUserAnswers((prev) => ({ ...prev, [currentQuestion]: index }));
 
     const isRight = index === currentQ.correct;
     if (isRight) {
@@ -108,20 +113,42 @@ export default function QuizScreen() {
       setSelectedOption(null);
       setAnswered(false);
     } else {
-      // Quiz finished
-      const finalScore = selectedOption === currentQ.correct ? score + 1 : score;
+      // Quiz finished - compute definitive score based on recorded answers
+      const allAnswers = { ...userAnswers, [currentQuestion]: selectedOption ?? -1 };
+      const finalScore = activeQuestions.reduce((acc, q, idx) => {
+        return allAnswers[idx] === q.correct ? acc + 1 : acc;
+      }, 0);
+
+      const isPassed = finalScore >= passingScore;
+
       if (!isPracticeMode) {
-        const totalXpEarned = finalScore * 50;
-        setEarnedXp(totalXpEarned);
-        if (totalXpEarned > 0) addXp(totalXpEarned);
-        saveProgress(finalScore);
+        if (isPassed) {
+          // STRICT RULE: Award XP only if user passes the exam!
+          const totalXpEarned = 100 + finalScore * 25;
+          setEarnedXp(totalXpEarned);
+          if (totalXpEarned > 0) addXp(totalXpEarned);
+          saveProgress(finalScore);
+        } else {
+          // Failed exam: 0 XP awarded
+          setEarnedXp(0);
+        }
       }
       setShowResults(true);
     }
   };
 
+  const handleRetakeQuiz = () => {
+    setCurrentQuestion(0);
+    setScore(0);
+    setSelectedOption(null);
+    setAnswered(false);
+    setUserAnswers({});
+    setEarnedXp(0);
+    setShowResults(false);
+  };
+
   const saveProgress = async (finalScore: number) => {
-    if (finalScore >= Math.ceil(activeQuestions.length * 0.7)) {
+    if (finalScore >= passingScore) {
       await AsyncStorage.setItem(`module_completed_${moduleId}`, 'true');
       recordCourseCompleted(`module_${moduleId}`).catch(() => {});
       recordPuzzleSolved().catch(() => {});
@@ -148,7 +175,11 @@ export default function QuizScreen() {
   });
 
   if (showResults) {
-    const isPassed = score >= Math.ceil(activeQuestions.length * 0.7);
+    const finalScore = activeQuestions.reduce((acc, q, idx) => {
+      return userAnswers[idx] === q.correct ? acc + 1 : acc;
+    }, 0);
+    const scorePct = Math.round((finalScore / activeQuestions.length) * 100);
+    const isPassed = finalScore >= passingScore;
 
     return (
       <View
@@ -157,74 +188,416 @@ export default function QuizScreen() {
           { backgroundColor: colors.background, paddingTop: insets.top, paddingBottom: insets.bottom },
         ]}
       >
-        <View style={styles.resultBox}>
-          <Ionicons
-            name={isPassed ? 'shield-checkmark' : 'shield-half'}
-            size={80}
-            color={isPassed ? theme.main : '#f59e0b'}
-          />
-          <Text style={[styles.title, { color: colors.text }]}>
-            {isPassed ? 'Module Cleared!' : 'Keep Learning!'}
+        {/* TOP BAR */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
+            <Ionicons name="close" size={26} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={{ fontWeight: '800', color: colors.text, fontSize: 16 }}>
+            Module Exam Results
           </Text>
-          <Text style={[styles.subTitle, { color: colors.textSecondary }]}>
-            Score: {score} / {activeQuestions.length} Correct ({Math.round((score / activeQuestions.length) * 100)}%)
-          </Text>
+          <View style={{ width: 30 }} />
+        </View>
 
-          <View style={[styles.proGameCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {isPracticeMode ? (
-              <>
-                <Text style={styles.proGameSub}>PRACTICE COMPLETED</Text>
-                <Ionicons name="school" size={40} color="#9ca3af" style={{ marginVertical: 15 }} />
-                <Text style={{ color: colors.textSecondary, fontSize: 14, textAlign: 'center', fontWeight: '600' }}>
-                  Great revision! Module already unlocked in your portfolio.
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: 40 }}
+        >
+          {/* ── TOP FOLD: RESULT SUMMARY & PASS/FAIL CARD ── */}
+          <View style={styles.resultBox}>
+            <View
+              style={[
+                styles.iconCircle,
+                {
+                  backgroundColor: isPassed
+                    ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#dcfce7')
+                    : (isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2'),
+                },
+              ]}
+            >
+              <Ionicons
+                name={isPassed ? 'shield-checkmark' : 'alert-circle'}
+                size={60}
+                color={isPassed ? '#10b981' : '#ef4444'}
+              />
+            </View>
+
+            {/* HIGH-VISIBILITY STATUS BADGE */}
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: isPassed
+                    ? (isDark ? 'rgba(16, 185, 129, 0.2)' : '#bbf7d0')
+                    : (isDark ? 'rgba(239, 68, 68, 0.2)' : '#fecaca'),
+                  borderColor: isPassed ? '#10b981' : '#ef4444',
+                },
+              ]}
+            >
+              <Ionicons
+                name={isPassed ? 'checkmark-circle' : 'close-circle'}
+                size={16}
+                color={isPassed ? '#10b981' : '#ef4444'}
+              />
+              <Text
+                style={[
+                  styles.statusBadgeText,
+                  { color: isPassed ? '#10b981' : '#ef4444' },
+                ]}
+              >
+                {isPassed ? 'EXAM PASSED 🎉' : 'EXAM FAILED ❌'}
+              </Text>
+            </View>
+
+            <Text style={[styles.title, { color: colors.text }]}>
+              {isPassed ? 'Congratulations!' : 'Needs Revision'}
+            </Text>
+
+            {/* DETAILED SCORE BREAKDOWN */}
+            <View style={[styles.scoreSummaryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Your Final Score
                 </Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.proGameSub}>Rank Progress</Text>
+                <Text style={[styles.bigScoreText, { color: isPassed ? '#10b981' : '#ef4444' }]}>
+                  {finalScore} <Text style={{ fontSize: 20, color: colors.textSecondary }}>/ {activeQuestions.length}</Text>
+                </Text>
+                <Text style={{ fontSize: 14, fontWeight: '800', color: isPassed ? '#10b981' : '#ef4444' }}>
+                  {scorePct}% Correct
+                </Text>
+              </View>
 
-                <Animated.View style={[styles.proRankRow, { transform: [{ scale: popAnim }] }]}>
-                  <Ionicons
-                    name="leaf"
-                    size={28}
-                    color={currentRank.color}
-                    style={{ transform: [{ scaleX: -1 }, { rotate: '45deg' }], opacity: 0.5 }}
-                  />
-                  <Text style={[styles.proRankName, { color: currentRank.color }]}>{currentRank.name}</Text>
-                  <Ionicons
-                    name="leaf"
-                    size={28}
-                    color={currentRank.color}
-                    style={{ transform: [{ rotate: '45deg' }], opacity: 0.5 }}
-                  />
-                </Animated.View>
+              <View style={[styles.scoreDivider, { backgroundColor: colors.border }]} />
 
-                <View style={styles.proXpBarRow}>
-                  <Text style={styles.proXpText}>{(currentRank.minXp + earnedXp).toLocaleString()} XP</Text>
-                  <Text style={styles.proXpText}>{nextRank ? nextRank.minXp.toLocaleString() + ' XP' : 'MAX'}</Text>
+              <View style={{ gap: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Passing Score Required:</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: colors.text }}>
+                    {passingScore} / {activeQuestions.length} ({PASSING_PERCENTAGE}%)
+                  </Text>
                 </View>
-
-                <View style={[styles.proTrack, { backgroundColor: colors.border }]}>
-                  <Animated.View
-                    style={[styles.proFill, { width: animatedWidth, backgroundColor: currentRank.color }]}
-                  />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Result Decision:</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: isPassed ? '#10b981' : '#ef4444' }}>
+                    {isPassed ? 'PASSED (Module Cleared)' : `FAILED (Needs ${passingScore - finalScore} more correct)`}
+                  </Text>
                 </View>
+              </View>
+            </View>
 
-                <Animated.Text style={[styles.proEarnedText, { opacity: popAnim }]}>
-                  +{earnedXp} XP Earned
-                </Animated.Text>
-              </>
-            )}
+            {/* GAMIFICATION & XP STATUS */}
+            <View style={[styles.proGameCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {isPracticeMode ? (
+                <>
+                  <Text style={styles.proGameSub}>PRACTICE COMPLETED</Text>
+                  <Ionicons name="school" size={36} color="#9ca3af" style={{ marginVertical: 10 }} />
+                  <Text style={{ color: colors.textSecondary, fontSize: 13, textAlign: 'center', fontWeight: '600' }}>
+                    Great revision! Module is already completed and unlocked in your portfolio.
+                  </Text>
+                </>
+              ) : isPassed ? (
+                <>
+                  <Text style={styles.proGameSub}>Rank Progress</Text>
+                  <Animated.View style={[styles.proRankRow, { transform: [{ scale: popAnim }] }]}>
+                    <Ionicons
+                      name="leaf"
+                      size={26}
+                      color={currentRank.color}
+                      style={{ transform: [{ scaleX: -1 }, { rotate: '45deg' }], opacity: 0.5 }}
+                    />
+                    <Text style={[styles.proRankName, { color: currentRank.color }]}>{currentRank.name}</Text>
+                    <Ionicons
+                      name="leaf"
+                      size={26}
+                      color={currentRank.color}
+                      style={{ transform: [{ rotate: '45deg' }], opacity: 0.5 }}
+                    />
+                  </Animated.View>
+
+                  <View style={styles.proXpBarRow}>
+                    <Text style={styles.proXpText}>{(currentRank.minXp + earnedXp).toLocaleString()} XP</Text>
+                    <Text style={styles.proXpText}>{nextRank ? nextRank.minXp.toLocaleString() + ' XP' : 'MAX'}</Text>
+                  </View>
+
+                  <View style={[styles.proTrack, { backgroundColor: colors.border }]}>
+                    <Animated.View
+                      style={[styles.proFill, { width: animatedWidth, backgroundColor: currentRank.color }]}
+                    />
+                  </View>
+
+                  <Animated.Text style={[styles.proEarnedText, { opacity: popAnim }]}>
+                    +{earnedXp} XP Earned 🎉
+                  </Animated.Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.proGameSub}>XP REWARD LOCKED</Text>
+                  <View
+                    style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginVertical: 8,
+                    }}
+                  >
+                    <Ionicons name="lock-closed" size={22} color="#ef4444" />
+                  </View>
+                  <Text style={{ color: '#ef4444', fontSize: 15, fontWeight: '900', marginBottom: 4 }}>
+                    0 XP Earned
+                  </Text>
+                  <Text style={{ color: colors.textSecondary, fontSize: 12.5, textAlign: 'center', lineHeight: 18 }}>
+                    XP is awarded only when passing the exam with ≥ {PASSING_PERCENTAGE}% ({passingScore}/{activeQuestions.length} correct). Retake the exam to earn XP and level up!
+                  </Text>
+                </>
+              )}
+            </View>
+
+            {/* ACTION BUTTONS */}
+            <View style={{ width: '100%', gap: 10 }}>
+              {isPassed ? (
+                <TouchableOpacity
+                  style={[styles.gameButton, { backgroundColor: theme.main }]}
+                  onPress={() => router.back()}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.gameButtonText}>CONTINUE TO ACADEMY →</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.gameButton, { backgroundColor: theme.main }]}
+                  onPress={handleRetakeQuiz}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.gameButtonText}>RETAKE QUIZ 🔄</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* SCROLL DOWN HINT (VISIBLE AT BOTTOM OF TOP FOLD) */}
+            <View style={styles.scrollHintContainer}>
+              <Text style={[styles.scrollHintText, { color: colors.textSecondary }]}>
+                Scroll down to review questions & answers
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={colors.textSecondary} />
+            </View>
           </View>
 
-          <TouchableOpacity
-            style={[styles.gameButton, { backgroundColor: theme.main }]}
-            onPress={() => router.back()}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.gameButtonText}>CONTINUE TO ACADEMY</Text>
-          </TouchableOpacity>
-        </View>
+          {/* ── BELOW THE FOLD: COMPLETE QUESTION & ANSWER REVIEW ── */}
+          <View style={styles.reviewSection}>
+            <View style={styles.reviewHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="document-text-outline" size={20} color={colors.text} />
+                <Text style={[styles.reviewSectionTitle, { color: colors.text }]}>
+                  Question & Answer Review
+                </Text>
+              </View>
+              <View
+                style={{
+                  backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0',
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 8,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '800', color: colors.textSecondary }}>
+                  {finalScore}/{activeQuestions.length} Correct
+                </Text>
+              </View>
+            </View>
+
+            <Text style={{ fontSize: 12, color: colors.textSecondary, marginBottom: 16 }}>
+              Review your answers, correct options, and detailed financial explanations below:
+            </Text>
+
+            {activeQuestions.map((q, qIndex) => {
+              const userAnswer = userAnswers[qIndex];
+              const isUserCorrect = userAnswer === q.correct;
+
+              return (
+                <View
+                  key={qIndex}
+                  style={[
+                    styles.reviewCard,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: isUserCorrect
+                        ? (isDark ? 'rgba(16, 185, 129, 0.4)' : '#a7f3d0')
+                        : (isDark ? 'rgba(239, 68, 68, 0.4)' : '#fecaca'),
+                    },
+                  ]}
+                >
+                  {/* Card Header */}
+                  <View style={styles.reviewCardHeader}>
+                    <Text style={[styles.reviewQNumber, { color: colors.textSecondary }]}>
+                      QUESTION {qIndex + 1} OF {activeQuestions.length}
+                    </Text>
+                    <View
+                      style={[
+                        styles.reviewStatusBadge,
+                        {
+                          backgroundColor: isUserCorrect
+                            ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#dcfce7')
+                            : (isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2'),
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={isUserCorrect ? 'checkmark-circle' : 'close-circle'}
+                        size={13}
+                        color={isUserCorrect ? '#10b981' : '#ef4444'}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 10,
+                          fontWeight: '900',
+                          color: isUserCorrect ? '#10b981' : '#ef4444',
+                        }}
+                      >
+                        {isUserCorrect ? 'CORRECT' : 'INCORRECT'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Question Text */}
+                  <Text style={[styles.reviewQText, { color: colors.text }]}>
+                    {q.question}
+                  </Text>
+
+                  {/* Options List */}
+                  <View style={{ gap: 8, marginTop: 10 }}>
+                    {q.options.map((option: string, optIdx: number) => {
+                      const isCorrectOption = optIdx === q.correct;
+                      const isUserPick = optIdx === userAnswer;
+
+                      let optBg = isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc';
+                      let optBorder = colors.border;
+                      let badgeText = '';
+                      let badgeColor = '';
+                      let badgeBg = '';
+
+                      if (isCorrectOption && isUserPick) {
+                        optBg = isDark ? 'rgba(16, 185, 129, 0.12)' : '#dcfce7';
+                        optBorder = '#10b981';
+                        badgeText = '✓ Your Answer (Correct)';
+                        badgeColor = '#10b981';
+                        badgeBg = isDark ? 'rgba(16, 185, 129, 0.2)' : '#bbf7d0';
+                      } else if (isCorrectOption) {
+                        optBg = isDark ? 'rgba(16, 185, 129, 0.12)' : '#dcfce7';
+                        optBorder = '#10b981';
+                        badgeText = '✓ Correct Answer';
+                        badgeColor = '#10b981';
+                        badgeBg = isDark ? 'rgba(16, 185, 129, 0.2)' : '#bbf7d0';
+                      } else if (isUserPick) {
+                        optBg = isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2';
+                        optBorder = '#ef4444';
+                        badgeText = '✗ Your Answer';
+                        badgeColor = '#ef4444';
+                        badgeBg = isDark ? 'rgba(239, 68, 68, 0.2)' : '#fecaca';
+                      }
+
+                      return (
+                        <View
+                          key={optIdx}
+                          style={[
+                            styles.reviewOptionRow,
+                            { backgroundColor: optBg, borderColor: optBorder },
+                          ]}
+                        >
+                          <View style={styles.reviewOptLeft}>
+                            <View
+                              style={[
+                                styles.reviewOptLetter,
+                                {
+                                  backgroundColor: isCorrectOption
+                                    ? '#10b981'
+                                    : isUserPick
+                                    ? '#ef4444'
+                                    : colors.border,
+                                },
+                              ]}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: '800',
+                                  color: (isCorrectOption || isUserPick) ? '#fff' : colors.text,
+                                }}
+                              >
+                                {String.fromCharCode(65 + optIdx)}
+                              </Text>
+                            </View>
+                            <Text style={[styles.reviewOptText, { color: colors.text }]}>
+                              {option}
+                            </Text>
+                          </View>
+
+                          {badgeText ? (
+                            <View style={[styles.reviewBadge, { backgroundColor: badgeBg }]}>
+                              <Text style={{ fontSize: 9.5, fontWeight: '800', color: badgeColor }}>
+                                {badgeText}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+
+                  {/* Explanation */}
+                  {q.explanation && (
+                    <View
+                      style={[
+                        styles.reviewExplanationBox,
+                        {
+                          backgroundColor: isDark ? 'rgba(59, 130, 246, 0.08)' : '#eff6ff',
+                          borderColor: isDark ? 'rgba(59, 130, 246, 0.25)' : '#bfdbfe',
+                        },
+                      ]}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                        <Ionicons name="bulb-outline" size={14} color="#2563eb" />
+                        <Text style={{ fontSize: 10.5, fontWeight: '900', color: '#2563eb', textTransform: 'uppercase' }}>
+                          Reasoning & Explanation
+                        </Text>
+                      </View>
+                      <Text style={[styles.reviewExplanationText, { color: colors.text }]}>
+                        {q.explanation}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+
+            {/* Bottom Actions after review */}
+            <View style={{ marginTop: 20, gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.gameButton, { backgroundColor: theme.main }]}
+                onPress={() => router.back()}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.gameButtonText}>RETURN TO ACADEMY</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.gameButton,
+                  {
+                    backgroundColor: 'transparent',
+                    borderWidth: 1.5,
+                    borderColor: colors.border,
+                  },
+                ]}
+                onPress={handleRetakeQuiz}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.gameButtonText, { color: colors.text }]}>RETAKE QUIZ 🔄</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
       </View>
     );
   }
@@ -555,5 +928,143 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 15,
     letterSpacing: 1,
+  },
+
+  iconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    marginBottom: 8,
+  },
+  statusBadgeText: {
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  scoreSummaryCard: {
+    width: '100%',
+    padding: 18,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    marginBottom: 16,
+  },
+  bigScoreText: {
+    fontSize: 36,
+    fontWeight: '900',
+    marginVertical: 4,
+  },
+  scoreDivider: {
+    height: 1,
+    marginVertical: 12,
+  },
+  scrollHintContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  scrollHintText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  reviewSection: {
+    marginTop: 24,
+    paddingHorizontal: 4,
+  },
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reviewSectionTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  reviewCard: {
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1.5,
+  },
+  reviewCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  reviewQNumber: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  reviewStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  reviewQText: {
+    fontSize: 15,
+    fontWeight: '800',
+    lineHeight: 22,
+  },
+  reviewOptionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  reviewOptLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+    marginRight: 8,
+  },
+  reviewOptLetter: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewOptText: {
+    fontSize: 13,
+    fontWeight: '700',
+    flex: 1,
+  },
+  reviewBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  reviewExplanationBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  reviewExplanationText: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    fontWeight: '600',
   },
 });

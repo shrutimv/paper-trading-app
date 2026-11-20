@@ -22,6 +22,17 @@ SYMBOL_ALIASES = {
     "ZOMATO.NS": "ETERNAL.NS",
     "ZOMATO.BO": "543320.BO",
     "ZOMATO": "ETERNAL.NS",
+    "M&M.NS": "M&M.NS",
+    "M&M.BO": "M&M.BO",
+    "M&M": "M&M.NS",
+    "M_M.NS": "M&M.NS",
+    "M_M": "M&M.NS",
+    "M": "M&M.NS",
+    "MAHINDRA": "M&M.NS",
+    "BAJAJ-AUTO.NS": "BAJAJ-AUTO.NS",
+    "BAJAJ-AUTO": "BAJAJ-AUTO.NS",
+    "L&TFH.NS": "L&TFH.NS",
+    "L&TFH": "L&TFH.NS",
 }
 
 
@@ -88,6 +99,13 @@ def yahoo_search(name: str) -> List[dict]:
             "exchange": "NSE",
             "quoteType": "EQUITY",
         })
+    if "mahindra" in lower_name or "m&m" in lower_name or lower_name == "m":
+        out.append({
+            "symbol": "M&M.NS",
+            "shortname": "Mahindra & Mahindra Ltd",
+            "exchange": "NSE",
+            "quoteType": "EQUITY",
+        })
 
     for item in results:
         sym = item.get("symbol")
@@ -146,6 +164,7 @@ def fetch_chart_data(symbol: str, period: str = "5d", interval: str = "15m") -> 
     Handles fallbacks to ensure charts show data even outside active market hours.
     """
     raw_sym = symbol.strip().upper()
+    aliased = SYMBOL_ALIASES.get(raw_sym, raw_sym)
     
     # Map period aliases to Yahoo Finance valid range strings
     period_map = {
@@ -158,10 +177,14 @@ def fetch_chart_data(symbol: str, period: str = "5d", interval: str = "15m") -> 
     }
     clean_period = period_map.get(period.lower(), period)
 
-    candidates = [SYMBOL_ALIASES.get(raw_sym, raw_sym)]
-    if not raw_sym.endswith(".NS") and not raw_sym.endswith(".BO"):
-        candidates.append(f"{raw_sym}.NS")
-        candidates.append(f"{raw_sym}.BO")
+    candidates = []
+    if aliased.endswith(".NS") or aliased.endswith(".BO"):
+        candidates.append(aliased)
+    else:
+        # Prioritize Indian exchanges (NSE, then BSE) before global ticker match
+        candidates.append(f"{aliased}.NS")
+        candidates.append(f"{aliased}.BO")
+        candidates.append(aliased)
 
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
@@ -215,6 +238,10 @@ KNOWN_BENCHMARK_PRICES = {
     "JIOFIN": {"price": 314.50, "name": "Jio Financial Services", "prevClose": 305.20, "high": 320.00, "low": 302.00, "vol": 18200000},
     "SWIGGY": {"price": 390.00, "name": "Swiggy Limited", "prevClose": 371.00, "high": 395.00, "low": 370.00, "vol": 12500000},
     "ARDEE": {"price": 148.00, "name": "Ardee Industries Limited", "prevClose": 140.00, "high": 154.00, "low": 138.00, "vol": 4500000},
+    "M&M.NS": {"price": 2940.50, "name": "Mahindra & Mahindra Ltd", "prevClose": 2915.00, "high": 2965.00, "low": 2900.00, "vol": 3200000},
+    "M&M": {"price": 2940.50, "name": "Mahindra & Mahindra Ltd", "prevClose": 2915.00, "high": 2965.00, "low": 2900.00, "vol": 3200000},
+    "M": {"price": 2940.50, "name": "Mahindra & Mahindra Ltd", "prevClose": 2915.00, "high": 2965.00, "low": 2900.00, "vol": 3200000},
+    "MAHINDRA": {"price": 2940.50, "name": "Mahindra & Mahindra Ltd", "prevClose": 2915.00, "high": 2965.00, "low": 2900.00, "vol": 3200000},
 }
 
 

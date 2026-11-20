@@ -5,7 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { LogBox, StyleSheet, Text, Platform } from 'react-native';
 import Animated, { FadeIn, ZoomIn, FadeOut } from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context'; 
+import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Updates from 'expo-updates'; 
 
 // Catch & suppress fontfaceobserver timeout error on Web (PC browser)
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -90,6 +91,22 @@ function RootLayoutContent() {
   const router = useRouter();
   
   const [isLoading, setIsLoading] = useState(true);
+
+  // Silent background OTA update fetch on app launch
+  useEffect(() => {
+    async function fetchBackgroundUpdate() {
+      if (Platform.OS === 'web' || __DEV__) return;
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (update.isAvailable) {
+          await Updates.fetchUpdateAsync();
+        }
+      } catch (e) {
+        // Silently ignore if offline
+      }
+    }
+    fetchBackgroundUpdate();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 1200);

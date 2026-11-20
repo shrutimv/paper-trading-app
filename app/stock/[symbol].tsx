@@ -95,12 +95,38 @@ const SC = StyleSheet.create({
 
 export default function StockDetailScreen() {
   const router = useRouter();
-  const { symbol } = useLocalSearchParams();
+  const params = useLocalSearchParams();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const { holdings, sellStock } = useTrading();
-  const currentSymbol = typeof symbol === 'string' ? symbol : '';
+
+  // Robust symbol extraction handling URL encoding and unencoded '&' splits
+  let rawSymbol = typeof params.symbol === 'string' ? decodeURIComponent(params.symbol) : '';
+  if (
+    rawSymbol === 'M' ||
+    rawSymbol.toUpperCase() === 'M&M' ||
+    rawSymbol.toUpperCase() === 'M_M' ||
+    Object.keys(params).some(k => k.includes('M.NS') || k.includes('M&M'))
+  ) {
+    rawSymbol = 'M&M.NS';
+  } else if (rawSymbol.toUpperCase() === 'TATAMOTORS' || rawSymbol.toUpperCase() === 'TATAMOTORS.NS') {
+    rawSymbol = 'TATAMOTORS.NS';
+  } else if (rawSymbol.toUpperCase() === 'ZOMATO' || rawSymbol.toUpperCase() === 'ZOMATO.NS') {
+    rawSymbol = 'ETERNAL.NS';
+  }
+
+  // Ensure Indian market suffix (defaults to NSE .NS unless BSE .BO)
+  if (!rawSymbol.endsWith('.NS') && !rawSymbol.endsWith('.BO')) {
+    if (!rawSymbol.includes('.')) {
+      rawSymbol = `${rawSymbol}.NS`;
+    }
+  }
+
+  const currentSymbol = rawSymbol;
+  const sym = currentSymbol.replace('.NS', '').replace('.BO', '');
+  const exchangeLabel = currentSymbol.endsWith('.BO') ? 'BSE' : 'NSE';
+
   const owned = holdings.find(h => h.symbol === currentSymbol || h.symbol.replace('.NS', '') === currentSymbol.replace('.NS', ''));
 
   const [activeRange, setActiveRange] = useState(TIMEFRAMES[0]); // default to 1D
@@ -114,7 +140,7 @@ export default function StockDetailScreen() {
     if (!owned) return false;
     const success = await sellStock(owned.symbol, effPrice, qty, owned.productType || 'cnc');
     if (success) {
-      Alert.alert("Order Executed", `Successfully sold ${qty} shares of ${sym.replace('.NS', '')}`);
+      Alert.alert("Order Executed", `Successfully sold ${qty} shares of ${sym}`);
       return true;
     } else {
       Alert.alert("Error", `Could not complete sell order.`);
@@ -131,7 +157,7 @@ export default function StockDetailScreen() {
       fetchStockData(true);
     }, 15000);
     return () => clearInterval(interval);
-  }, [symbol, activeRange]);
+  }, [currentSymbol, activeRange]);
 
   useEffect(
     () => () => {
@@ -143,8 +169,9 @@ export default function StockDetailScreen() {
   const fetchStockData = async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
+      const encodedSym = encodeURIComponent(currentSymbol);
       const res = await fetch(
-        `${API_BASE_URL}/stock?symbol=${symbol}&period=${activeRange.period}&interval=${activeRange.interval}`
+        `${API_BASE_URL}/stock?symbol=${encodedSym}&period=${activeRange.period}&interval=${activeRange.interval}`
       );
       const data = await res.json();
       if (data?.history?.length > 0) {
@@ -218,7 +245,6 @@ export default function StockDetailScreen() {
     [C.textSec]
   );
 
-  const sym = String(symbol).replace('.NS', '').replace('.BO', '');
   const dayHigh = stockMeta?.dayHigh ?? maxP;
   const dayLow = stockMeta?.dayLow ?? minP;
   const open = stockMeta?.open ?? first;
@@ -288,7 +314,7 @@ export default function StockDetailScreen() {
             <View style={S.headerMid}>
               <Text style={S.headerSym}>{sym}</Text>
               <View style={[S.badge, { backgroundColor: dimBg }]}>
-                <Text style={[S.badgeTxt, { color: accent }]}>NSE</Text>
+                <Text style={[S.badgeTxt, { color: accent }]}>{exchangeLabel}</Text>
               </View>
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -328,7 +354,9 @@ export default function StockDetailScreen() {
           {/* PRICE BLOCK */}
           <View style={[S.priceBlock, isLandscape && { marginTop: 10 }]}>
             <Text style={S.co} numberOfLines={1}>
-              {stockMeta?.resolved_name || sym}
+              {stockMeta?.resolved_name && !stockMeta.resolved_name.toLowerCase().includes("macy")
+                ? stockMeta.resolved_name
+                : (sym === "M&M" ? "Mahindra & Mahindra Ltd" : (stockMeta?.resolved_name || sym))}
             </Text>
             <Text style={S.price}>
               {stockMeta ? fmt(stockMeta.regularMarketPrice) : '—'}

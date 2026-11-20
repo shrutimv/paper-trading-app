@@ -123,6 +123,7 @@ export default function TradingDashboard() {
 
   // Unified 4-Tab Navigation
   const [logFilter, setLogFilter] = useState<'ALL' | 'BUY' | 'SELL'>('ALL');
+  const [orderViewMode, setOrderViewMode] = useState<'cards' | 'ledger'>('cards');
   const [mainTab, setMainTab] = useState<'screener' | 'portfolio' | 'ipos' | 'logs'>('screener');
 
   // Screener Filter Category
@@ -764,7 +765,7 @@ export default function TradingDashboard() {
                     if (item.isIpo) {
                       openIpoBidModal(item.ipoData);
                     } else {
-                      router.push(`/stock/${item.symbol}`);
+                      router.push(`/stock/${encodeURIComponent(item.symbol)}` as any);
                     }
                     setSearchResults([]);
                     setSearchQuery('');
@@ -981,7 +982,7 @@ export default function TradingDashboard() {
                         {/* Header */}
                         <TouchableOpacity 
                           style={styles.screenerCardHeader}
-                          onPress={() => router.push(`/stock/${stock.symbol}`)}
+                          onPress={() => router.push(`/stock/${encodeURIComponent(stock.symbol)}` as any)}
                           activeOpacity={0.8}
                         >
                           <View style={{ flex: 1, marginRight: 10 }}>
@@ -1337,64 +1338,293 @@ export default function TradingDashboard() {
           )}
 
           {/* 6. TAB 4: 📋 TRADE ORDERS & EXECUTION LOGS */}
-          {mainTab === 'logs' && (
-            <View style={{ marginTop: 10, marginBottom: 40 }}>
-              {/* SUMMARY STATS BAR */}
-              <View style={styles.logStatsBar}>
-                <View style={styles.logStatBox}>
-                  <Text style={styles.logStatNumber}>{transactions.length}</Text>
-                  <Text style={styles.logStatLabel}>Executed</Text>
-                </View>
-                <View style={styles.logStatDivider} />
-                <View style={styles.logStatBox}>
-                  <Text style={[styles.logStatNumber, { color: "#10B981" }]}>
-                    {transactions.filter((t) => t.type === "BUY").length}
-                  </Text>
-                  <Text style={styles.logStatLabel}>Buys</Text>
-                </View>
-                <View style={styles.logStatDivider} />
-                <View style={styles.logStatBox}>
-                  <Text style={[styles.logStatNumber, { color: "#EF4444" }]}>
-                    {transactions.filter((t) => t.type === "SELL").length}
-                  </Text>
-                  <Text style={styles.logStatLabel}>Sells</Text>
-                </View>
-              </View>
+          {mainTab === 'logs' && (() => {
+            const buyTotal = transactions
+              .filter(t => t.type === 'BUY')
+              .reduce((sum, t) => sum + (t.totalAmount || 0), 0);
 
-              {/* FILTER CHIPS */}
-              <View style={styles.logFilterRow}>
-                {(["ALL", "BUY", "SELL"] as const).map((chip) => {
-                  const isActive = logFilter === chip;
-                  return (
+            const sellTotal = transactions
+              .filter(t => t.type === 'SELL')
+              .reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+
+            const netRealizedPnl = transactions
+              .filter(t => t.type === 'SELL')
+              .reduce((sum, t) => {
+                if (typeof t.pnl === 'number') return sum + t.pnl;
+                if (t.costPrice && t.costPrice > 0) return sum + ((t.price - t.costPrice) * t.quantity);
+                return sum;
+              }, 0);
+
+            const netCashflow = sellTotal - buyTotal;
+            const displayedTx = transactions.filter(t => logFilter === 'ALL' || t.type === logFilter);
+
+            return (
+              <View style={{ marginTop: 10, marginBottom: 40 }}>
+                {/* 1. SUMMARY STATS BAR */}
+                <View style={styles.logStatsBar}>
+                  <View style={styles.logStatBox}>
+                    <Text style={styles.logStatNumber}>{transactions.length}</Text>
+                    <Text style={styles.logStatLabel}>Executed</Text>
+                  </View>
+                  <View style={styles.logStatDivider} />
+                  <View style={styles.logStatBox}>
+                    <Text style={[styles.logStatNumber, { color: "#10B981" }]}>
+                      {transactions.filter((t) => t.type === "BUY").length}
+                    </Text>
+                    <Text style={styles.logStatLabel}>Buys</Text>
+                  </View>
+                  <View style={styles.logStatDivider} />
+                  <View style={styles.logStatBox}>
+                    <Text style={[styles.logStatNumber, { color: "#EF4444" }]}>
+                      {transactions.filter((t) => t.type === "SELL").length}
+                    </Text>
+                    <Text style={styles.logStatLabel}>Sells</Text>
+                  </View>
+                </View>
+
+                {/* 2. BEGINNER-FRIENDLY NET PROFIT/LOSS & CASHFLOW CARD */}
+                <View style={{
+                  backgroundColor: colors.card,
+                  borderRadius: 18,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  marginBottom: 14,
+                  shadowColor: colors.shadowColor,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 6,
+                  elevation: 2,
+                }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="calculator-outline" size={18} color={colors.accent} />
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
+                        Realized Profit & Loss Ledger
+                      </Text>
+                    </View>
+                    <View style={{
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                      backgroundColor: netRealizedPnl >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                    }}>
+                      <Text style={{
+                        fontSize: 11,
+                        fontWeight: '800',
+                        color: netRealizedPnl >= 0 ? '#10B981' : '#EF4444',
+                      }}>
+                        {netRealizedPnl >= 0 ? 'OVERALL PROFIT 🎉' : 'OVERALL LOSS 📉'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', padding: 12, borderRadius: 12, marginBottom: 12 }}>
+                    <View>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>
+                        Capital Spent (Buys -)
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#EF4444', marginTop: 3 }}>
+                        - {formatCurrency(buyTotal)}
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>
+                        Capital Received (Sells +)
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#10B981', marginTop: 3 }}>
+                        + {formatCurrency(sellTotal)}
+                      </Text>
+                    </View>
+
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' }}>
+                        Net Realized P&L
+                      </Text>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: netRealizedPnl >= 0 ? '#10B981' : '#EF4444', marginTop: 3 }}>
+                        {netRealizedPnl >= 0 ? '+' : ''}{formatCurrency(netRealizedPnl)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* View Mode Toggle: Standard Cards vs Cashflow Statement */}
+                  <View style={{ flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0', borderRadius: 10, padding: 3 }}>
                     <TouchableOpacity
-                      key={chip}
-                      onPress={() => setLogFilter(chip)}
-                      style={[styles.logFilterChip, isActive && styles.activeLogFilterChip]}
+                      onPress={() => setOrderViewMode('cards')}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 7,
+                        alignItems: 'center',
+                        borderRadius: 8,
+                        backgroundColor: orderViewMode === 'cards' ? (isDark ? '#334155' : '#ffffff') : 'transparent',
+                      }}
                     >
-                      <Text style={[styles.logFilterChipText, isActive && styles.activeLogFilterChipText]}>
-                        {chip === "ALL" ? "All Orders" : chip === "BUY" ? "Buys" : "Sells"}
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: orderViewMode === 'cards' ? colors.text : colors.textSecondary }}>
+                        Order Cards
                       </Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* TRANSACTIONS LIST */}
-              {transactions.filter(t => logFilter === 'ALL' || t.type === logFilter).length === 0 ? (
-                <View style={styles.emptyLogCard}>
-                  <Ionicons name="receipt-outline" size={40} color={colors.textSecondary} style={{ marginBottom: 8 }} />
-                  <Text style={styles.emptyLogTitle}>No trade logs recorded yet</Text>
-                  <Text style={styles.emptyLogSub}>Execute a buy or sell trade to view execution logs here.</Text>
+                    <TouchableOpacity
+                      onPress={() => setOrderViewMode('ledger')}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 7,
+                        alignItems: 'center',
+                        borderRadius: 8,
+                        backgroundColor: orderViewMode === 'ledger' ? (isDark ? '#334155' : '#ffffff') : 'transparent',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: orderViewMode === 'ledger' ? colors.text : colors.textSecondary }}>
+                        Cashflow & P&L Ledger (±)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              ) : (
-                transactions
-                  .filter(t => logFilter === 'ALL' || t.type === logFilter)
-                  .map((item, idx) => {
+
+                {/* 3. FILTER CHIPS */}
+                <View style={styles.logFilterRow}>
+                  {(["ALL", "BUY", "SELL"] as const).map((chip) => {
+                    const isActive = logFilter === chip;
+                    return (
+                      <TouchableOpacity
+                        key={chip}
+                        onPress={() => setLogFilter(chip)}
+                        style={[styles.logFilterChip, isActive && styles.activeLogFilterChip]}
+                      >
+                        <Text style={[styles.logFilterChipText, isActive && styles.activeLogFilterChipText]}>
+                          {chip === "ALL" ? "All Orders" : chip === "BUY" ? "Buys" : "Sells"}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* 4. ORDERS LIST (CARDS VIEW OR CASHFLOW LEDGER VIEW) */}
+                {displayedTx.length === 0 ? (
+                  <View style={styles.emptyLogCard}>
+                    <Ionicons name="receipt-outline" size={40} color={colors.textSecondary} style={{ marginBottom: 8 }} />
+                    <Text style={styles.emptyLogTitle}>No trade logs recorded yet</Text>
+                    <Text style={styles.emptyLogSub}>Execute a buy or sell trade to view execution logs here.</Text>
+                  </View>
+                ) : orderViewMode === 'ledger' ? (
+                  /* ── CASHFLOW & P&L LEDGER VIEW (BEGINNER FRIENDLY) ── */
+                  <View style={{ gap: 8 }}>
+                    {displayedTx.map((item, idx) => {
+                      const isBuy = item.type === "BUY";
+                      const isProfit = (item.pnl || 0) >= 0;
+
+                      return (
+                        <View
+                          key={item.id || item._id || idx.toString()}
+                          style={{
+                            backgroundColor: colors.card,
+                            borderRadius: 14,
+                            padding: 14,
+                            borderWidth: 1,
+                            borderColor: colors.border,
+                            borderLeftWidth: 4,
+                            borderLeftColor: isBuy ? '#EF4444' : '#10B981',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <View style={{ flex: 1, marginRight: 10 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '800', color: colors.text }}>
+                                  {item.symbol}
+                                </Text>
+                                <View style={{
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                  borderRadius: 5,
+                                  backgroundColor: isBuy
+                                    ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2')
+                                    : (isDark ? 'rgba(16, 185, 129, 0.15)' : '#dcfce7'),
+                                }}>
+                                  <Text style={{
+                                    fontSize: 9,
+                                    fontWeight: '900',
+                                    color: isBuy ? '#EF4444' : '#10B981',
+                                  }}>
+                                    {isBuy ? 'CASH OUTFLOW (BUY)' : 'CASH INFLOW (SELL)'}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              <Text style={{ fontSize: 11, color: colors.textSecondary, marginBottom: 2 }}>
+                                {isBuy
+                                  ? `Bought ${item.quantity} sh @ ${formatCurrency(item.price)}`
+                                  : `Sold ${item.quantity} sh @ ${formatCurrency(item.price)}`}
+                              </Text>
+
+                              {!isBuy && item.pnl !== undefined && (
+                                <Text style={{
+                                  fontSize: 11,
+                                  fontWeight: '800',
+                                  color: isProfit ? '#10B981' : '#EF4444',
+                                  marginTop: 2,
+                                }}>
+                                  Realized P&L: {isProfit ? '+' : ''}{formatCurrency(item.pnl)}
+                                  {item.pnlPercent !== undefined ? ` (${isProfit ? '+' : ''}${item.pnlPercent.toFixed(1)}%)` : ''}
+                                  {item.costPrice ? ` • Cost: ₹${item.costPrice.toFixed(2)}` : ''}
+                                </Text>
+                              )}
+                            </View>
+
+                            <View style={{ alignItems: 'flex-end' }}>
+                              <Text style={{
+                                fontSize: 15,
+                                fontWeight: '900',
+                                color: isBuy ? '#EF4444' : '#10B981',
+                              }}>
+                                {isBuy ? '-' : '+'} {formatCurrency(item.totalAmount)}
+                              </Text>
+                              <Text style={{ fontSize: 10, color: colors.textSecondary, marginTop: 4 }}>
+                                {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+
+                    {/* LEDGER FINAL TOTAL FOOTER */}
+                    <View style={{
+                      backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#f1f5f9',
+                      borderRadius: 14,
+                      padding: 16,
+                      marginTop: 8,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                    }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text, marginBottom: 8 }}>
+                        Financial Statement & Net Cashflow Total
+                      </Text>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 12, color: colors.textSecondary }}>Total Capital Deployed (Buys):</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>- {formatCurrency(buyTotal)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, color: colors.textSecondary }}>Total Capital Recovered (Sells):</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#10B981' }}>+ {formatCurrency(sellTotal)}</Text>
+                      </View>
+                      <View style={{ height: 1, backgroundColor: colors.border, marginVertical: 6 }} />
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: colors.text }}>Final Net Realized Profit/Loss:</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: netRealizedPnl >= 0 ? '#10B981' : '#EF4444' }}>
+                          {netRealizedPnl >= 0 ? '+' : ''}{formatCurrency(netRealizedPnl)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : (
+                  /* ── STANDARD ORDER CARDS VIEW ── */
+                  displayedTx.map((item, idx) => {
                     const isBuy = item.type === "BUY";
                     const badgeColor = isBuy ? "#10B981" : "#EF4444";
                     const badgeBg = isBuy
                       ? isDark ? "rgba(16, 185, 129, 0.15)" : "#dcfce7"
                       : isDark ? "rgba(239, 68, 68, 0.15)" : "#fee2e2";
+                    const isProfit = (item.pnl || 0) >= 0;
 
                     return (
                       <View key={item.id || item._id || idx.toString()} style={styles.logOrderCard}>
@@ -1422,10 +1652,45 @@ export default function TradingDashboard() {
                             <Text style={styles.logMetricValue}>{item.quantity}</Text>
                           </View>
                           <View style={styles.logMetricItem}>
-                            <Text style={styles.logMetricLabel}>Total</Text>
-                            <Text style={styles.logMetricValue}>{formatCurrency(item.totalAmount)}</Text>
+                            <Text style={styles.logMetricLabel}>Cashflow Total</Text>
+                            <Text style={[
+                              styles.logMetricValue,
+                              { color: isBuy ? '#EF4444' : '#10B981', fontWeight: '900' }
+                            ]}>
+                              {isBuy ? '-' : '+'} {formatCurrency(item.totalAmount)}
+                            </Text>
                           </View>
                         </View>
+
+                        {/* SELL ORDER REALIZED PROFIT / LOSS BADGE */}
+                        {!isBuy && item.pnl !== undefined && (
+                          <View style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            backgroundColor: isProfit
+                              ? (isDark ? 'rgba(16, 185, 129, 0.12)' : '#dcfce7')
+                              : (isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2'),
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            marginBottom: 8,
+                          }}>
+                            <Text style={{
+                              fontSize: 11,
+                              fontWeight: '800',
+                              color: isProfit ? '#10B981' : '#EF4444',
+                            }}>
+                              Realized {isProfit ? 'Profit' : 'Loss'}: {isProfit ? '+' : ''}{formatCurrency(item.pnl)}
+                              {item.pnlPercent !== undefined ? ` (${isProfit ? '+' : ''}${item.pnlPercent.toFixed(1)}%)` : ''}
+                            </Text>
+                            {item.costPrice ? (
+                              <Text style={{ fontSize: 10, color: colors.textSecondary, fontWeight: '600' }}>
+                                Cost: ₹{item.costPrice.toFixed(2)}/sh
+                              </Text>
+                            ) : null}
+                          </View>
+                        )}
 
                         <View style={styles.logCardFooter}>
                           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
@@ -1445,9 +1710,10 @@ export default function TradingDashboard() {
                       </View>
                     );
                   })
-              )}
-            </View>
-          )}
+                )}
+              </View>
+            );
+          })()}
 
     </ScrollView>
 

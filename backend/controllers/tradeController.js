@@ -49,6 +49,9 @@ module.exports.buyStock = async (req, res) => {
     const requiredMargin = productType === "mis" ? totalValue * 0.2 : totalValue;
 
     let userId = req.user?._id || null;
+    if (!userId && req.headers["x-user-id"] && require("mongoose").Types.ObjectId.isValid(req.headers["x-user-id"])) {
+      userId = req.headers["x-user-id"];
+    }
     let finalBalance = 100000;
 
     if (userId) {
@@ -99,8 +102,9 @@ module.exports.buyStock = async (req, res) => {
 
 module.exports.sellStock = async (req, res) => {
   try {
-    const { symbol, quantity, productType = "cnc", guestId, currentBalance } = req.body;
+    const { symbol, quantity, productType = "cnc", guestId, currentBalance, price } = req.body;
     let clientPrice = req.body.price ? Number(req.body.price) : null;
+    let clientAvgPrice = req.body.averagePrice ? Number(req.body.averagePrice) : null;
     const qty = Number(quantity);
 
     if (!symbol || isNaN(qty) || qty <= 0) {
@@ -108,15 +112,57 @@ module.exports.sellStock = async (req, res) => {
     }
 
     let userId = req.user?._id || null;
+    if (!userId && req.headers["x-user-id"] && require("mongoose").Types.ObjectId.isValid(req.headers["x-user-id"])) {
+      userId = req.headers["x-user-id"];
+    }
     const finalGuestId = userId ? "" : (guestId || "guest_default");
 
     // Resolve price
     const { price: fetchedPrice, companyName } = await getStockPrice(symbol);
     const executionPrice = fetchedPrice || clientPrice || 100;
 
-    let revenue = executionPrice * qty;
+    // Calculate Weighted Average Cost Basis for accurate realized P&L (supports full or partial sells)
+    const userFilter = userId ? { user: userId } : (finalGuestId && finalGuestId !== "guest_default" ? { guestId: finalGuestId, user: null } : null);
+    let avgBuyPrice = clientAvgPrice || 0;
+
+    if (userFilter) {
+      const priorTxns = await Transaction.find({
+        ...userFilter,
+        symbol,
+        productType,
+      }).sort({ createdAt: 1 });
+
+      let currentHoldingQty = 0;
+      let currentHoldingCost = 0;
+
+      for (const tx of priorTxns) {
+        if (tx.type === "BUY") {
+          currentHoldingQty += tx.quantity;
+          currentHoldingCost += tx.totalAmount;
+        } else if (tx.type === "SELL") {
+          const unitCost = currentHoldingQty > 0 ? (currentHoldingCost / currentHoldingQty) : 0;
+          currentHoldingQty = Math.max(0, currentHoldingQty - tx.quantity);
+          currentHoldingCost = Math.max(0, currentHoldingQty * unitCost);
+        }
+      }
+
+      if (currentHoldingQty > 0 && currentHoldingCost > 0) {
+        avgBuyPrice = currentHoldingCost / currentHoldingQty;
+      }
+    }
+
+    if (!avgBuyPrice || avgBuyPrice <= 0) {
+      avgBuyPrice = clientAvgPrice || executionPrice;
+    }
+
+    const costBasis = avgBuyPrice * qty;
+    const totalSaleAmount = executionPrice * qty;
+    const realizedPnL = totalSaleAmount - costBasis;
+    const pnlPercent = avgBuyPrice > 0 ? ((executionPrice - avgBuyPrice) / avgBuyPrice) * 100 : 0;
+
+    let revenue = totalSaleAmount;
     if (productType === "mis") {
-      revenue = executionPrice * qty * 0.2; // Return margin + PnL approximate
+      revenue = totalSaleAmount * 0.2; // Return margin + PnL approximate
     }
 
     let finalBalance = 100000;
@@ -133,7 +179,7 @@ module.exports.sellStock = async (req, res) => {
       finalBalance = baseBal + revenue;
     }
 
-    // Create Sell Transaction in MongoDB
+    // Create Sell Transaction in MongoDB with full realized PnL audit
     const transaction = await Transaction.create({
       user: userId,
       guestId: finalGuestId,
@@ -143,13 +189,16 @@ module.exports.sellStock = async (req, res) => {
       productType,
       quantity: qty,
       price: executionPrice,
-      totalAmount: executionPrice * qty,
+      totalAmount: totalSaleAmount,
+      costPrice: Number(avgBuyPrice.toFixed(2)),
+      pnl: Number(realizedPnL.toFixed(2)),
+      pnlPercent: Number(pnlPercent.toFixed(2)),
       status: "EXECUTED",
     });
 
     res.status(200).json({
       success: true,
-      message: `Successfully sold ${qty} shares of ${symbol}`,
+      message: `Successfully sold ${qty} shares of ${symbol}. Realized P&L: ${realizedPnL >= 0 ? '+' : ''}₹${realizedPnL.toFixed(2)}`,
       balance: finalBalance,
       revenue,
       transaction,
@@ -163,17 +212,23 @@ module.exports.sellStock = async (req, res) => {
 module.exports.getHoldings = async (req, res) => {
   try {
     const { guestId } = req.query;
-    const userId = req.user?._id;
+    let userId = req.user?._id;
+    if (!userId && req.headers["x-user-id"] && require("mongoose").Types.ObjectId.isValid(req.headers["x-user-id"])) {
+      userId = req.headers["x-user-id"];
+    }
 
-    const queryFilters = [];
-    if (userId) queryFilters.push({ user: userId });
-    if (guestId) queryFilters.push({ guestId: guestId });
+    let filter = null;
+    if (userId) {
+      filter = { user: userId };
+    } else if (guestId && guestId !== "guest_default") {
+      filter = { guestId: guestId, user: null };
+    }
 
-    if (queryFilters.length === 0) {
+    if (!filter) {
       return res.status(200).json({ success: true, holdings: [] });
     }
 
-    const transactions = await Transaction.find({ $or: queryFilters }).sort({ createdAt: 1 });
+    const transactions = await Transaction.find(filter).sort({ createdAt: 1 });
 
     const holdingsMap = {};
 
@@ -222,13 +277,24 @@ module.exports.getHoldings = async (req, res) => {
 module.exports.getTransactionHistory = async (req, res) => {
   try {
     const { guestId } = req.query;
-    const userId = req.user?._id;
+    let userId = req.user?._id;
+    if (!userId && req.headers["x-user-id"] && require("mongoose").Types.ObjectId.isValid(req.headers["x-user-id"])) {
+      userId = req.headers["x-user-id"];
+    }
 
-    const queryFilters = [];
-    if (userId) queryFilters.push({ user: userId });
-    if (guestId) queryFilters.push({ guestId: guestId });
+    let filter = null;
+    if (userId) {
+      filter = { user: userId };
+    } else if (guestId && guestId !== "guest_default") {
+      filter = { guestId: guestId, user: null };
+    }
 
-    const filter = queryFilters.length > 0 ? { $or: queryFilters } : {};
+    // STRICT PRIVACY PROTECTION: If neither an authenticated user ID nor a valid device guest ID is provided,
+    // NEVER query global transactions ({})! Return an empty array to protect customer confidentiality.
+    if (!filter) {
+      return res.status(200).json({ success: true, transactions: [] });
+    }
+
     const transactions = await Transaction.find(filter).sort({ createdAt: -1 }).limit(100);
 
     res.status(200).json({ success: true, transactions });
@@ -241,7 +307,10 @@ module.exports.getTransactionHistory = async (req, res) => {
 module.exports.resetAccount = async (req, res) => {
   try {
     const { guestId } = req.body;
-    const userId = req.user?._id;
+    let userId = req.user?._id;
+    if (!userId && req.headers["x-user-id"] && require("mongoose").Types.ObjectId.isValid(req.headers["x-user-id"])) {
+      userId = req.headers["x-user-id"];
+    }
 
     if (userId) {
       await Transaction.deleteMany({ user: userId });
@@ -250,8 +319,7 @@ module.exports.resetAccount = async (req, res) => {
         user.balance = 100000;
         await user.save();
       }
-    }
-    if (guestId) {
+    } else if (guestId && guestId !== "guest_default") {
       await Transaction.deleteMany({ guestId: guestId });
     }
 

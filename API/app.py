@@ -133,7 +133,12 @@ def stock(
     Or direct: /stock?symbol=TCS.NS
     """
     if symbol:
-        result = get_stock_data_by_symbol(symbol, period=period, interval=interval, max_points=max_points, compact=compact)
+        clean_sym = symbol.strip()
+        if clean_sym.upper() in SYMBOL_ALIASES:
+            clean_sym = SYMBOL_ALIASES[clean_sym.upper()]
+        elif clean_sym.upper() == "M":
+            clean_sym = "M&M.NS"
+        result = get_stock_data_by_symbol(clean_sym, period=period, interval=interval, max_points=max_points, compact=compact)
         if "error" in result:
             raise HTTPException(status_code=404, detail=result)
         return result

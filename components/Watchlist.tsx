@@ -338,7 +338,7 @@ export default function Watchlist({ showSearch = true, limit = 5, onBuyComplete 
         {watchlist.slice(0, limit).map((stock) => {
           const data = liveData[stock.symbol];
           return (
-            <TouchableOpacity key={stock.symbol} style={styles.stockCard} onPress={() => router.push(`/stock/${stock.symbol}`)}>
+            <TouchableOpacity key={stock.symbol} style={styles.stockCard} onPress={() => router.push(`/stock/${encodeURIComponent(stock.symbol)}` as any)}>
               <TouchableOpacity onPress={() => removeFromWatchlist(stock.symbol)} style={{ marginRight: 12 }}>
                  <Ionicons name="trash-outline" size={20} color="#ef4444" />
               </TouchableOpacity>
