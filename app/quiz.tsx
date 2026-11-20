@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QUIZ_DATA } from '../constants/Questions';
-import { recordCourseCompleted, recordPuzzleSolved } from '../src/services/progressService';
+import { recordCourseCompleted } from '../src/services/progressService';
 import { useGamification } from '../context/GamificationContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -151,7 +151,6 @@ export default function QuizScreen() {
     if (finalScore >= passingScore) {
       await AsyncStorage.setItem(`module_completed_${moduleId}`, 'true');
       recordCourseCompleted(`module_${moduleId}`).catch(() => {});
-      recordPuzzleSolved().catch(() => {});
     }
   };
 

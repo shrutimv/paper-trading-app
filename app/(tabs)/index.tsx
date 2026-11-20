@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTheme } from "../../context/ThemeContext";
 import {
   Alert,
@@ -103,57 +103,55 @@ export default function Home() {
     },
   ];
 
-  useEffect(() => {
-    const loadUserAndStats = async () => {
-      try {
-        const session = await AsyncStorage.getItem('userSession');
-        if (session) {
-          setLocalUser(JSON.parse(session));
-        }
-
-        // 1. Dynamic Streak Calculation (Sensible default: 5 days)
-        const today = new Date().toISOString().slice(0, 10);
-        const lastActive = await AsyncStorage.getItem("paper_last_active_date");
-        let currentStreak = parseInt((await AsyncStorage.getItem("paper_streak")) || "5", 10);
-        if (isNaN(currentStreak) || currentStreak < 5) {
-          currentStreak = 5;
-          await AsyncStorage.setItem("paper_streak", "5");
-        }
-
-        if (lastActive) {
-          const lastDate = new Date(lastActive);
-          const todayDate = new Date(today);
-          const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
-
-          if (diffDays === 1) {
-            currentStreak += 1;
-            await AsyncStorage.setItem("paper_streak", currentStreak.toString());
-            await AsyncStorage.setItem("paper_last_active_date", today);
-          } else if (diffDays > 1) {
-            currentStreak = 5;
-            await AsyncStorage.setItem("paper_streak", "5");
-            await AsyncStorage.setItem("paper_last_active_date", today);
-          }
-        } else {
-          await AsyncStorage.setItem("paper_last_active_date", today);
-          await AsyncStorage.setItem("paper_streak", currentStreak.toString());
-        }
-        setStreak(currentStreak);
-
-        // 2 & 3. Real Puzzles & Courses (Sensible active default: 4 puzzles, 0 courses)
-        const progress = await getRealProgress();
-        const sensiblePuzzles = Math.max(4, progress.puzzlesSolved);
-        setPuzzlesSolved(sensiblePuzzles);
-        await AsyncStorage.setItem("paper_puzzles_completed", sensiblePuzzles.toString());
-
-        // Always show 0 courses as requested
-        setCoursesCompletedCount(0);
-      } catch (e) {
-        console.error("Failed to load user and stats", e);
+  const loadUserAndStats = useCallback(async () => {
+    try {
+      const session = await AsyncStorage.getItem('userSession');
+      if (session) {
+        setLocalUser(JSON.parse(session));
       }
-    };
-    loadUserAndStats();
+
+      // 1. Dynamic Streak Calculation (100% Real - Consecutive Daily Activity)
+      const today = new Date().toISOString().slice(0, 10);
+      const lastActive = await AsyncStorage.getItem("paper_last_active_date");
+      let currentStreak = parseInt((await AsyncStorage.getItem("paper_streak")) || "1", 10);
+      if (isNaN(currentStreak) || currentStreak < 1) {
+        currentStreak = 1;
+      }
+
+      if (lastActive) {
+        const lastDate = new Date(lastActive);
+        const todayDate = new Date(today);
+        const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
+
+        if (diffDays === 1) {
+          currentStreak += 1;
+          await AsyncStorage.setItem("paper_streak", currentStreak.toString());
+          await AsyncStorage.setItem("paper_last_active_date", today);
+        } else if (diffDays > 1) {
+          currentStreak = 1; // Streak broken, reset to 1
+          await AsyncStorage.setItem("paper_streak", "1");
+          await AsyncStorage.setItem("paper_last_active_date", today);
+        }
+      } else {
+        await AsyncStorage.setItem("paper_last_active_date", today);
+        await AsyncStorage.setItem("paper_streak", currentStreak.toString());
+      }
+      setStreak(currentStreak);
+
+      // 2 & 3. Real Dynamic Puzzles & Courses (from genuine user activity)
+      const progress = await getRealProgress();
+      setPuzzlesSolved(progress.puzzlesSolved || 0);
+      setCoursesCompletedCount(progress.coursesCompletedCount || 0);
+    } catch (e) {
+      console.error("Failed to load user and stats", e);
+    }
   }, [authUser]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUserAndStats();
+    }, [loadUserAndStats])
+  );
 
   const currentUser = authUser || localUser;
   const username = currentUser?.username 
