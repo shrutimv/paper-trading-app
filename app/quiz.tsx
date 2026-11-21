@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QUIZ_DATA } from '../constants/Questions';
-import { recordCourseCompleted } from '../src/services/progressService';
+import { recordCourseCompleted, recordPuzzleSolved } from '../src/services/progressService';
 import { useGamification } from '../context/GamificationContext';
 import { useTheme } from '../context/ThemeContext';
 
@@ -107,7 +107,7 @@ export default function QuizScreen() {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (currentQuestion + 1 < activeQuestions.length) {
       setCurrentQuestion((prev) => prev + 1);
       setSelectedOption(null);
@@ -127,7 +127,7 @@ export default function QuizScreen() {
           const totalXpEarned = 100 + finalScore * 25;
           setEarnedXp(totalXpEarned);
           if (totalXpEarned > 0) addXp(totalXpEarned);
-          saveProgress(finalScore);
+          await saveProgress(finalScore);
         } else {
           // Failed exam: 0 XP awarded
           setEarnedXp(0);
@@ -149,8 +149,12 @@ export default function QuizScreen() {
 
   const saveProgress = async (finalScore: number) => {
     if (finalScore >= passingScore) {
-      await AsyncStorage.setItem(`module_completed_${moduleId}`, 'true');
-      recordCourseCompleted(`module_${moduleId}`).catch(() => {});
+      const modIdStr = String(moduleId || 'm1');
+      await AsyncStorage.setItem(`module_completed_${modIdStr}`, 'true');
+      await AsyncStorage.setItem(`quiz_completed_${modIdStr}`, 'true');
+      recordCourseCompleted(`module_${modIdStr}`).catch(() => {});
+      // Increment solved puzzle count when quiz is passed
+      await recordPuzzleSolved(`quiz_${modIdStr}`).catch((e) => console.log('recordPuzzleSolved error:', e));
     }
   };
 

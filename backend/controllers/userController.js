@@ -131,8 +131,17 @@ module.exports.syncGamification = async (req, res) => {
     if (typeof puzzlesCompleted === "number") update.puzzlesCompleted = puzzlesCompleted;
     if (Array.isArray(coursesCompleted)) update.coursesCompleted = coursesCompleted;
 
+    let targetUserId = req.user?._id;
+    if (!targetUserId && req.headers["x-user-id"] && require("mongoose").Types.ObjectId.isValid(req.headers["x-user-id"])) {
+      targetUserId = req.headers["x-user-id"];
+    }
+
+    if (!targetUserId) {
+      return res.status(401).json({ success: false, message: "User not authenticated." });
+    }
+
     const user = await User.findByIdAndUpdate(
-      req.user._id,
+      targetUserId,
       { $set: update },
       { new: true }
     ).select("xp streak puzzlesCompleted coursesCompleted");

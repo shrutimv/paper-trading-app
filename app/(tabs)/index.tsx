@@ -22,7 +22,7 @@ import AIRecommendations from "../../components/AIRecommendations";
 import DailyRecapModal from "../../components/DailyRecapModal";
 import { useAuth } from "../../context/AuthContext";
 import { getRealProgress, getScopedKeys } from "../../src/services/progressService";
-import { BASE_URL } from "../../src/config/api";
+import { BASE_URL, getAuthHeaders } from "../../src/config/api";
 
 // --- THE ANIMATED CARD WRAPPER ---
 const AnimatedTabCard = ({ children, href }: { children: React.ReactNode, href: string }) => {
@@ -133,6 +133,7 @@ export default function Home() {
         const todayDate = new Date(today);
         const diffDays = Math.floor((todayDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
 
+        const authHeaders = await getAuthHeaders();
         if (diffDays === 1) {
           currentStreak += 1;
           await AsyncStorage.setItem(streakKey, currentStreak.toString());
@@ -140,7 +141,7 @@ export default function Home() {
           if (userId) {
             fetch(`${BASE_URL}/api/user/gamification`, {
               method: "PUT",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeaders },
               credentials: "include",
               body: JSON.stringify({ streak: currentStreak }),
             }).catch(() => {});
@@ -152,19 +153,20 @@ export default function Home() {
           if (userId) {
             fetch(`${BASE_URL}/api/user/gamification`, {
               method: "PUT",
-              headers: { "Content-Type": "application/json" },
+              headers: { "Content-Type": "application/json", ...authHeaders },
               credentials: "include",
               body: JSON.stringify({ streak: 1 }),
             }).catch(() => {});
           }
         }
       } else {
+        const authHeaders = await getAuthHeaders();
         await AsyncStorage.setItem(lastActiveKey, today);
         await AsyncStorage.setItem(streakKey, currentStreak.toString());
         if (userId) {
           fetch(`${BASE_URL}/api/user/gamification`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", ...authHeaders },
             credentials: "include",
             body: JSON.stringify({ streak: currentStreak }),
           }).catch(() => {});
